@@ -1,0 +1,20 @@
+{
+  "config_digest": "90dda5a735bd8495047cbfb803e04d86bd2894a1c3f3dd546d0054f420ff60d4",
+  "phantom_digest": "1c66389676cf6aedbfcccee9697ff17a68d0e813380475d51841595c4d140021",
+  "scores": {
+    "accuracy": 0.976087,
+    "bone_dice": 0.989859,
+    "bone_precision": 0.996353,
+    "bone_recall": 0.983449,
+    "burst_dice": 0.798551,
+    "burst_precision": 0.695174,
+    "burst_recall": 0.938046,
+    "clotted_recall": 0.838109,
+    "vessel_dice": 0.772692,
+    "vessel_precision": 0.768115,
+    "vessel_recall": 0.777324,
+    "vessel_recall_0_6um": 0.587997,
+    "vessel_recall_12_25um": 0.78296,
+    "vessel_recall_6_12um": 0.766345
+  }
+}

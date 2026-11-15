@@ -1,0 +1,82 @@
+{
+  "source": "data_set.zip",
+  "segmentation": "output/latest",
+  "segmentation_version": "0.2.0",
+  "crop_size": 256,
+  "context_slices": 3,
+  "prefilled": true,
+  "unsure_value": 255,
+  "created": "2026-11-15T08:49:08+00:00",
+  "crops": [
+    {
+      "crop_id": "z022_y1792_x0768",
+      "z": 22,
+      "y": 1792,
+      "x": 768,
+      "category": "burst"
+    },
+    {
+      "crop_id": "z003_y1024_x0768",
+      "z": 3,
+      "y": 1024,
+      "x": 768,
+      "category": "burst"
+    },
+    {
+      "crop_id": "z077_y0000_x1024",
+      "z": 77,
+      "y": 0,
+      "x": 1024,
+      "category": "vessel"
+    },
+    {
+      "crop_id": "z096_y0768_x0768",
+      "z": 96,
+      "y": 768,
+      "x": 768,
+      "category": "vessel"
+    },
+    {
+      "crop_id": "z003_y1536_x0512",
+      "z": 3,
+      "y": 1536,
+      "x": 512,
+      "category": "vessel"
+    },
+    {
+      "crop_id": "z059_y0256_x1024",
+      "z": 59,
+      "y": 256,
+      "x": 1024,
+      "category": "vessel"
+    },
+    {
+      "crop_id": "z022_y1280_x0000",
+      "z": 22,
+      "y": 1280,
+      "x": 0,
+      "category": "random"
+    },
+    {
+      "crop_id": "z022_y1792_x1024",
+      "z": 22,
+      "y": 1792,
+      "x": 1024,
+      "category": "random"
+    },
+    {
+      "crop_id": "z003_y1792_x0256",
+      "z": 3,
+      "y": 1792,
+      "x": 256,
+      "category": "random"
+    },
+    {
+      "crop_id": "z059_y1024_x1024",
+      "z": 59,
+      "y": 1024,
+      "x": 1024,
+      "category": "random"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+\chapter{Speed and memory}
+\label{chap:performance}
+
+I treated speed and memory as constraints from the start, but never at the expense of correctness:
+each optimisation came after the result it served was right, and I checked that it left the output
+unchanged (byte-identical, or with every difference explained). Today the whole stack is segmented in
+about \pbValueSeconds\,s with a peak of \pbValuePeakGB\,GB of memory.
+
+\paragraph{Test machine} Timings depend on the hardware, so they are only meaningful next to it. Every
+timing of this report (here and in Table~\ref{tab:history}) was measured on the same machine, recorded
+automatically when the runs were timed:
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+Processor        & \pbValueCpu{} (\pbValueCores{} logical cores) \\
+Memory           & \pbValueMemoryGB\,GB \\
+System           & \pbValueSystem \\
+Python           & \pbValuePython{} (report tool) \\
+pyBones threads  & \pbValueWorkers{} (\code{pipeline.workers}) \\
+\bottomrule
+\end{tabular}
+\end{center}
+The times are wall-clock times of the whole command, including the start-up of each version's
+environment; the memory is the peak resident size of the process tree. On another machine the absolute
+values will differ; the comparison between versions holds, since they all ran on this one.
+
+\paragraph{What makes it fast}
+\begin{itemize}
+  \item \textbf{Vectorisation}: no Python loop ever runs over pixels or labels. Component statistics are
+        one \code{bincount}, morphological reconstruction one labelling, the Otsu search one array
+        expression over all threshold pairs, the eigenvalues a closed formula over millions of matrices.
+  \item \textbf{OpenCV} for every filter: Gaussian blurs, box filters (integral images), grey-level
+        dilations and erosions, connected components, separable Hessian filters.
+  \item \textbf{Threads} for the per-slice work (about twice as fast with four threads).
+  \item \textbf{Work only where it matters}: the Hessian eigenvalues are computed only on the voxels that
+        can become ambiguous, a few percent of each slice instead of a quarter of it.
+\end{itemize}
+
+\paragraph{What keeps memory low}
+\begin{itemize}
+  \item \textbf{Streaming}: slices go through bounded windows; volumes are written slice by slice and
+        read back memory-mapped. A full 32-bit label volume (1.4\,GB) or six float Hessian volumes
+        (8\,GB) are never built.
+  \item \textbf{Compact buffers}: the slices waiting for the 3D burst box are bit-packed (eight times
+        smaller), the burst density lives on a 12\um{} grid (sixteen times smaller), the tubularity is
+        stored on one byte.
+  \item \textbf{Chunks}: eigenvalues, mesh smoothing and STL writing process bounded batches.
+\end{itemize}
+
+My last optimisation pass brought the segmentation from 36\,s and 3.3\,GB to the figures above, and the
+smoothing of the bone mesh (about 7 million triangles) from 1.9\,GB to 1.2\,GB with an identical result.
+Version 0.1 was faster and lighter still, but it computed much less: the 3D refinement and the
+tubularity are what the time and memory now buy.

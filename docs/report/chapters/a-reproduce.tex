@@ -1,0 +1,34 @@
+\chapter{Reproducing this report}
+\label{chap:reproduce}
+
+Everything below runs from the repository root, with the dataset saved as
+\code{data\_set.zip} there (see \code{INSTALL.md}).
+
+\begin{enumerate}
+  \item Segment the stack and generate the phantom:
+\begin{verbatim}
+uv run pybones segment data_set.zip -o output/latest
+uv run python -m tools.phantom generate -o output/phantom
+\end{verbatim}
+  \item Run every version listed in \code{tools/report/config.json} on the phantom (and on the real
+        data where figures need it), each in its own git worktree and environment, and score them:
+\begin{verbatim}
+uv run python -m tools.report history
+\end{verbatim}
+        This writes \code{docs/report/data/history.csv} and, for each version, a small extract of its
+        segmentation (\code{docs/report/data/runs/}). Versions whose commit is not in the repository
+        are not run again: their archived scores and extracts are kept.
+  \item Render the figures, the plot data, the history table and the measured values
+        (\code{values.tex}), and the README screenshots:
+\begin{verbatim}
+uv run python -m tools.report figures
+\end{verbatim}
+  \item Build the PDF (XeLaTeX):
+\begin{verbatim}
+cd docs/report && latexmk -xelatex report.tex
+\end{verbatim}
+\end{enumerate}
+
+The 2018 images of Chapter~\ref{chap:legacy} and the 2018 masks used for the comparisons are stored
+in \code{docs/report/2018/}.
+The screenshot of the annotation page was captured from the running page in a headless browser.

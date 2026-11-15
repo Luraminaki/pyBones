@@ -1,0 +1,15 @@
+\begin{tabular}{@{}l l r r r r r r@{}}
+\toprule
+Version & Commit & Bone & Vessel & (prec.) & (recall) & Burst & Real stack \\
+\midrule
+First Python port (2D, per-slice) & \texttt{6e040e7} & 0.972 & \textbf{0.709} & 0.569 & 0.943 & 0.887 & 4\,s / 0.4\,GB \\
+3D connectivity refinement & \texttt{3d05cea} & 0.975 & \textbf{0.674} & 0.521 & 0.953 & 0.884 & 13\,s / 0.7\,GB \\
+3D burst density & \texttt{222b1a4} & 0.975 & \textbf{0.686} & 0.536 & 0.953 & 0.897 & 12\,s / 1.1\,GB \\
+Physical units, analytic kernels & \texttt{fe645dd} & 0.974 & \textbf{0.685} & 0.535 & 0.954 & 0.897 & -- \\
+Half-maximum vessel edges & \texttt{50a394c} & 0.986 & \textbf{0.810} & 0.719 & 0.928 & 0.897 & 13\,s / 1.2\,GB \\
+Tube-vs-plate veto & \texttt{427cd3d} & 0.989 & \textbf{0.829} & 0.753 & 0.923 & 0.897 & 35\,s / 2.9\,GB \\
+3D vessel halo & \texttt{e7ca4a1} & 0.989 & \textbf{0.837} & 0.776 & 0.907 & 0.897 & -- \\
+Half-maximum burst boundary & \texttt{d33da52} & 0.989 & \textbf{0.840} & 0.801 & 0.884 & 0.911 & -- \\
+Current code (0.5.0) & -- & 0.989 & \textbf{0.851} & 0.821 & 0.884 & 0.913 & 25\,s / 1.7\,GB \\
+\bottomrule
+\end{tabular}

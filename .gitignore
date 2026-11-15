@@ -1,0 +1,31 @@
+# Raw micro-CT dataset (617 MB) and anything derived from it
+data_set.zip
+/data/
+output/
+
+# Log files (one per process: <stem>-<pid>.log, rotated)
+logs/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Editors / OS
+.vscode/
+.idea/
+*.m~
+.DS_Store
+
+# Annotation workspaces: crops and pre-fills are regenerated from the dataset
+# (python -m tools.annotation regenerate); manifest.json and labels/ are versioned.
+annotations/*/crops/
+annotations/*/prefill/
+
+# Coverage data (pytest --cov)
+.coverage

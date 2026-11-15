@@ -1,0 +1,50 @@
+\chapter{Current limitations}
+\label{chap:limitations}
+
+\section{Thin vessels are below the resolution}
+\label{sec:thin}
+
+With a blur of $\sigma = 4.4$\um{}, the image of a point is about 10\um{} wide at half its height. A
+vessel of 3 to 6\um{} radius is narrower than the blur: its image is essentially the blur's own shape,
+dimmer than a large vessel, whatever its true size. On the phantom, vessels of that size are found
+\pbValueVesselRecallThin{} of the time, against \pbValueVesselRecallMedium{} for 6--12\um{} and
+\pbValueVesselRecallLarge{} above.
+
+I tried two recoveries and dropped them. The missed thin vessels turned out not to be faint at all (their
+voxels are mostly brighter than the bone threshold): they are lost because, next to a brighter vessel,
+they fall below that vessel's half-maximum and are taken for its halo. Telling them apart from a real
+halo with the Hessian recovered about as many wrong voxels as right ones: no net gain, so I did not
+keep the code. The
+consequence for future measurements is that diameters under about 12\um{} will be overestimated, and
+the thinnest vessels partly missed: this is a property of the scan, not of the software.
+
+\section{Rods and vessels}
+
+Shape alone cannot tell a trabecular rod from a vessel: both are tubes. The decision rests on what they
+touch in 3D. A dim vessel running along a trabecula, or a rod touching vessels on all sides, can still
+be misclassified; these are the same ``zones of uncertainty'' we met in 2018.
+
+\section{Validation}
+
+The phantom is calibrated on the real scan, but it is synthetic: its vessel paths, burst textures and
+bone geometry are simplifications. The scores of Chapter~\ref{chap:validation} measure the method on
+realistic data, not the segmentation of this particular knee. Expert labels on a few real crops (the
+annotation page is ready) would close that gap.
+
+\section{The data}
+
+\begin{itemize}
+  \item \textbf{One sample.} I could only check the parameters on a single scan. Physical units make them
+        transferable in principle, not in fact.
+  \item \textbf{Voxel size.} 3\um{} is the slice thickness we used in 2018 and agrees with the
+        anatomy; I assumed isotropy.
+  \item \textbf{A thin slab.} The stack is 100 slices thick (0.3\,mm) for a knee several millimetres
+        wide: most vessels leave the volume, which limits what 3D connectivity can decide near the
+        first and last slices.
+  \item \textbf{Bursts and vessels.} A vessel running into a burst cluster is partly absorbed by it.
+\end{itemize}
+
+\section{The original goal}
+
+The brief asked for a quantified network: nodes, branches, calibre, branch lengths. pyBones delivers a
+validated segmentation and meshes, the prerequisite, but not the quantification yet.

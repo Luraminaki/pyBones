@@ -1,0 +1,5 @@
+# latexmk configuration: XeLaTeX (fontspec, 2018 fonts), build files in build/,
+# the PDF copied next to the sources so it can be read without LaTeX.
+$pdf_mode = 5;
+$out_dir = 'build';
+$success_cmd = 'cp build/report.pdf report.pdf';

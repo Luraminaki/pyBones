@@ -1,0 +1,77 @@
+[project]
+name = "pybones"
+version = "0.5.0"
+description = "Segmentation and 3D modelling of the intra-osseous vascular network from micro-CT stacks."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.0",
+    "opencv-python-headless>=4.10",
+    "pydantic>=2.9",
+    # Marching cubes only (skimage.measure.marching_cubes).
+    "scikit-image>=0.24",
+]
+
+[project.scripts]
+pybones = "pybones.cli.main:main"
+
+[dependency-groups]
+dev = [
+    "basedpyright>=1.40.2",
+    "pytest>=8",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W", "I", "N", "UP", "B", "SIM", "NPY", "PERF", "RUF", "D",
+    "TC",       # type-only imports under `if TYPE_CHECKING:`
+    "PLC0415",  # no import outside module top level (no lazy imports)
+    "PLR2004",  # no magic values in comparisons
+]
+
+[tool.ruff.lint.flake8-type-checking]
+quote-annotations = true
+strict = true
+runtime-evaluated-base-classes = ["pydantic.BaseModel", "pybones.cli.arguments.ArgsModel"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Expected values in assertions are literals by nature.
+"tests/**" = ["PLR2004"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = [
+    # scikit-image's own use of a NumPy 2.5 deprecation; not actionable here.
+    "ignore::DeprecationWarning:skimage.*",
+]
+
+[tool.basedpyright]
+# Same checker as the editor extension; `uv run basedpyright` reports what VS Code shows.
+include = ["src", "tests", "tools"]
+pythonVersion = "3.12"
+typeCheckingMode = "recommended"
+# numpy / OpenCV / pydantic expose many partially-typed or `Any` values; these rules would only
+# flag library typing gaps, not project code.
+reportAny = "none"
+reportExplicitAny = "none"
+reportMissingTypeArgument = "none"
+reportUnknownArgumentType = "none"
+reportUnknownMemberType = "none"
+reportUnknownParameterType = "none"
+reportUnknownVariableType = "none"

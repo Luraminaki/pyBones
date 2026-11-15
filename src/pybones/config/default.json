@@ -1,0 +1,102 @@
+{
+  "io": {
+    "slice_extensions": [".tif", ".tiff", ".png"],
+    "ignored_name_prefixes": ["._"],
+    "ignored_directories": ["__MACOSX"],
+    "labels_file": "labels.npy",
+    "meta_file": "meta.json",
+    "scratch_file_template": "labels.{stage}.npy",
+    "mask_png_template": "{label}_{index:04d}.png"
+  },
+  "logging": {
+    "directory": "logs",
+    "file_level": "INFO",
+    "console_level": "WARNING",
+    "max_bytes": 5242880,
+    "backup_count": 5,
+    "max_files": 20
+  },
+  "jobs": {
+    "max_concurrent": 1,
+    "history_size": 100,
+    "event_interval_s": 0.25,
+    "event_queue_size": 64
+  },
+  "acquisition": {
+    "voxel_size_um": [3.0, 3.0, 3.0]
+  },
+  "pipeline": {
+    "workers": 4,
+    "extra_in_flight": 2,
+    "stage_weights": {
+      "thresholds": 0.05,
+      "classify": 0.62,
+      "analyse": 0.12,
+      "resolve": 0.12,
+      "clean": 0.09
+    }
+  },
+  "thresholds": {
+    "histogram_stride": 5,
+    "histogram_bins": 1024
+  },
+  "segmentation": {
+    "smoothing_sigma_um": 3.0,
+    "connectivity": 8,
+    "small_blob_max_area_um2": 6300,
+    "vessel": {
+      "rim_occupancy": 0.5,
+      "rim_um": 9.0,
+      "min_area_um2": 54
+    },
+    "bone": {
+      "min_area_um2": 270
+    },
+    "burst": {
+      "window_xy_um": 123,
+      "density_grid_um": 12,
+      "window_z_um": 123,
+      "density": 0.35,
+      "min_area_um2": 18000,
+      "boundary_sigma_um": 36,
+      "boundary_fraction": 0.5
+    }
+  },
+  "tubularity": {
+    "enabled": true,
+    "scales_um": [3.0, 4.5, 6.0]
+  },
+  "z_smoothing": {
+    "window_um": 0
+  },
+  "refinement": {
+    "enabled": true,
+    "vessel_contact_ratio": 1.0,
+    "min_tubularity": 0.45,
+    "min_isolated_vessel_um3": 810,
+    "min_vessel_um3": 810,
+    "min_bone_um3": 27000
+  },
+  "mesh": {
+    "downsample": {"bone": 2, "vessel": 2, "burst": 2},
+    "step_size": 1,
+    "iso_level": 0.5,
+    "chunk_faces": 1048576,
+    "taubin": {
+      "iterations": 10,
+      "lambda_factor": 0.5,
+      "mu_factor": -0.53
+    }
+  },
+  "render": {
+    "alpha": 0.6,
+    "low_percentile": 0.5,
+    "high_percentile": 99.5,
+    "colors_bgr": {
+      "bone": [80, 200, 80],
+      "vessel": [40, 40, 230],
+      "burst": [230, 150, 40],
+      "ambiguous": [0, 200, 220]
+    }
+  }
+}

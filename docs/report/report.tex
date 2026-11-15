@@ -1,0 +1,47 @@
+\documentclass[11pt,a4paper,oneside]{report}
+\input{preamble}
+
+\title{pyBones}
+\author{Luraminaki}
+
+\begin{document}
+
+% ---------------------------------------------------------------- title page
+\begin{titlepage}
+  \centering
+  \vspace*{3cm}
+  {\Huge\bfseries pyBones\par}
+  \vspace{0.8cm}
+  {\Large Segmentation and 3D modelling of the intra-osseous vascular network\\
+    of a mouse knee from micro-computed tomography\par}
+  \vspace{0.6cm}
+  \rule{0.6\linewidth}{0.4pt}\par
+  \vspace{0.6cm}
+  {\large From a 2018 student project to a validated pipeline\par}
+  \vfill
+  {\large Luraminaki\par}
+  \vspace{0.3cm}
+  {Version \pbValueVersion\par}
+  \vspace{2cm}
+  {\small Rework of a 2017--2018 engineering student project (CPE Lyon, 5ETI -- IMI major),\\
+    carried out for the SAINBIOSE laboratory (U1059, Saint-Étienne).\par}
+\end{titlepage}
+
+\pagenumbering{roman}
+\tableofcontents
+\clearpage
+\pagenumbering{arabic}
+
+\input{chapters/01-introduction}
+\input{chapters/02-legacy}
+\input{chapters/03-rewrite}
+\input{chapters/04-segmentation}
+\input{chapters/05-validation}
+\input{chapters/06-performance}
+\input{chapters/07-limitations}
+\input{chapters/08-conclusion}
+
+\appendix
+\input{chapters/a-reproduce}
+
+\end{document}
