@@ -252,7 +252,33 @@ divides the memory by $8$ (factor 2). Marching cubes on voxel data produces ``st
 Taubin's $\lambda|\mu$ smoothing alternates a shrinking and an inflating step, which removes the
 staircase without shrinking the object: the area error falls to 0.8\,\% in 10 iterations, the volume
 is kept, and a two-voxel-thin tube keeps 92\,\% of its volume (blurring the volume before meshing would
-erase it). Meshes are written as binary STL in micrometres, in chunks, and open in any 3D viewer.
+erase it).
+
+Meshes are written in micrometres, in one of two formats. Binary STL, for other software, stores every
+triangle with its own three corners as 32-bit floats. Binary glTF (GLB), for the browser, stores each
+point once and the triangles as indices into them, and can store the positions as 16-bit integers over
+the mesh's bounding box (the \code{KHR\_mesh\_quantization} extension), with 8-bit normals. A point is
+then off by at most half of the box size divided by 65\,535 on each axis: 0.05\um{} on the sample,
+sixty times less than a voxel. Table~\ref{tab:meshfiles} compares the three choices on the vessel mesh
+of the sample. The storage precision is not the grid the surface is built on: with the default factor
+of 2, that grid is 6\um{}.
+
+\begin{table}[ht]
+\centering
+\small
+\begin{tabular}{@{}lrll@{}}
+\toprule
+Format          & Size          & Position error              & Use \\
+\midrule
+STL             & 134.6\,MB     & none (32-bit floats)        & other software (ImageJ, MeshLab) \\
+GLB, 32-bit     & 64.7\,MB      & none (32-bit floats)        & browser, exact positions \\
+GLB, 16-bit     & 48.5\,MB      & $\leq 0.05$\um{}            & browser (default) \\
+\bottomrule
+\end{tabular}
+\caption{The vessel mesh of the sample (1.35 million points, 2.7 million triangles, 6\um{} grid) in
+each file format.}
+\label{tab:meshfiles}
+\end{table}
 
 Figure~\ref{fig:network} shows the vessel network of the whole stack, viewed from above.
 

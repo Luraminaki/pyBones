@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pybones.io.slices import SliceStack
+from pybones.meshing.formats import MeshFormat
 from pybones.segmentation.labels import FOREGROUND_LABELS
 from pybones.segmentation.results import IncompatibleOutputError, load_meta
 from pybones.server.schemas import (
@@ -61,7 +62,8 @@ class Library:
         data_dir: Absolute data folder.
         output_dir: Absolute output folder.
         io: File names of the segmentation outputs and slice discovery rules.
-        mesh_file_template: Name of a cached mesh inside its segmentation (``{label}``).
+        mesh_file_template: Name of a cached mesh inside its segmentation (``{label}``,
+            ``{format}``).
     """
 
     data_dir: Path
@@ -186,17 +188,18 @@ class Library:
         """
         return load_meta(self.segmentation_path(segmentation_id), self.io)
 
-    def mesh_path(self, segmentation_id: str, label: "Label") -> Path:
-        """Locate the cached mesh of a label (it may not exist yet).
+    def mesh_path(self, segmentation_id: str, label: "Label", mesh_format: MeshFormat) -> Path:
+        """Locate the cached mesh of a label in one format (it may not exist yet).
 
         Args:
             segmentation_id: Segmentation id.
             label: Foreground label.
+            mesh_format: File format.
 
         Returns:
-            Path of its STL file.
+            Path of its mesh file.
         """
-        name = self.mesh_file_template.format(label=label.key)
+        name = self.mesh_file_template.format(label=label.key, format=mesh_format.value)
         return self.segmentation_path(segmentation_id) / name
 
     def summary(self, segmentation_id: str) -> SegmentationSummary:
@@ -209,11 +212,15 @@ class Library:
             Its summary.
         """
         meta = self.meta(segmentation_id)
-        meshes = [
-            label.key
+        meshes = {
+            label.key: [
+                fmt.value
+                for fmt in MeshFormat
+                if self.mesh_path(segmentation_id, label, fmt).is_file()
+            ]
             for label in FOREGROUND_LABELS
-            if self.mesh_path(segmentation_id, label).is_file()
-        ]
+        }
+        meshes = {key: formats for key, formats in meshes.items() if formats}
         return SegmentationSummary(
             id=segmentation_id,
             source=meta.source,

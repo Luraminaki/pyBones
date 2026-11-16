@@ -90,10 +90,12 @@ def build_parser() -> argparse.ArgumentParser:
     _ = p.add_argument("--source", type=Path, help="raw stack (default: the one in the metadata)")
     _ = p.add_argument("--scale", type=float, help="output scale factor")
 
-    p = sub.add_parser("mesh", help="mesh one label to a binary STL file (µm)")
+    p = sub.add_parser("mesh", help="mesh one label to an STL or GLB file (µm)")
     _ = p.add_argument("segmentation", type=Path, help="segmentation output directory")
     _add_label(p)
-    _ = p.add_argument("-o", "--output", type=Path, required=True, help="output .stl file")
+    _ = p.add_argument(
+        "-o", "--output", type=Path, required=True, help="output .stl or .glb file (format)"
+    )
 
     p = sub.add_parser("export", help="export one label as a PNG sequence (ImageJ)")
     _ = p.add_argument("segmentation", type=Path, help="segmentation output directory")

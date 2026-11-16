@@ -15,6 +15,7 @@ from pybones.api.operations import (
     segment,
     write_mesh_file,
 )
+from pybones.meshing.gltf import read_glb
 from pybones.meshing.stl import read_stl
 from pybones.segmentation.labels import Label
 from pybones.segmentation.stages import CancelledError, ProgressTracker, Stage
@@ -55,13 +56,21 @@ def test_preview_renders_and_checks_the_slice(segmentation: "Path") -> None:
         _ = preview(segmentation, N_SYNTHETIC_SLICES, small_config())
 
 
-def test_mesh_is_saved_as_stl(segmentation: "Path", tmp_path: "Path") -> None:
-    """A label's mesh has a positive volume and round-trips through STL."""
+def test_mesh_is_saved_in_the_format_of_its_extension(
+    segmentation: "Path", tmp_path: "Path"
+) -> None:
+    """A label's mesh has a positive volume and round-trips through STL and GLB."""
     config = small_config()
     result = mesh_label(segmentation, Label.BONE, config)
     assert result.volume_mm3 > 0
-    path = save_mesh(result, Label.BONE, tmp_path / "bone.stl", config)
-    assert len(read_stl(path)) == result.mesh.n_faces
+    stl = save_mesh(result, Label.BONE, tmp_path / "bone.stl", config)
+    assert len(read_stl(stl)) == result.mesh.n_faces
+    glb = save_mesh(result, Label.BONE, tmp_path / "bone.glb", config)
+    back = read_glb(glb)
+    assert len(back.faces) == result.mesh.n_faces
+    assert back.position_bits == config.mesh.glb_position_bits
+    with pytest.raises(ValueError, match="unsupported mesh format"):
+        _ = write_mesh_file(segmentation, Label.BONE, tmp_path / "bone.obj", config)
 
 
 def test_export_and_compare_agree_with_themselves(segmentation: "Path", tmp_path: "Path") -> None:

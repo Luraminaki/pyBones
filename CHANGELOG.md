@@ -39,6 +39,12 @@ from package metadata at runtime; every segmentation records it in its
   answers 409 when it is asked for. Outputs are not kept compatible across versions while alpha.
 - Configuration file names (`io.*_file`, `io.*_template`) now really refuse paths: a field's own
   pattern (its extension) used to replace the "no `/` or `\`" rule instead of adding to it.
+- Mesh files in two formats, chosen by the extension: STL (other software) and GLB (binary glTF, for
+  the browser), written with numpy only. GLB stores each point once, with smooth vertex normals, and
+  by default 16-bit positions over the mesh's bounding box (`mesh.glb_position_bits`, error at most
+  half of its size / 65,535: 0.05 µm on the sample; `32` for floats). The vessel mesh of the sample:
+  134.6 MB as STL, 48.5 MB as GLB. The server builds and caches each label per format
+  (`?format=glb|stl`, default `api.default_mesh_format`), and lists them per label.
 - Documentation: how to start the web server and which address to open (README, INSTALL "WEB
   SERVER"); README "KNOWN LIMITATIONS" grouped into results, other scans (preparation, thresholds,
   fixed rules, values tuned on one sample, format) and web server; the report gains the web server

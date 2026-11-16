@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from pybones.config.loader import load_config
+from pybones.meshing.formats import MeshFormat
 from pybones.segmentation.labels import Label
 from pybones.server.library import ConflictError, Library, NotFoundError, is_entry_id
 from pybones.server.schemas import DatasetKind
@@ -28,7 +29,7 @@ def library(folders: "Folders") -> Library:
         data_dir=folders.data,
         output_dir=folders.output,
         io=load_config().io,
-        mesh_file_template="mesh_{label}.stl",
+        mesh_file_template="mesh_{label}.{format}",
     )
 
 
@@ -69,7 +70,7 @@ def test_segmentations_are_finished_and_readable(library: Library) -> None:
     found = library.segmentations()
     assert [s.id for s in found] == [SEGMENTATION]
     assert found[0].shape_zyx == (N_SYNTHETIC_SLICES, *SLICE_SHAPE)
-    assert found[0].meshes == []
+    assert found[0].meshes == {}
     with pytest.raises(NotFoundError):
         _ = library.segmentation_path("unfinished")
 
@@ -93,5 +94,5 @@ def test_new_segmentations_need_a_free_name(library: Library) -> None:
 
 def test_mesh_files_are_listed_once_written(library: Library) -> None:
     """A mesh file inside the segmentation shows in its summary."""
-    _ = library.mesh_path(SEGMENTATION, Label.VESSEL).write_bytes(b"")
-    assert library.summary(SEGMENTATION).meshes == [Label.VESSEL.key]
+    _ = library.mesh_path(SEGMENTATION, Label.VESSEL, MeshFormat.GLB).write_bytes(b"")
+    assert library.summary(SEGMENTATION).meshes == {Label.VESSEL.key: [MeshFormat.GLB.value]}

@@ -71,7 +71,7 @@ full version history.
 uv sync
 uv run pybones segment data_set.zip -o output/run
 uv run pybones preview output/run -z 50 --scale 0.5 -o slice50.png
-uv run pybones mesh output/run --label vessel -o vessels.stl
+uv run pybones mesh output/run --label vessel -o vessels.stl   # or vessels.glb
 ```
 
 `pybones` (or `python -m pybones`) is the single entry point; see `pybones --help`.
@@ -104,10 +104,32 @@ every command, the tools and how to build the report: [INSTALL.md](INSTALL.md).
 3. **Tubularity**: a multi-scale 3D Hessian gives each ambiguous voxel a tube-vs-plate ratio.
 4. **3D refinement**: ambiguous blobs are decided by what they touch in 3D (vessel, bone, nothing) and
    by their shape (a plate is never a vessel); 3D specks are removed.
-5. **Meshing**: marching cubes, Taubin smoothing, binary STL in µm.
+5. **Meshing**: marching cubes, Taubin smoothing, STL or GLB files in µm.
 
 Everything is physical (µm): change `acquisition.voxel_size_um` and every kernel follows. Every value
 lives in one JSON configuration, validated by pydantic.
+
+**Mesh files.** Two settings decide how fine a mesh is, and they are independent:
+
+- **The grid** (`mesh.downsample`, per label) is how finely the surface is built: 2 averages blocks of
+  2×2×2 voxels, a 6 µm grid at 3 µm voxels (edges are still placed between grid points, but details
+  smaller than a block are smoothed). 1 is full resolution, with about 4 times more triangles.
+- **The storage precision** (`mesh.glb_position_bits`) is how exactly each point is written. The file
+  format follows the output's extension:
+  - **STL** (`.stl`), for other software (ImageJ, MeshLab, slicers): 32-bit floats, every triangle
+    stored with its own corners.
+  - **GLB** (`.glb`, binary glTF), for the browser (and Blender): each point stored once, loaded
+    straight into the GPU. With 16-bit positions (the default), a point is rounded to a grid of
+    65,535 steps across the mesh's bounding box: the error is at most half a step, **0.05 µm on the
+    sample** (a voxel is 3 µm); `32` stores exact floats.
+
+The vessel mesh of the sample (1.35 million points, 2.7 million triangles, 6 µm grid):
+
+| Format      | Size     | Position error              | Use                                   |
+|-------------|----------|-----------------------------|---------------------------------------|
+| STL         | 134.6 MB | none (32-bit floats)        | other software (ImageJ, MeshLab, ...) |
+| GLB, 32-bit | 64.7 MB  | none (32-bit floats)        | browser, exact positions              |
+| GLB, 16-bit | 48.5 MB  | ≤ 0.05 µm (1/60 of a voxel) | browser (default)                     |
 
 ## VALIDATION
 
@@ -136,7 +158,7 @@ src/pybones/
   io/             slice stacks (directory / zip), streamed .npy volumes, PNG export
   imaging/        binary morphology, multi-Otsu, Hessian / eigenvalues
   segmentation/   classifier, bursts, tubularity, 3D connectivity, refinement, pipeline
-  meshing/        marching cubes, Taubin smoothing, STL
+  meshing/        marching cubes, Taubin smoothing, STL and glTF (GLB) files
   analysis/       Dice / precision / recall
   visualization/  label overlays
   cli/            pybones command
@@ -195,11 +217,14 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
 - **Local only**: no login and no access control; it listens on `127.0.0.1` and must stay there.
 - **No upload**: stacks are read from the data folder on the server's own disk.
 - **No web page yet**: the API works and is documented in the browser; the viewers come next.
-- **Heavy meshes**: the full vessel mesh of the sample is ~134 MB (~2.7 million triangles), too heavy
-  to send to a browser as is.
+- **Large meshes**: the vessel mesh of the sample is 48.5 MB as 16-bit GLB (2.7 million triangles),
+  the bone mesh about 2.6 times more (see [Mesh files](#how-it-works)). A recent GPU draws that, but it takes RAM in the browser, and
+  the 6 µm grid (`mesh.downsample` 2) is already a compromise: full resolution quadruples it.
+  Nothing is compressed: on the local machine, compressing would take longer than sending.
 - **One job at a time** by default (`jobs.max_concurrent`): a segmentation takes ~1.7 GB of RAM.
-- **Cached meshes are not rebuilt by themselves**: a mesh is built once per label and kept next to its
-  segmentation; after changing the mesh settings, build it again (`POST` its address) to refresh it.
+- **Cached meshes are not rebuilt by themselves**: a mesh is built once per label and format and kept
+  next to its segmentation; after changing the mesh settings (grid, smoothing, precision), build it
+  again (`POST` its address) to refresh it.
 
 ## POSSIBLE FUTURE UPDATES
 
@@ -207,7 +232,7 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
   calibre and branch lengths.
 - Bridging small vessel gaps (clots) along the vessel direction.
 - A web page on top of the local web server: slices with their labels, and an in-browser 3D view of
-  the meshes (lighter meshes first).
+  the meshes (GLB).
 
 ## LICENSE AND DATA
 

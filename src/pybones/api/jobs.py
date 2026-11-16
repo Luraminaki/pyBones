@@ -257,12 +257,12 @@ class JobManager:
     def submit_mesh(
         self, segmentation: "Path", label: "Label", path: "Path", config: "PyBonesConfig"
     ) -> str:
-        """Queue the meshing of one label into a binary STL file.
+        """Queue the meshing of one label into a mesh file (format from its extension).
 
         Args:
             segmentation: Segmentation output directory.
             label: Foreground label to mesh.
-            path: Output STL file (appears only once complete).
+            path: Output ``.stl`` or ``.glb`` file (appears only once complete).
             config: Configuration.
 
         Returns:

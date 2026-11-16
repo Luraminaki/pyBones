@@ -12,14 +12,18 @@ import pytest
 
 from pybones import __version__
 from pybones.api.jobs import JobState
+from pybones.meshing.formats import MeshFormat
+from pybones.meshing.gltf import read_glb
 from pybones.segmentation.stages import STAGES_2D, Stage
 from pybones.server.app import DOCS_PATH
 from pybones.server.context import ServerContext
 from pybones.server.routes.jobs import SSE_MEDIA_TYPE
-from pybones.server.routes.segmentations import PNG_MEDIA_TYPE, STL_MEDIA_TYPE
+from pybones.server.routes.segmentations import MESH_MEDIA_TYPES, PNG_MEDIA_TYPE
 from tests.helpers import N_SYNTHETIC_SLICES, SEGMENTATION, SLICE_SHAPE, STACK_DIR, STACK_ZIP
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
     from numpy.typing import NDArray
@@ -203,28 +207,54 @@ def test_slices_are_rendered_as_png(client: "TestClient") -> None:
     assert client.get("/api/segmentations/nope/slices/0").status_code == HTTPStatus.NOT_FOUND
 
 
-def test_meshes_are_built_by_jobs_then_downloaded(client: "TestClient") -> None:
-    """A mesh is missing until its job succeeds, then downloads as a binary STL."""
+def build_mesh(client: "TestClient", url: str, params: dict[str, str]) -> dict[str, Any]:
+    """Build a mesh through the API and wait for its job.
+
+    Args:
+        client: Test client.
+        url: Mesh address.
+        params: Query parameters (format).
+
+    Returns:
+        The job as first returned.
+    """
+    job = client.post(url, params=params).json()
+    assert follow(client, job["job_id"])[-1]["state"] == JobState.SUCCEEDED
+    return job
+
+
+def test_meshes_are_built_by_jobs_then_downloaded(client: "TestClient", tmp_path: "Path") -> None:
+    """A mesh is missing until its job succeeds; GLB by default, STL on request."""
     url = f"/api/segmentations/{SEGMENTATION}/meshes/bone"
     assert client.get(url).status_code == HTTPStatus.NOT_FOUND
-    job = client.post(url).json()
-    assert (job["kind"], job["label"]) == ("mesh", "bone")
-    assert follow(client, job["job_id"])[-1]["state"] == JobState.SUCCEEDED
+    job = build_mesh(client, url, {})
+    assert (job["kind"], job["label"], job["mesh_format"]) == ("mesh", "bone", "glb")
     response = client.get(url)
     assert response.status_code == HTTPStatus.OK
-    assert response.headers["content-type"] == STL_MEDIA_TYPE
+    assert response.headers["content-type"] == MESH_MEDIA_TYPES[MeshFormat.GLB]
+    glb = tmp_path / "bone.glb"
+    _ = glb.write_bytes(response.content)
+    assert len(read_glb(glb).faces) > 0
+    stl = {"format": "stl"}
+    assert client.get(url, params=stl).status_code == HTTPStatus.NOT_FOUND
+    _ = build_mesh(client, url, stl)
+    response = client.get(url, params=stl)
+    assert response.headers["content-type"] == MESH_MEDIA_TYPES[MeshFormat.STL]
     body = response.content
     (count,) = struct.unpack_from(STL_COUNT_FORMAT, body, STL_HEADER_BYTES)
-    assert count > 0
     assert len(body) == STL_HEADER_BYTES + 4 + count * STL_TRIANGLE_BYTES
+    assert count == len(read_glb(glb).faces)
     summary = client.get("/api/segmentations").json()[0]
-    assert summary["meshes"] == ["bone"]
+    assert summary["meshes"] == {"bone": ["stl", "glb"]}
     rebuilt = client.post(url).json()
     assert rebuilt["job_id"] != job["job_id"]
     assert follow(client, rebuilt["job_id"])[-1]["state"] == JobState.SUCCEEDED
     for label in ("ambiguous", "background", "nope"):
         response = client.post(f"/api/segmentations/{SEGMENTATION}/meshes/{label}")
         assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    assert client.post(url, params={"format": "obj"}).status_code == (
+        HTTPStatus.UNPROCESSABLE_ENTITY
+    )
 
 
 def test_a_mesh_is_built_by_one_job_at_a_time(client: "TestClient") -> None:

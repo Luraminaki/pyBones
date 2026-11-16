@@ -94,6 +94,15 @@ def test_global_options_and_typed_arguments() -> None:
     assert inv.args.segmentation == Path("seg")
 
 
+def test_mesh_output_must_be_a_mesh_format() -> None:
+    """``pybones mesh`` accepts .stl and .glb outputs and refuses anything else."""
+    for name in ("v.stl", "v.glb"):
+        args = parse("mesh", "seg", "--label", "vessel", "-o", name).args
+        assert isinstance(args, MeshArgs)
+    with pytest.raises(ValidationError, match="unsupported mesh format"):
+        _ = parse("mesh", "seg", "--label", "vessel", "-o", "v.obj")
+
+
 def test_optional_arguments_default_to_none() -> None:
     """Options not given on the command line are ``None``."""
     inv = parse(*EXAMPLE_ARGV["preview"])

@@ -10,8 +10,8 @@ Routes (all under ``/api``; interactive documentation at ``/docs``)::
     POST   /segmentations                         segment a dataset (202 + job)
     GET    /segmentations/{id}                    full metadata
     GET    /segmentations/{id}/slices/{z}         slice with its labels overlaid (PNG)
-    POST   /segmentations/{id}/meshes/{label}     build a label's mesh (202 + job)
-    GET    /segmentations/{id}/meshes/{label}     download it (binary STL, µm)
+    POST   /segmentations/{id}/meshes/{label}     build a label's mesh (202 + job), ?format=glb|stl
+    GET    /segmentations/{id}/meshes/{label}     download it (µm), ?format=glb|stl
     GET    /jobs                                  remembered jobs
     GET    /jobs/{id}                             one job
     GET    /jobs/{id}/events                      follow it (Server-Sent Events)

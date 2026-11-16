@@ -32,7 +32,7 @@ The package is split by responsibility:
                         streamed \code{.npy} volumes, image-sequence export (ImageJ) \\
 \code{imaging/}       & binary morphology, multi-Otsu, Gaussian-derivative Hessian, eigenvalues \\
 \code{segmentation/}  & classifier, bursts, tubularity, 3D connectivity, refinement, pipeline \\
-\code{meshing/}       & marching cubes, Taubin smoothing, binary STL \\
+\code{meshing/}       & marching cubes, Taubin smoothing, STL and glTF files \\
 \code{analysis/}, \code{visualization/} & agreement metrics, label overlays \\
 \code{cli/}           & the \code{pybones} command (also \code{python -m pybones}); arguments
                         validated into one typed model per sub-command \\
@@ -96,7 +96,7 @@ segmentation records with its result.
   \node[box, left=of tube] (ref) {3D refinement\\\footnotesize union-find, 3 passes};
   \node[data, below=of ref] (vol) {\code{labels.npy}\\\code{meta.json}};
   \node[box, right=of vol] (mesh) {meshing\\\footnotesize marching cubes, Taubin};
-  \node[data, right=of mesh] (stl) {STL, PNG\\sequences};
+  \node[data, right=of mesh] (stl) {STL, GLB,\\PNG sequences};
   \draw[arrow] (zip) -- (thr);
   \draw[arrow] (thr) -- (cls);
   \draw[arrow] (cls) -- (burst);

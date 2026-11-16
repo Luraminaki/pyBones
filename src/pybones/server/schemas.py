@@ -80,7 +80,7 @@ class SegmentationSummary(Body):
         shape_zyx: Shape of the label volume.
         voxel_size_um: Voxel size it was made with, ``(x, y, z)``.
         label_fractions: Fraction of the volume per label key.
-        meshes: Keys of the labels whose mesh is ready to download.
+        meshes: Formats ready to download, by label key (labels without a mesh omitted).
     """
 
     id: str
@@ -89,7 +89,7 @@ class SegmentationSummary(Body):
     shape_zyx: tuple[int, int, int]
     voxel_size_um: tuple[float, float, float]
     label_fractions: dict[str, float]
-    meshes: list[str]
+    meshes: dict[str, list[str]]
 
 
 class SegmentationRequest(Body):
@@ -132,7 +132,9 @@ class JobView(JobStatus):
     Attributes:
         segmentation: Id of the segmentation the job writes or reads.
         label: Key of the label being meshed (mesh jobs only).
+        mesh_format: Format of the mesh being written (mesh jobs only).
     """
 
     segmentation: str
     label: str | None
+    mesh_format: str | None

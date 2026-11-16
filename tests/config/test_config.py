@@ -61,6 +61,7 @@ def test_overrides_parse_json_values() -> None:
         'io.meta_file="..\\\\meta.json"',  # a Windows path
         'io.mask_png_template="png/{label}_{index:04d}.png"',  # a path, not a file name
         "mesh.taubin.mu_factor=-0.4",  # Taubin needs mu < -lambda
+        "mesh.glb_position_bits=24",  # 16 or 32
     ],
 )
 def test_out_of_range_values_are_rejected(override: str) -> None:
@@ -121,8 +122,10 @@ def test_server_config_loads_and_merges(tmp_path: "Path") -> None:
     [
         "http.port=0",  # < 1
         "http.port=70000",  # > 65535
-        'library.mesh_file_template="mesh.stl"',  # no {label}
-        'library.mesh_file_template="meshes/{label}.stl"',  # not a plain file name
+        'library.mesh_file_template="mesh_{label}.stl"',  # no {format} extension
+        'library.mesh_file_template="mesh.{format}"',  # no {label}
+        'library.mesh_file_template="meshes/{label}.{format}"',  # not a plain file name
+        'api.default_mesh_format="obj"',  # not a mesh format
         "api.max_preview_scale=0",  # must be > 0
         "api.event_heartbeat_s=0",  # must be > 0
     ],

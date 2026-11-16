@@ -17,6 +17,8 @@ import numpy as np
 from pybones.analysis.metrics import compare_stacks
 from pybones.io.export import export_mask_sequence
 from pybones.io.slices import SliceStack
+from pybones.meshing.formats import MeshFormat
+from pybones.meshing.gltf import write_glb
 from pybones.meshing.marching import extract_surface
 from pybones.meshing.stl import write_stl
 from pybones.segmentation.pipeline import run_segmentation
@@ -134,28 +136,46 @@ def mesh_label(segmentation: Path, label: "Label", config: "PyBonesConfig") -> M
     return MeshResult(mesh=mesh, volume_mm3=volume_mm3)
 
 
-def save_mesh(result: MeshResult, label: "Label", path: Path, config: "PyBonesConfig") -> Path:
-    """Write a mesh as a binary STL file (coordinates in µm).
+def save_mesh(
+    result: MeshResult,
+    label: "Label",
+    path: Path,
+    config: "PyBonesConfig",
+    mesh_format: MeshFormat | None = None,
+) -> Path:
+    """Write a mesh file (coordinates in µm): binary STL or binary glTF (``.glb``).
 
     Args:
         result: Mesh to write.
-        label: Its label (recorded in the STL header).
+        label: Its label (STL header, glTF mesh name).
         path: Output file.
-        config: Configuration (write chunk size).
+        config: Configuration (write chunk size, GLB position precision).
+        mesh_format: File format (default: from the extension of ``path``).
 
     Returns:
         The written path.
     """
-    header = f"{STL_HEADER_PREFIX} {label.key}"
-    return write_stl(result.mesh, path, header, config.mesh.chunk_faces)
+    fmt = MeshFormat.from_path(path) if mesh_format is None else mesh_format
+    match fmt:
+        case MeshFormat.STL:
+            header = f"{STL_HEADER_PREFIX} {label.key}"
+            return write_stl(result.mesh, path, header, config.mesh.chunk_faces)
+        case MeshFormat.GLB:
+            return write_glb(
+                result.mesh,
+                path,
+                label.key,
+                config.mesh.glb_position_bits,
+                config.mesh.chunk_faces,
+            )
 
 
 @dataclass(frozen=True, slots=True)
 class MeshFile:
-    """A label's surface, written as a binary STL file.
+    """A label's surface, written as a mesh file.
 
     Attributes:
-        path: The STL file (coordinates in µm).
+        path: The STL or GLB file (coordinates in µm).
         n_faces: Number of triangles.
         volume_mm3: Enclosed volume.
     """
@@ -172,7 +192,7 @@ def write_mesh_file(
     config: "PyBonesConfig",
     progress: "ProgressCallback" = no_progress,
 ) -> MeshFile:
-    """Mesh one label and write it as a binary STL file, which appears only once complete.
+    """Mesh one label and write it as a mesh file, which appears only once complete.
 
     The file is written under a temporary name and renamed at the end, so a reader
     never sees a partial mesh, and a failure or a cancellation leaves no file behind.
@@ -180,7 +200,7 @@ def write_mesh_file(
     Args:
         segmentation: Segmentation output directory.
         label: Foreground label to mesh.
-        path: Output STL file (replaced if it exists).
+        path: Output file, ``.stl`` or ``.glb`` (replaced if it exists).
         config: Configuration (mesh settings, voxel size).
         progress: Progress callback, reported as :attr:`Stage.MESH` in
             :data:`MESH_STEPS` steps; a cancelled tracker stops the job between them.
@@ -188,12 +208,13 @@ def write_mesh_file(
     Returns:
         The written file and what it holds.
     """
+    mesh_format = MeshFormat.from_path(path)  # an unsupported extension fails before the work
     progress(Stage.MESH, 0, MESH_STEPS)
     result = mesh_label(segmentation, label, config)
     progress(Stage.MESH, 1, MESH_STEPS)
     partial = path.with_name(path.name + PARTIAL_SUFFIX)
     try:
-        _ = save_mesh(result, label, partial, config)
+        _ = save_mesh(result, label, partial, config, mesh_format)
         # Last cancellation point: once renamed, the file is there to stay.
         progress(Stage.MESH, MESH_STEPS, MESH_STEPS)
         _ = partial.replace(path)

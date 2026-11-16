@@ -24,6 +24,7 @@ from pybones.server.schemas import JobView
 if TYPE_CHECKING:
     from pybones.api.jobs import JobManager, JobStatus
     from pybones.config.schema import PyBonesConfig, ServerConfig
+    from pybones.meshing.formats import MeshFormat
     from pybones.segmentation.labels import Label
     from pybones.segmentation.results import SegmentationMeta
     from pybones.segmentation.stages import ProgressTracker
@@ -38,10 +39,12 @@ class JobTarget:
     Attributes:
         segmentation: Segmentation id.
         label: Label being meshed (``None`` for a segmentation job).
+        mesh_format: Format of the mesh (``None`` for a segmentation job).
     """
 
     segmentation: str
     label: "Label | None"
+    mesh_format: "MeshFormat | None"
 
 
 @dataclass(slots=True)
@@ -81,6 +84,7 @@ class ServerContext:
             **status.model_dump(),
             segmentation=target.segmentation,
             label=None if target.label is None else target.label.key,
+            mesh_format=None if target.mesh_format is None else target.mesh_format.value,
         )
 
     def job(self, job_id: str) -> JobView:
@@ -162,7 +166,7 @@ class ServerContext:
         config = apply_overrides(self.config, request.overrides)
         source = self.library.dataset_path(request.dataset)
         out_dir = self.library.new_segmentation_path(request.name)
-        target = JobTarget(request.name, None)
+        target = JobTarget(request.name, None, None)
 
         def work(tracker: "ProgressTracker") -> "SegmentationMeta":
             """Segment, removing the output folder if the run does not finish.
@@ -189,25 +193,28 @@ class ServerContext:
             self._record(job_id, target)
         return self.job(job_id)
 
-    def start_mesh(self, segmentation_id: str, label: "Label") -> JobView:
-        """Queue the meshing of a label, or return the job already meshing it.
+    def start_mesh(
+        self, segmentation_id: str, label: "Label", mesh_format: "MeshFormat"
+    ) -> JobView:
+        """Queue the meshing of a label in one format, or return the job already doing it.
 
         The geometry (voxel size) is the one the segmentation was made with; the mesh
-        settings (downsampling, smoothing) are the server's. Asking again once a mesh
+        settings (grid, smoothing, GLB precision) are the server's. Asking again once a mesh
         exists rebuilds it, e.g. after changing those settings.
 
         Args:
             segmentation_id: Segmentation id.
             label: Foreground label.
+            mesh_format: File format.
 
         Returns:
             The queued (or already running) job.
         """
-        path = self.library.mesh_path(segmentation_id, label)
+        path = self.library.mesh_path(segmentation_id, label, mesh_format)
         stored = self.library.meta(segmentation_id).config
         config = stored.model_copy(update={"mesh": self.config.mesh})
         segmentation = self.library.segmentation_path(segmentation_id)
-        target = JobTarget(segmentation_id, label)
+        target = JobTarget(segmentation_id, label, mesh_format)
         with self.submit_lock:
             if (current := self.active_job(target)) is not None:
                 return current

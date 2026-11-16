@@ -117,6 +117,7 @@ pybones segment data_set.zip -o output/run                       # ~25 s, ~1.7 G
 python -m pybones segment data_set.zip -o output/run             # same command, as a module
 pybones preview output/run -z 50 --scale 0.5 -o slice50.png
 pybones mesh output/run --label vessel -o vessels.stl             # µm, Taubin-smoothed
+pybones mesh output/run --label vessel -o vessels.glb             # same, glTF (16-bit positions)
 pybones export output/run --label vessel -o output/vessel_png     # ImageJ image sequence
 pybones config > my_config.json                                   # effective configuration
 pybones --config my_config.json --set pipeline.workers=1 segment data_set.zip -o output/run
@@ -169,7 +170,9 @@ each request can be tried with "Try it out". A typical session:
 3. `GET /api/jobs/segmentation-1/events`: its progress, pushed as it happens (Server-Sent Events).
 4. `GET /api/segmentations/run1/slices/50?scale=0.4`: a slice with its labels, as a PNG image.
 5. `POST /api/segmentations/run1/meshes/vessel`, then once its job succeeded,
-   `GET /api/segmentations/run1/meshes/vessel`: the vessel surface (binary STL, µm).
+   `GET /api/segmentations/run1/meshes/vessel`: the vessel surface in µm, as GLB (for the browser);
+   add `?format=stl` to both for an STL file. The mesh settings, precision included, are explained in
+   the [README](README.md#how-it-works).
 
 Other folders or port:
 

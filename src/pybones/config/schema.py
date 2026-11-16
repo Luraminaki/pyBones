@@ -9,6 +9,7 @@ from typing import Annotated, ClassVar, Literal, Self
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
+from pybones.meshing.formats import MeshFormat
 from pybones.segmentation.labels import FOREGROUND_LABELS, Label, label_keys
 from pybones.segmentation.stages import STAGES_3D, Stage
 from pybones.utils.constants import UINT8_MAX
@@ -287,7 +288,12 @@ class TaubinConfig(Section):
 
 
 class MeshConfig(Section):
-    """Surface extraction."""
+    """Surface extraction and mesh files.
+
+    ``downsample`` sets the grid the surface is built on: a factor of 2 averages blocks
+    of 2x2x2 voxels (a 6 µm grid at 3 µm voxels), so details smaller than a block are
+    smoothed; 1 is full resolution, with about 4 times more triangles.
+    """
 
     downsample: Annotated[
         dict[str, Annotated[int, Field(ge=1, le=_MAX_DOWNSAMPLE)]],
@@ -296,6 +302,10 @@ class MeshConfig(Section):
     step_size: int = Field(ge=1, le=50, description="Marching-cubes step (coarser if larger).")
     iso_level: float = Field(gt=0.0, lt=1.0, description="Occupancy level of the surface.")
     chunk_faces: int = Field(ge=1024, le=10**9, description="Triangles per write chunk.")
+    glb_position_bits: Literal[16, 32] = Field(
+        description="GLB positions: 16-bit integers over the bounding box (error <= half of "
+        + "its size / 65535, 8-bit normals) or 32-bit floats. STL is always 32-bit."
+    )
     taubin: TaubinConfig
 
     def factor_for(self, label: Label) -> int:
@@ -372,8 +382,9 @@ class LibraryConfig(Section):
     output_dir: Annotated[str, Field(min_length=1)] = Field(
         description="Folder of the segmentation outputs (one sub-folder each)."
     )
-    mesh_file_template: Annotated[FileName, Field(pattern=r"\{label\}.*\.stl$")] = Field(
-        description="Name of a label's cached mesh, inside its segmentation folder."
+    mesh_file_template: Annotated[FileName, Field(pattern=r"\{label\}.*\.\{format\}$")] = Field(
+        description="Name of a label's cached mesh inside its segmentation folder; "
+        + "{format} is the extension (stl, glb)."
     )
 
 
@@ -381,6 +392,9 @@ class ApiConfig(Section):
     """Limits and timings of the web API."""
 
     max_preview_scale: float = Field(gt=0.0, le=16.0, description="Largest slice image scale.")
+    default_mesh_format: MeshFormat = Field(
+        description="Mesh format when a request names none (glb for the browser, stl to export)."
+    )
     event_heartbeat_s: float = Field(
         gt=0.0, le=3600.0, description="Status repeated on an idle event stream after this time."
     )

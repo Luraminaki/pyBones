@@ -10,6 +10,7 @@ from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from pybones.meshing.formats import MeshFormat
 from pybones.segmentation.labels import FOREGROUND_LABELS, Label, label_keys
 
 #: Bounds of ``preview --scale`` (output scale factor).
@@ -112,10 +113,24 @@ class _LabelArgs(ArgsModel):
 
 
 class MeshArgs(_LabelArgs):
-    """``pybones mesh SEGMENTATION --label L -o OUTPUT.stl``."""
+    """``pybones mesh SEGMENTATION --label L -o OUTPUT.{stl,glb}``."""
 
     command: Literal["mesh"]
-    output: Path
+    output: Path = Field(description="Mesh file; its extension chooses the format.")
+
+    @field_validator("output")
+    @classmethod
+    def _known_format(cls, output: Path) -> Path:
+        """Refuse an output whose extension is not a mesh format.
+
+        Args:
+            output: Requested output file.
+
+        Returns:
+            ``output``, unchanged.
+        """
+        _ = MeshFormat.from_path(output)
+        return output
 
 
 class ExportArgs(_LabelArgs):

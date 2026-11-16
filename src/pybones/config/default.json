@@ -82,6 +82,7 @@
     "step_size": 1,
     "iso_level": 0.5,
     "chunk_faces": 1048576,
+    "glb_position_bits": 16,
     "taubin": {
       "iterations": 10,
       "lambda_factor": 0.5,
