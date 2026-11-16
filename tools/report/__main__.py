@@ -1,6 +1,7 @@
 """``python -m tools.report {history,figures}`` (run from the repository root)."""
 
 import argparse
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
@@ -46,6 +47,9 @@ FIGURE_STEPS: "tuple[Callable[[Context], None], ...]" = (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 def cmd_history(settings: "ReportSettings", repo: Path, force: bool) -> None:
     """Run every configured version on the phantom (and real data) and tabulate the scores.
 
@@ -59,7 +63,7 @@ def cmd_history(settings: "ReportSettings", repo: Path, force: bool) -> None:
     rows = history_rows(settings, phantom, phantom_settings, repo, force)
     path = repo / settings.data_dir / settings.history_csv
     write_csv(rows, path)
-    print(f"Wrote {path}")
+    logger.info("Wrote %s", path)
 
 
 def cmd_figures(settings: "ReportSettings", repo: Path) -> None:
@@ -74,8 +78,8 @@ def cmd_figures(settings: "ReportSettings", repo: Path) -> None:
     )
     for step in FIGURE_STEPS:
         step(ctx)
-        print(f"  {step.__name__}")
-    print(f"Wrote {ctx.figures}, {ctx.data} and {ctx.screenshots}")
+        logger.info("Rendered %s", step.__name__)
+    logger.info("Wrote %s, %s and %s", ctx.figures, ctx.data, ctx.screenshots)
 
 
 def build_parser() -> argparse.ArgumentParser:

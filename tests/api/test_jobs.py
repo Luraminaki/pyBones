@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from pybones.api.jobs import JobManager, JobState, put_latest
+from pybones.api.jobs import MESH_JOB, JobManager, JobState, put_latest
+from pybones.api.operations import MeshFile, segment
 from pybones.config.loader import load_config
+from pybones.segmentation.labels import Label
 from pybones.segmentation.results import SegmentationMeta
 from pybones.segmentation.stages import STAGES_2D, CancelledError, Stage
 from tests.helpers import small_config
@@ -218,3 +220,33 @@ def test_slow_subscribers_lose_the_oldest_snapshots(manager: JobManager) -> None
         put_latest(events, status)
     assert [events.get_nowait().error for _ in range(2)] == ["1", "2"]
     release.set()
+
+
+def test_mesh_job_writes_the_stl_file(
+    manager: JobManager, slice_dir: "Path", tmp_path: "Path"
+) -> None:
+    """A mesh job reports the mesh stage, succeeds and returns the written file."""
+    config = small_config()
+    seg = tmp_path / "seg"
+    _ = segment(slice_dir, seg, config)
+    path = tmp_path / "bone.stl"
+    job_id = manager.submit_mesh(seg, Label.BONE, path, config)
+    result = manager.result(job_id, WAIT_S)
+    status = manager.status(job_id)
+    assert isinstance(result, MeshFile)
+    assert (result.path, path.is_file(), result.n_faces > 0) == (path, True, True)
+    assert (status.kind, status.state) == (MESH_JOB, JobState.SUCCEEDED)
+    assert status.progress is not None
+    assert status.progress.stage == Stage.MESH
+
+
+def test_events_repeat_the_status_when_idle(manager: JobManager) -> None:
+    """With a heartbeat, a quiet job's status is repeated instead of blocking forever."""
+    release, started = threading.Event(), threading.Event()
+    job_id = manager.submit("test", blocked_job(release, started), STAGES_2D, WEIGHTS)
+    assert started.wait(WAIT_S)
+    stream = manager.events(job_id, heartbeat_s=0.01)
+    first, repeated = next(stream), next(stream)
+    assert first.state == repeated.state == JobState.RUNNING
+    release.set()
+    assert [s.state for s in stream][-1] == JobState.SUCCEEDED

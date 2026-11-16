@@ -33,22 +33,28 @@ from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
-from pybones.api.operations import segment
+from pybones.api.operations import segment, write_mesh_file
 from pybones.segmentation.pipeline import planned_stages
 from pybones.segmentation.stages import CancelledError, ProgressTracker, Stage
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator, Mapping
+    from collections.abc import Callable, Generator, Mapping
     from concurrent.futures import Future
     from pathlib import Path
 
+    from pybones.api.operations import MeshFile
     from pybones.config.schema import JobsConfig, PyBonesConfig
+    from pybones.segmentation.labels import Label
     from pybones.segmentation.results import SegmentationMeta
     from pybones.segmentation.stages import Progress
 
 #: Name prefix of the job threads, as shown in the logs.
 JOB_THREAD_PREFIX = "pybones-job"
 SEGMENTATION_JOB = "segmentation"
+MESH_JOB = "mesh"
+#: Stages of a mesh job (a single one: its weight is irrelevant).
+MESH_PLAN = (Stage.MESH,)
+MESH_WEIGHTS = {Stage.MESH: 1.0}
 
 logger = logging.getLogger(__name__)
 
@@ -248,6 +254,34 @@ class JobManager:
             SEGMENTATION_JOB, work, planned_stages(config), config.pipeline.stage_weights
         )
 
+    def submit_mesh(
+        self, segmentation: "Path", label: "Label", path: "Path", config: "PyBonesConfig"
+    ) -> str:
+        """Queue the meshing of one label into a binary STL file.
+
+        Args:
+            segmentation: Segmentation output directory.
+            label: Foreground label to mesh.
+            path: Output STL file (appears only once complete).
+            config: Configuration.
+
+        Returns:
+            The job id; its result is the :class:`~pybones.api.operations.MeshFile`.
+        """
+
+        def work(tracker: ProgressTracker) -> "MeshFile":
+            """Mesh, reporting to the job's tracker.
+
+            Args:
+                tracker: Progress tracker of the job.
+
+            Returns:
+                The written mesh file.
+            """
+            return write_mesh_file(segmentation, label, path, config, tracker)
+
+        return self.submit(MESH_JOB, work, MESH_PLAN, MESH_WEIGHTS)
+
     def _run(self, job: _Job, work: "Callable[[ProgressTracker], object]") -> object:
         """Run a job in a worker thread and record how it ended.
 
@@ -313,7 +347,9 @@ class JobManager:
         for events in subscribers:
             put_latest(events, status)
 
-    def events(self, job_id: str) -> "Iterator[JobStatus]":
+    def events(
+        self, job_id: str, heartbeat_s: float | None = None
+    ) -> "Generator[JobStatus, None, None]":
         """Follow a job: its current status, then every change, until it finishes.
 
         Made for Server-Sent Events: the caller sends each status as it comes. The
@@ -321,6 +357,9 @@ class JobManager:
 
         Args:
             job_id: Job id.
+            heartbeat_s: If set, the current status is repeated whenever nothing was
+                sent for this long, so a server notices a departed client even while
+                the job is quiet (``None``: wait for changes only).
 
         Yields:
             Status snapshots; the last one has a finished state.
@@ -333,7 +372,10 @@ class JobManager:
             status = self._describe(job)
             yield status
             while status.state not in FINISHED_STATES:
-                status = events.get()
+                try:
+                    status = events.get(timeout=heartbeat_s)
+                except queue.Empty:
+                    status = self._describe(job)
                 yield status
         finally:
             with self._lock:

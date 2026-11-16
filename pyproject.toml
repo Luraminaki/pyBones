@@ -7,11 +7,13 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
+    "fastapi>=0.115",
     "numpy>=2.0",
     "opencv-python-headless>=4.10",
     "pydantic>=2.9",
     # Marching cubes only (skimage.measure.marching_cubes).
     "scikit-image>=0.24",
+    "uvicorn>=0.32",
 ]
 
 [project.scripts]
@@ -20,6 +22,7 @@ pybones = "pybones.cli.main:main"
 [dependency-groups]
 dev = [
     "basedpyright>=1.40.2",
+    "httpx2>=2.16.2",
     "pytest>=8",
     "pytest-cov>=7.1.0",
     "ruff>=0.8",
@@ -45,6 +48,12 @@ select = [
 quote-annotations = true
 strict = true
 runtime-evaluated-base-classes = ["pydantic.BaseModel", "pybones.cli.arguments.ArgsModel"]
+# FastAPI reads the signatures of the routes at runtime (parameters, bodies, responses).
+runtime-evaluated-decorators = [
+    "fastapi.APIRouter.get",
+    "fastapi.APIRouter.post",
+    "fastapi.APIRouter.delete",
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

@@ -39,6 +39,9 @@ LOG_FORMAT = (
     "[%(asctime)s] [%(process)d] [%(threadName)s] [%(name)s] [%(levelname)s]: "
     + "%(funcName)s -- %(message)s"
 )
+#: Console layout: short, for a person watching the terminal (the file keeps the details).
+CONSOLE_FORMAT = "%(asctime)s %(levelname)s %(message)s"
+CONSOLE_DATE_FORMAT = "%H:%M:%S"
 LOG_FILE_TEMPLATE = "{stem}-{pid}.log"
 #: Matches a program's log files and their rotated backups: ``<stem>-<pid>.log[.<n>]``.
 _LOG_FILE_PATTERN = r"^{stem}-(?P<pid>\d+)\.log(?:\.\d+)?$"
@@ -152,15 +155,16 @@ def configure_logging(config: "LoggingConfig", stem: str) -> Path:
         path, maxBytes=config.max_bytes, backupCount=config.backup_count, encoding=_ENCODING
     )
     file_handler.setLevel(config.file_level)
+    file_handler.setFormatter(formatter)
     console = logging.StreamHandler()
     console.setLevel(config.console_level)
+    console.setFormatter(logging.Formatter(CONSOLE_FORMAT, CONSOLE_DATE_FORMAT))
 
     root = logging.getLogger()
     for handler in [h for h in root.handlers if getattr(h, _HANDLER_ATTRIBUTE, False)]:
         root.removeHandler(handler)
         handler.close()
     for handler in (file_handler, console):
-        handler.setFormatter(formatter)
         setattr(handler, _HANDLER_ATTRIBUTE, True)
         root.addHandler(handler)
     root.setLevel(min(file_handler.level, console.level))

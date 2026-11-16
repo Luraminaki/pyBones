@@ -15,6 +15,7 @@ tools, and building the report.
   - [INSTALL GUIDE](#install-guide)
   - [DATASET](#dataset)
   - [RUN](#run)
+  - [WEB SERVER](#web-server)
   - [DEVELOPMENT](#development)
   - [TOOLS](#tools)
   - [REPORT (LaTeX)](#report-latex)
@@ -122,8 +123,10 @@ pybones --config my_config.json --set pipeline.workers=1 segment data_set.zip -o
 ```
 
 Every run of `pybones` or of a tool logs to its own file, `logs/<program>-<pid>.log` (time, process,
-thread, module, function, message); warnings and errors also go to the console. Only the most recent
-runs' files are kept (`logging` section of the configuration).
+thread, module, function, message), and to the terminal in a short form (`time level message`): what
+was written where, scores, timings, warnings. Only the most recent runs' files are kept; the levels of
+both are in the `logging` section of the configuration (`console_level` `WARNING` keeps the terminal
+quiet). `pybones config` writes its JSON on stdout, so that it can be redirected to a file.
 
 (*) On an AMD Ryzen AI 9 HX 370 (24 logical cores, 4 worker threads), 24 GB RAM, Linux; the report
 lists the machine every timing was measured on.
@@ -132,6 +135,54 @@ Every tunable value lives in [src/pybones/config/default.json](src/pybones/confi
 is validated (types, bounds) by [src/pybones/config/schema.py](src/pybones/config/schema.py). A user
 file only needs the values it changes. Sizes are physical (µm): if the voxel size of your scan
 differs, change `acquisition.voxel_size_um` and everything follows.
+
+## WEB SERVER
+
+The server reads its stacks from a `data/` folder and writes segmentations to `output/` (both relative
+to the folder you start it from). Put the dataset where it looks, without moving it away from the
+repository root where the other commands expect it:
+
+```sh
+mkdir -p data && ln -s ../data_set.zip data/      # Linux / macOS: a link, no copy
+```
+
+```powershell
+mkdir data; copy data_set.zip data\              # Windows: a copy
+```
+
+Then start it from the repository root:
+
+```sh
+pybones serve                                     # or: uv run pybones serve
+```
+
+and open **<http://127.0.0.1:8000>** in a web browser on the same machine. The terminal prints that
+address (and the folders in use) when the server starts; Ctrl+C stops it, which also cancels the
+running jobs and removes their partial outputs.
+
+There is no web page yet: the address leads to the interactive API documentation (`/docs`), where
+each request can be tried with "Try it out". A typical session:
+
+1. `GET /api/datasets`: the stacks found in `data/` (here `data_set.zip`).
+2. `POST /api/segmentations` with `{"dataset": "data_set.zip", "name": "run1"}`: starts a job
+   (~35 s on the sample); `"overrides": ["refinement.enabled=false"]` changes settings for this run.
+3. `GET /api/jobs/segmentation-1/events`: its progress, pushed as it happens (Server-Sent Events).
+4. `GET /api/segmentations/run1/slices/50?scale=0.4`: a slice with its labels, as a PNG image.
+5. `POST /api/segmentations/run1/meshes/vessel`, then once its job succeeded,
+   `GET /api/segmentations/run1/meshes/vessel`: the vessel surface (binary STL, µm).
+
+Other folders or port:
+
+```sh
+pybones serve --port 8080 --data-dir /srv/stacks --output-dir /srv/segmentations
+pybones serve --server-config my_server.json      # only the values it changes
+```
+
+The server settings (address, folders, limits) live in
+[src/pybones/config/server.json](src/pybones/config/server.json), apart from the segmentation
+configuration (which every segmentation records in its `meta.json`). Clients only send ids (a name in
+the data or output folder), never paths. It listens on `127.0.0.1` without any login: **keep it
+local** (see the limitations in the [README](README.md#known-limitations)).
 
 ## DEVELOPMENT
 

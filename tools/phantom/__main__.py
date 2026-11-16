@@ -1,6 +1,7 @@
 """``python -m tools.phantom {generate,score}`` (run from the repository root)."""
 
 import argparse
+import logging
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
@@ -31,6 +32,9 @@ if TYPE_CHECKING:
 PROGRAM_NAME = "tools-phantom"
 
 
+logger = logging.getLogger(__name__)
+
+
 def cmd_generate(output: Path, settings: "PhantomSettings", config: "PyBonesConfig") -> None:
     """Render the phantom: 16-bit PNG slices + compressed ground truth.
 
@@ -46,14 +50,20 @@ def cmd_generate(output: Path, settings: "PhantomSettings", config: "PyBonesConf
     fractions = ", ".join(
         f"{lab.key}={counts[lab] / phantom.truth.size:.2%}" for lab in FINAL_LABELS
     )
-    print(f"Phantom {phantom.image.shape} in {time.perf_counter() - t0:.1f}s -> {output}")
-    print(f"  truth: {fractions}, clotted vessel voxels={int(phantom.clotted.sum())}")
+    logger.info(
+        "Phantom %s in %.1f s -> %s; truth: %s, clotted vessel voxels=%d",
+        phantom.image.shape,
+        time.perf_counter() - t0,
+        output,
+        fractions,
+        int(phantom.clotted.sum()),
+    )
 
 
 def cmd_score(
     segmentation: Path, phantom_dir: Path, settings: "PhantomSettings", config: "PyBonesConfig"
 ) -> None:
-    """Score a segmentation of the phantom against its ground truth and print the scores.
+    """Score a segmentation of the phantom against its ground truth and log the scores.
 
     Args:
         segmentation: pyBones segmentation output directory.
@@ -67,12 +77,17 @@ def cmd_score(
         prediction, phantom, settings.excluded_value, settings.score.radius_bins_um
     )
     labels = score.labels
-    print(f"accuracy {labels.accuracy:.4f} over {labels.voxels:,} voxels")
-    print("\n".join(labels.report_lines("truth")))
-    print("  vessel recall by radius:")
-    for r in score.vessel_recall_by_radius:
-        print(f"    {r.low_um:>4.0f}-{r.high_um:<4.0f} µm  {r.recall:.3f}  ({r.voxels:,} voxels)")
-    print(f"  vessel recall on clotted segments: {score.clotted_recall:.3f}")
+    lines = [
+        f"accuracy {labels.accuracy:.4f} over {labels.voxels:,} voxels",
+        *labels.report_lines("truth"),
+        "  vessel recall by radius:",
+        *(
+            f"    {r.low_um:>4.0f}-{r.high_um:<4.0f} µm  {r.recall:.3f}  ({r.voxels:,} voxels)"
+            for r in score.vessel_recall_by_radius
+        ),
+        f"  vessel recall on clotted segments: {score.clotted_recall:.3f}",
+    ]
+    logger.info("Phantom scores of %s:\n%s", segmentation, "\n".join(lines))
 
 
 def build_parser() -> argparse.ArgumentParser:

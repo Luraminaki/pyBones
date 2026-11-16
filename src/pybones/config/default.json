@@ -11,7 +11,7 @@
   "logging": {
     "directory": "logs",
     "file_level": "INFO",
-    "console_level": "WARNING",
+    "console_level": "INFO",
     "max_bytes": 5242880,
     "backup_count": 5,
     "max_files": 20

@@ -1,6 +1,7 @@
 """``python -m tools.annotation {prepare,serve,score}`` (run from the repository root)."""
 
 import argparse
+import logging
 import webbrowser
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
@@ -34,6 +35,9 @@ if TYPE_CHECKING:
 
 #: Program name of the log files.
 PROGRAM_NAME = "tools-annotation"
+
+
+logger = logging.getLogger(__name__)
 
 
 def _portable(path: Path) -> str:
@@ -83,7 +87,7 @@ def cmd_prepare(
     stack = source or Path(meta.source)
     crops = select_crops(volume, settings.crops)
     if len(crops) < settings.total_crops:
-        print(f"Only {len(crops)} of {settings.total_crops} crops qualified")
+        logger.warning("Only %d of %d crops qualified", len(crops), settings.total_crops)
     manifest = Manifest(
         source=_portable(stack),
         segmentation=_portable(segmentation),
@@ -97,7 +101,7 @@ def cmd_prepare(
     )
     workspace.save_manifest(manifest)
     extract_crops(stack, volume, crops, settings.crops, config, workspace, settings.prefill)
-    print(f"Prepared {len(crops)} crops in {workspace.root}")
+    logger.info("Prepared %d crops in %s", len(crops), workspace.root)
 
 
 def cmd_regenerate(
@@ -123,7 +127,7 @@ def cmd_regenerate(
         workspace,
         manifest.prefilled,
     )
-    print(f"Regenerated {len(manifest.crops)} crops in {workspace.root}")
+    logger.info("Regenerated %d crops in %s", len(manifest.crops), workspace.root)
 
 
 def cmd_serve(
@@ -144,19 +148,19 @@ def cmd_serve(
     server = make_server(app, settings.server.host, settings.server.port)
     host, port = server.server_address[:2]
     url = f"http://{host!s}:{port}/"
-    print(f"Annotation page: {url}  (Ctrl+C to stop)")
+    logger.info("Annotation page: %s  (Ctrl+C to stop)", url)
     if open_browser:
         _ = webbrowser.open(url)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nStopped.")
+        logger.info("Stopped")
     finally:
         server.server_close()
 
 
 def cmd_score(workspace: Workspace, segmentation: Path, config: "PyBonesConfig") -> None:
-    """Score a segmentation against the saved annotations and print the scores.
+    """Score a segmentation against the saved annotations and log the scores.
 
     Args:
         workspace: Workspace holding the annotations.
@@ -171,11 +175,11 @@ def cmd_score(workspace: Workspace, segmentation: Path, config: "PyBonesConfig")
     if score.crops_scored == 0:
         raise SystemExit("No annotated crop yet")
     labels = score.labels
-    print(
+    summary = (
         f"{score.crops_scored}/{len(manifest.crops)} crops, {labels.voxels:,} annotated px, "
         + f"accuracy {labels.accuracy:.3f} (pybones {__version__})"
     )
-    print("\n".join(labels.report_lines("annotation")))
+    logger.info("%s\n%s", summary, "\n".join(labels.report_lines("annotation")))
 
 
 def build_parser() -> argparse.ArgumentParser:

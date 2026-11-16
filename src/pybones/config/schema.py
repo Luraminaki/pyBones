@@ -10,7 +10,7 @@ from typing import Annotated, ClassVar, Literal, Self
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from pybones.segmentation.labels import FOREGROUND_LABELS, Label, label_keys
-from pybones.segmentation.stages import Stage
+from pybones.segmentation.stages import STAGES_3D, Stage
 from pybones.utils.constants import UINT8_MAX
 
 #: Largest mesh downsampling factor: factor³ must fit the uint16 block counters of the
@@ -57,7 +57,31 @@ Volume = Annotated[float, Field(ge=0.0, le=1e18)]
 Fraction = Annotated[float, Field(ge=0.0, le=1.0)]
 Channel = Annotated[int, Field(ge=0, le=UINT8_MAX)]
 ColorBGR = tuple[Channel, Channel, Channel]
-FileName = Annotated[str, Field(min_length=1, pattern=r"^[^/\\]+$")]
+#: Characters that would turn a file name into a path.
+PATH_SEPARATORS = ("/", "\\")
+
+
+def _plain_name(name: str) -> str:
+    """Check that a configured file name stays inside its folder.
+
+    A validator rather than a ``pattern``: a field adding its own ``pattern`` (e.g. an
+    extension) would replace this one instead of adding to it.
+
+    Args:
+        name: Configured file name.
+
+    Returns:
+        ``name``, unchanged.
+
+    Raises:
+        ValueError: If it is empty or holds a path separator.
+    """
+    if not name or any(sep in name for sep in PATH_SEPARATORS):
+        raise ValueError(f"must be a plain file name (no {' or '.join(PATH_SEPARATORS)}): {name!r}")
+    return name
+
+
+FileName = Annotated[str, AfterValidator(_plain_name)]
 
 
 class Section(BaseModel):
@@ -90,15 +114,15 @@ class PipelineConfig(Section):
 
     @model_validator(mode="after")
     def _every_stage_weighted(self) -> Self:
-        """Check that every stage has a weight.
+        """Check that every segmentation stage has a weight (other jobs bring their own).
 
         Returns:
             The validated section.
 
         Raises:
-            ValueError: If a stage has no weight.
+            ValueError: If a segmentation stage has no weight.
         """
-        missing = sorted(set(Stage) - set(self.stage_weights))
+        missing = sorted(set(STAGES_3D) - set(self.stage_weights))
         if missing:
             raise ValueError(f"stage_weights misses {missing}")
         return self
@@ -327,3 +351,49 @@ class PyBonesConfig(Section):
     refinement: RefinementConfig
     mesh: MeshConfig
     render: RenderConfig
+
+
+class HttpConfig(Section):
+    """Address of the web server (local by default: no authentication)."""
+
+    host: Annotated[str, Field(min_length=1)] = Field(description="Interface to listen on.")
+    port: int = Field(ge=1, le=65535, description="TCP port.")
+    shutdown_timeout_s: int = Field(
+        ge=0, le=3600, description="Grace period for open connections when stopping."
+    )
+
+
+class LibraryConfig(Section):
+    """Folders the web server reads stacks from and writes segmentations to."""
+
+    data_dir: Annotated[str, Field(min_length=1)] = Field(
+        description="Folder of the slice stacks (directories or zip archives)."
+    )
+    output_dir: Annotated[str, Field(min_length=1)] = Field(
+        description="Folder of the segmentation outputs (one sub-folder each)."
+    )
+    mesh_file_template: Annotated[FileName, Field(pattern=r"\{label\}.*\.stl$")] = Field(
+        description="Name of a label's cached mesh, inside its segmentation folder."
+    )
+
+
+class ApiConfig(Section):
+    """Limits and timings of the web API."""
+
+    max_preview_scale: float = Field(gt=0.0, le=16.0, description="Largest slice image scale.")
+    event_heartbeat_s: float = Field(
+        gt=0.0, le=3600.0, description="Status repeated on an idle event stream after this time."
+    )
+
+
+class ServerConfig(Section):
+    """Root of the web server configuration (``server.json``).
+
+    Kept apart from :class:`PyBonesConfig` on purpose: every segmentation stores its
+    :class:`PyBonesConfig`, and deployment settings are neither results nor
+    reproducibility information.
+    """
+
+    http: HttpConfig
+    library: LibraryConfig
+    api: ApiConfig

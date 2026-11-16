@@ -52,6 +52,24 @@ FINAL_LABELS: tuple[Label, ...] = (Label.BACKGROUND, Label.BONE, Label.VESSEL, L
 FOREGROUND_LABELS: tuple[Label, ...] = (Label.BONE, Label.VESSEL, Label.BURST)
 
 
+def foreground_from_key(key: str) -> Label:
+    """Parse the key of a foreground label (``bone``, ``vessel``, ``burst``).
+
+    Args:
+        key: Label key (case-insensitive).
+
+    Returns:
+        The foreground label.
+
+    Raises:
+        ValueError: If ``key`` names no label, or a label that cannot be meshed or exported.
+    """
+    label = Label.from_key(key)
+    if label not in FOREGROUND_LABELS:
+        raise ValueError(f"Choose one of {label_keys(FOREGROUND_LABELS)}, not {key!r}")
+    return label
+
+
 def label_keys(labels: "Iterable[Label]" = Label) -> list[str]:
     """List the keys of ``labels``.
 

@@ -67,8 +67,15 @@ down, must be deliberate.
 \paragraph{Programmatic interface} Every operation (segment, preview, mesh, export, compare) is a plain
 function of \code{pybones.api}, which the command line merely wraps. Long runs can be started as
 background jobs that report their progress (stage, overall fraction, remaining time) and can be
-cancelled, leaving no partial file behind: the groundwork of a web interface. Every run also writes its
-own log file.
+cancelled, leaving no partial file behind. Every run also writes its own log file.
+
+\paragraph{Web server} \code{pybones serve} puts an HTTP interface (FastAPI) on top of these functions,
+for a web page to come. It lists the stacks of a data folder and the segmentations of an output folder,
+starts segmentations and meshes as background jobs whose progress is pushed to the browser as it
+happens (Server-Sent Events, no polling), renders a slice with its labels and serves the meshes. A
+client only names things by their id, never by a path, so no request can reach another file. Its
+settings (address, folders) are kept apart from the segmentation configuration, which every
+segmentation records with its result.
 
 \section{Pipeline}
 

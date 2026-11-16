@@ -16,6 +16,7 @@ from pybones.cli.arguments import (
     MeshArgs,
     PreviewArgs,
     SegmentArgs,
+    ServeArgs,
 )
 from pybones.cli.commands import (
     cmd_compare,
@@ -24,6 +25,7 @@ from pybones.cli.commands import (
     cmd_mesh,
     cmd_preview,
     cmd_segment,
+    cmd_serve,
 )
 from pybones.config.loader import load_config
 from pybones.segmentation.labels import FOREGROUND_LABELS, label_keys
@@ -107,6 +109,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="directory or zip of binary reference masks, one per slice",
     )
     _add_label(p)
+
+    p = sub.add_parser("serve", help="run the local web server (HTTP API)")
+    _ = p.add_argument(
+        "--server-config", type=Path, help="JSON file merged over the packaged server.json"
+    )
+    _ = p.add_argument("--host", help="interface to listen on")
+    _ = p.add_argument("--port", type=int, help="TCP port")
+    _ = p.add_argument("--data-dir", type=Path, help="folder of the slice stacks")
+    _ = p.add_argument("--output-dir", type=Path, help="folder of the segmentations")
     return parser
 
 
@@ -132,6 +143,8 @@ def run_command(args: "CommandArgs", config: "PyBonesConfig") -> None:
             cmd_export(args, config)
         case CompareArgs():
             cmd_compare(args, config)
+        case ServeArgs():
+            cmd_serve(args, config)
         case _:
             assert_never(args)
 

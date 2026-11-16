@@ -1,9 +1,11 @@
 """Segmentation output directory: label volume + typed metadata."""
 
-from typing import TYPE_CHECKING, ClassVar
+import json
+from typing import TYPE_CHECKING, Any, ClassVar
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
+from pybones import __version__
 from pybones.config.schema import PyBonesConfig
 from pybones.io.volume_store import open_volume
 from pybones.segmentation.classifier import Thresholds
@@ -17,6 +19,10 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from pybones.config.schema import IOConfig
+
+#: Key of the writing version inside ``meta.json``.
+_VERSION_KEY = "pybones_version"
+_UNKNOWN_VERSION = "an unknown version"
 
 
 class SegmentationMeta(BaseModel):
@@ -43,6 +49,10 @@ class SegmentationMeta(BaseModel):
     refinement: RefinementStats | None
     timing_s: dict[str, float]
     config: PyBonesConfig
+
+
+class IncompatibleOutputError(ValueError):
+    """A segmentation was written by a pyBones whose metadata this version cannot read."""
 
 
 def labels_path(out_dir: "Path", io_config: "IOConfig") -> "Path":
@@ -91,14 +101,33 @@ def save_meta(meta: SegmentationMeta, out_dir: "Path", io_config: "IOConfig") ->
 def load_meta(out_dir: "Path", io_config: "IOConfig") -> SegmentationMeta:
     """Read and validate the metadata of a segmentation output.
 
+    Only metadata of this version's format is read: pyBones is alpha, and an older
+    output is cheaper to segment again than to keep compatible.
+
     Args:
         out_dir: Segmentation output directory.
         io_config: File names.
 
     Returns:
         The validated metadata.
+
+    Raises:
+        IncompatibleOutputError: If the metadata does not match this version's format.
     """
-    return SegmentationMeta.model_validate_json((out_dir / io_config.meta_file).read_text())
+    text = (out_dir / io_config.meta_file).read_text()
+    try:
+        return SegmentationMeta.model_validate_json(text)
+    except ValidationError as exc:
+        try:
+            data: Any = json.loads(text)
+        except json.JSONDecodeError:
+            data = None
+        written_by = data.get(_VERSION_KEY) if isinstance(data, dict) else None
+        version = f"pyBones {written_by}" if written_by else _UNKNOWN_VERSION
+        raise IncompatibleOutputError(
+            f"{out_dir} was written by {version} and cannot be read by pyBones {__version__} "
+            + f"({exc.error_count()} differences): segment the stack again"
+        ) from exc
 
 
 def load_labels(out_dir: "Path", io_config: "IOConfig") -> "NDArray[np.uint8]":

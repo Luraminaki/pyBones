@@ -1,0 +1,16 @@
+{
+  "http": {
+    "host": "127.0.0.1",
+    "port": 8000,
+    "shutdown_timeout_s": 5
+  },
+  "library": {
+    "data_dir": "data",
+    "output_dir": "output",
+    "mesh_file_template": "mesh_{label}.stl"
+  },
+  "api": {
+    "max_preview_scale": 4.0,
+    "event_heartbeat_s": 15.0
+  }
+}

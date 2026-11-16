@@ -1,11 +1,14 @@
 """Implementation of the ``pybones`` sub-commands (one function per command)."""
 
+import json
 import logging
 import sys
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import cv2
+import uvicorn
 
 from pybones.api.operations import (
     compare_label,
@@ -15,12 +18,21 @@ from pybones.api.operations import (
     save_mesh,
     segment,
 )
+from pybones.config.loader import load_server_config
 from pybones.segmentation.pipeline import planned_stages
 from pybones.segmentation.stages import ProgressTracker
+from pybones.server.app import DOCS_PATH, create_app, server_url
 from pybones.utils.constants import JSON_INDENT
 
 if TYPE_CHECKING:
-    from pybones.cli.arguments import CompareArgs, ExportArgs, MeshArgs, PreviewArgs, SegmentArgs
+    from pybones.cli.arguments import (
+        CompareArgs,
+        ExportArgs,
+        MeshArgs,
+        PreviewArgs,
+        SegmentArgs,
+        ServeArgs,
+    )
     from pybones.config.schema import PyBonesConfig
     from pybones.segmentation.stages import Progress
 
@@ -56,7 +68,10 @@ def _print_progress(progress: "Progress") -> None:
 
 
 def cmd_config(config: "PyBonesConfig") -> None:
-    """Print the effective configuration (defaults + user file + overrides) as JSON.
+    """Write the effective configuration (defaults + user file + overrides) as JSON on stdout.
+
+    This is the command's output, not a log message: it is meant to be redirected to a
+    file (``pybones config > my_config.json``).
 
     Args:
         config: Effective configuration.
@@ -65,7 +80,9 @@ def cmd_config(config: "PyBonesConfig") -> None:
 
 
 def cmd_segment(args: "SegmentArgs", config: "PyBonesConfig") -> None:
-    """Segment a stack into a label volume and print a summary.
+    """Segment a stack into a label volume and log the label fractions.
+
+    The pipeline itself logs the thresholds, the refinement and the timings.
 
     Args:
         args: Source stack and output directory.
@@ -75,11 +92,7 @@ def cmd_segment(args: "SegmentArgs", config: "PyBonesConfig") -> None:
     tracker.add_listener(_print_progress)
     meta = segment(args.source, args.output, config, tracker)
     fractions = ", ".join(f"{k}={v:.2%}" for k, v in meta.label_fractions.items())
-    timings = ", ".join(f"{k}={v:.1f}s" for k, v in meta.timing_s.items())
-    print(f"Wrote {args.output}\n  thresholds: {meta.thresholds}\n  fractions: {fractions}")
-    print(f"  timings: {timings}")
-    if meta.refinement is not None:
-        print(f"  refinement: {meta.refinement}")
+    logger.info("Label fractions of %s: %s", args.output, fractions)
 
 
 def cmd_preview(args: "PreviewArgs", config: "PyBonesConfig") -> None:
@@ -96,7 +109,6 @@ def cmd_preview(args: "PreviewArgs", config: "PyBonesConfig") -> None:
     if not cv2.imwrite(str(args.output), image):
         raise OSError(f"Could not write {args.output}")
     logger.info("Wrote preview of slice %d to %s", args.z, args.output)
-    print(f"Wrote {args.output}")
 
 
 def cmd_mesh(args: "MeshArgs", config: "PyBonesConfig") -> None:
@@ -109,9 +121,12 @@ def cmd_mesh(args: "MeshArgs", config: "PyBonesConfig") -> None:
     t0 = time.perf_counter()
     result = mesh_label(args.segmentation, args.label, config)
     _ = save_mesh(result, args.label, args.output, config)
-    print(
-        f"Wrote {args.output}: {result.mesh.n_faces:,} triangles, "
-        + f"volume {result.volume_mm3:.4f} mm³ in {time.perf_counter() - t0:.1f}s"
+    logger.info(
+        "Wrote %s: %s triangles, volume %.4f mm³ in %.1f s",
+        args.output,
+        f"{result.mesh.n_faces:,}",
+        result.volume_mm3,
+        time.perf_counter() - t0,
     )
 
 
@@ -122,19 +137,67 @@ def cmd_export(args: "ExportArgs", config: "PyBonesConfig") -> None:
         args: Segmentation, label and output directory.
         config: Effective configuration.
     """
-    paths = export_masks(args.segmentation, args.label, args.output, config)
-    print(f"Wrote {len(paths)} slices to {args.output}")
+    _ = export_masks(args.segmentation, args.label, args.output, config)
 
 
 def cmd_compare(args: "CompareArgs", config: "PyBonesConfig") -> None:
-    """Compare one label with a reference sequence of binary masks and print the scores.
+    """Compare one label with a reference sequence of binary masks and log the scores.
 
     Args:
         args: Segmentation, label and reference masks (directory or zip, one per slice).
         config: Effective configuration.
     """
     result = compare_label(args.segmentation, args.label, args.reference, config)
-    print(
-        f"{args.label.key}: dice={result.dice:.3f} "
-        + f"precision={result.precision:.3f} recall={result.recall:.3f}"
+    logger.info(
+        "%s: dice=%.3f precision=%.3f recall=%.3f",
+        args.label.key,
+        result.dice,
+        result.precision,
+        result.recall,
+    )
+
+
+def server_overrides(args: "ServeArgs") -> list[str]:
+    """Express the ``serve`` options given on the command line as server config overrides.
+
+    Args:
+        args: ``serve`` arguments.
+
+    Returns:
+        ``section.key=<JSON value>`` strings (JSON-encoded, so no value is misread).
+    """
+    given = {
+        "http.host": args.host,
+        "http.port": args.port,
+        "library.data_dir": None if args.data_dir is None else str(args.data_dir),
+        "library.output_dir": None if args.output_dir is None else str(args.output_dir),
+    }
+    return [f"{key}={json.dumps(value)}" for key, value in given.items() if value is not None]
+
+
+def cmd_serve(args: "ServeArgs", config: "PyBonesConfig") -> None:
+    """Run the local web server until interrupted (Ctrl+C).
+
+    Args:
+        args: Server configuration file and option overrides.
+        config: Base configuration of the segmentations.
+    """
+    server = load_server_config(args.server_config, server_overrides(args))
+    app = create_app(config, server)
+    url = server_url(server)
+    logger.info(
+        "pyBones web server on %s (API documentation: %s%s); data: %s, output: %s; "
+        + "Ctrl+C to stop",
+        url,
+        url,
+        DOCS_PATH,
+        Path(server.library.data_dir).resolve(),
+        Path(server.library.output_dir).resolve(),
+    )
+    uvicorn.run(
+        app,
+        host=server.http.host,
+        port=server.http.port,
+        log_config=None,
+        timeout_graceful_shutdown=server.http.shutdown_timeout_s,
     )

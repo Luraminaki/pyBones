@@ -1,6 +1,7 @@
 """Synthetic data and reference implementations shared by the tests."""
 
 from collections import deque
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import cv2
@@ -12,6 +13,7 @@ from pybones.utils.constants import UINT16_MAX
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
     from numpy.typing import NDArray
 
@@ -131,3 +133,22 @@ def flood_fill_components(
                     seen[n] = True
                     queue.append(n)
     return count
+
+
+#: Ids of the entries of the web server test folders (see ``tests/server/conftest.py``).
+STACK_DIR = "stack"
+STACK_ZIP = "stack.zip"
+SEGMENTATION = "seg"
+
+
+@dataclass(frozen=True, slots=True)
+class Folders:
+    """Data and output folders of a test server.
+
+    Attributes:
+        data: Data folder (a stack directory, the same stack zipped, and non-stacks).
+        output: Output folder (one finished segmentation of the stack).
+    """
+
+    data: "Path"
+    output: "Path"

@@ -44,6 +44,34 @@ annotation page is ready) would close that gap.
   \item \textbf{Bursts and vessels.} A vessel running into a burst cluster is partly absorbed by it.
 \end{itemize}
 
+\section{Other scans}
+
+The thresholds are computed from each scan and every size is in micrometres, so another resolution or
+brightness range should only need configuration changes. Other limits are built into the method:
+\begin{itemize}
+  \item \textbf{Three intensity classes.} The method assumes background $<$ bone $<$ contrast agent:
+        the vessels must be the brightest material (barium or another strongly radio-opaque agent) and
+        the bone must not be decalcified. A preparation where the agent looks dimmer than bone would
+        need new code, not new settings.
+  \item \textbf{One set of thresholds per stack.} A scan whose brightness drifts along the stack is
+        classified with thresholds that fit neither end.
+  \item \textbf{Fixed rules.} A vessel is a bright core with a rim, a tube rather than a plate; bone is
+        large and connected; a burst is an area dense in bright speckles. The numbers behind these rules
+        are settings; the rules are not.
+  \item \textbf{Values tuned on one sample.} Minimum sizes, burst density and the tube-versus-plate
+        cut-off were chosen on this scan and on a phantom calibrated on it. Without a reference, nothing
+        tells whether they still fit another scan.
+  \item \textbf{Format.} One 16-bit grey-level image per slice, ordered by file name.
+\end{itemize}
+A public scan would rarely come with vessel annotations: segmenting it would give one more sample to
+look at, not a measured accuracy.
+
+\section{The web server}
+
+The server has no login and must stay on the local machine; it reads stacks from its own disk (no
+upload). It has no web page yet, only its interactive documentation. The full vessel mesh of the
+sample weighs about 134\,MB (2.7 million triangles), too heavy to send to a browser as it is.
+
 \section{The original goal}
 
 The brief asked for a quantified network: nodes, branches, calibre, branch lengths. pyBones delivers a

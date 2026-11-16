@@ -16,6 +16,33 @@ from package metadata at runtime; every segmentation records it in its
 - Jobs push their status: `JobManager.events(job_id)` yields every state change and throttled
   progress, ready for Server-Sent Events (no polling); bounded per-subscriber queues drop the oldest
   snapshots first (`jobs.event_interval_s`, `jobs.event_queue_size`).
+- Web API: `pybones serve` runs a local FastAPI server (`pybones.server`) listing the stacks of a data
+  folder and the segmentations of an output folder, starting segmentations and meshes as jobs
+  followed with Server-Sent Events, cancelling them, rendering slices (PNG) and serving meshes
+  (binary STL). Clients address everything by id, never by path; errors use HTTP status codes. Its
+  settings live in a separate `server.json`, so that deployment settings never enter `meta.json`.
+  Interactive API documentation (Swagger UI) at `http://127.0.0.1:8000/docs`, where `/` redirects
+  until the web page exists. Meshes take the segmentation's voxel size and the server's mesh settings;
+  asking for an existing mesh again rebuilds it.
+- Mesh jobs: `JobManager.submit_mesh` and `write_mesh_file` (written under a temporary name, renamed
+  once complete; a cancelled job leaves no file). New `mesh` stage; `pipeline.stage_weights` only
+  needs the segmentation stages.
+- `JobManager.events(job_id, heartbeat_s)` repeats the status of a quiet job, so a server notices a
+  departed client.
+- New dependencies: `fastapi`, `uvicorn`; `httpx2` for the tests.
+- Messages of the `pybones` commands and of the tools go through the logger instead of `print`: the
+  terminal shows them in a short `time level message` form (`logging.console_level` is now `INFO`),
+  the log file in full. `pybones config` still writes its JSON on stdout, and the progress line still
+  updates in place.
+- A segmentation written by an older pyBones is refused with a clear message (both versions, and
+  "segment the stack again") instead of a validation dump; the web server skips it when listing and
+  answers 409 when it is asked for. Outputs are not kept compatible across versions while alpha.
+- Configuration file names (`io.*_file`, `io.*_template`) now really refuse paths: a field's own
+  pattern (its extension) used to replace the "no `/` or `\`" rule instead of adding to it.
+- Documentation: how to start the web server and which address to open (README, INSTALL "WEB
+  SERVER"); README "KNOWN LIMITATIONS" grouped into results, other scans (preparation, thresholds,
+  fixed rules, values tuned on one sample, format) and web server; the report gains the web server
+  (Chapter 3) and the limits for other scans and of the server (Chapter 7).
 
 ## 0.5.0-alpha
 

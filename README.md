@@ -76,6 +76,19 @@ uv run pybones mesh output/run --label vessel -o vessels.stl
 
 `pybones` (or `python -m pybones`) is the single entry point; see `pybones --help`.
 
+To drive it from a web browser instead, start the local server (it reads its stacks from `data/`):
+
+```sh
+mkdir -p data && ln -s ../data_set.zip data/    # Windows: copy data_set.zip into data\
+uv run pybones serve
+```
+
+Then open **<http://127.0.0.1:8000>** in a browser (Ctrl+C in the terminal stops the server). For now
+it leads to the interactive API documentation (FastAPI's Swagger UI), also reachable directly at
+**<http://127.0.0.1:8000/docs>**: every request is listed there with its parameters and answers, and
+can be tried with "Try it out". The web page with the slice and 3D viewers is the next step. Details:
+[INSTALL.md](INSTALL.md#web-server).
+
 ## INSTALLATION
 
 Prerequisites per OS (Debian/Ubuntu, Arch Linux, Windows), installation with uv or pip, the dataset,
@@ -127,6 +140,8 @@ src/pybones/
   analysis/       Dice / precision / recall
   visualization/  label overlays
   cli/            pybones command
+  api/            operations as functions, background jobs (progress, cancellation, events)
+  server/         local web server (FastAPI): HTTP API over api/
 tools/            annotation page, synthetic phantom, report benchmark & figures
 tests/            mirrors src/ and tools/ (pytest, synthetic data)
 docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it compares against
@@ -134,19 +149,65 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
 
 ## KNOWN LIMITATIONS
 
+**Results**
+
 - **Voxel size**: unknown; 3 µm isotropic is an estimate (anatomy and the 2018 project brief agree).
 - **Thin vessels**: below ~6 µm radius, a vessel is smaller than the scanner blur; about 4 in 10 are
   found. Measured diameters under ~12 µm will be overestimated.
+- **Vessels and bone look alike**: even the researchers could not always tell them apart on this scan.
+  The segmentation is a best effort, not a ground truth.
+- **Freezer damage**: the femur was frozen, so burst vessels and leaked or clotted contrast agent are
+  part of the data; bursts are labelled as such, clotted segments leave gaps in the network.
 - **No expert validation**: the phantom is realistic but synthetic. The annotation tool is ready for
   anyone who can label real crops.
+- **One sample**: pyBones has only ever seen this one scan.
+
+**Other scans**
+
+- **Preparation**: the thresholds are computed from each scan (3-class Otsu), and every size is in µm,
+  so another resolution or brightness range only needs configuration changes. But the method assumes
+  three intensity classes, background < bone < vessel: vessels must be the brightest material
+  (barium or another strongly radio-opaque agent) and the bone must not be decalcified. A scan where
+  the contrast agent looks dimmer than bone would need code changes, not settings.
+- **One set of thresholds per stack**: they are estimated once for the whole stack, so a scan whose
+  brightness drifts from one end to the other is classified with thresholds that fit neither end.
+- **Fixed rules**: a vessel is a bright core with a rim, a tube rather than a plate; bone is large,
+  connected material; a burst is an area dense in bright speckles (freezer damage). The numbers behind
+  these rules are settings, the rules themselves are code: tissue that does not look like this is
+  misclassified.
+- **Values tuned on one sample**: the minimum sizes, the burst density and the tubularity cut-off were
+  chosen on this scan (and on a phantom calibrated on it). Another scan will likely need them adjusted,
+  and there is no automatic way to check the result without a reference.
+- **Voxel size must be known**: every size goes through `acquisition.voxel_size_um`; a wrong value
+  scales every rule, and the meshes, by the same error.
+- **No ground truth**: a public scan rarely comes with vessel annotations or measurements; without
+  them, segmenting it gives one more sample to look at, not a measured accuracy.
+- **Format**: 16-bit grey-level slices (TIFF or PNG), one file per slice, in a folder or a zip
+  archive, ordered by their file names (`slice_2` before `slice_10`).
+- **Size**: the stack is streamed, but memory still grows with it (~1.7 GB peak for the 100 × 2300 ×
+  1487 sample).
+- **Older segmentations**: pyBones only reads the outputs of its own version's format; an output
+  written by an older version is refused with a message naming both versions. Segment the stack
+  again (~35 s for the sample): while the project is alpha, outputs are not kept compatible.
+
+**Web server**
+
+- **Local only**: no login and no access control; it listens on `127.0.0.1` and must stay there.
+- **No upload**: stacks are read from the data folder on the server's own disk.
+- **No web page yet**: the API works and is documented in the browser; the viewers come next.
+- **Heavy meshes**: the full vessel mesh of the sample is ~134 MB (~2.7 million triangles), too heavy
+  to send to a browser as is.
+- **One job at a time** by default (`jobs.max_concurrent`): a segmentation takes ~1.7 GB of RAM.
+- **Cached meshes are not rebuilt by themselves**: a mesh is built once per label and kept next to its
+  segmentation; after changing the mesh settings, build it again (`POST` its address) to refresh it.
 
 ## POSSIBLE FUTURE UPDATES
 
 - Vascular quantification (the original goal): centrelines, network graph, node / branch counts,
   calibre and branch lengths.
 - Bridging small vessel gaps (clots) along the vessel direction.
-- A web interface (FastAPI) with an in-browser 3D view of the volume, on top of the existing job API
-  (`pybones.api`: background segmentation with progress and cancellation).
+- A web page on top of the local web server: slices with their labels, and an in-browser 3D view of
+  the meshes (lighter meshes first).
 
 ## LICENSE AND DATA
 

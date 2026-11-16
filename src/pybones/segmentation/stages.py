@@ -21,13 +21,15 @@ if TYPE_CHECKING:
 
 
 class Stage(StrEnum):
-    """Pipeline stages, in execution order."""
+    """Stages of the jobs: the segmentation pipeline's, in execution order, then meshing."""
 
     THRESHOLDS = "thresholds"
     CLASSIFY = "classify"
     ANALYSE = "analyse"
     RESOLVE = "resolve"
     CLEAN = "clean"
+    #: Surface extraction of one label (a job of its own, after a segmentation).
+    MESH = "mesh"
 
 
 #: Stages of a run without / with the 3D refinement.

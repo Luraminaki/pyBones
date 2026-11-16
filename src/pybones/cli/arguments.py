@@ -14,6 +14,8 @@ from pybones.segmentation.labels import FOREGROUND_LABELS, Label, label_keys
 
 #: Bounds of ``preview --scale`` (output scale factor).
 MAX_PREVIEW_SCALE = 16.0
+#: Largest TCP port.
+MAX_PORT = 65535
 
 
 class ArgsModel(BaseModel):
@@ -130,8 +132,22 @@ class CompareArgs(_LabelArgs):
     reference: Path
 
 
+class ServeArgs(ArgsModel):
+    """``pybones serve``: run the local web server.
+
+    Every option left out keeps the value of the server configuration.
+    """
+
+    command: Literal["serve"]
+    server_config: Path | None = Field(description="JSON file merged over server.json.")
+    host: str | None = Field(min_length=1, description="Interface to listen on.")
+    port: int | None = Field(ge=1, le=MAX_PORT, description="TCP port.")
+    data_dir: Path | None = Field(description="Folder of the slice stacks.")
+    output_dir: Path | None = Field(description="Folder of the segmentations.")
+
+
 CommandArgs = Annotated[
-    ConfigArgs | SegmentArgs | PreviewArgs | MeshArgs | ExportArgs | CompareArgs,
+    ConfigArgs | SegmentArgs | PreviewArgs | MeshArgs | ExportArgs | CompareArgs | ServeArgs,
     Field(discriminator="command"),
 ]
 

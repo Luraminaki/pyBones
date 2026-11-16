@@ -239,7 +239,6 @@ def history_rows(
         vessel = float(row[metric_column(Label.VESSEL, dice)])
         burst = float(row[metric_column(Label.BURST, dice)])
         logger.info("%s (%s): vessel Dice %.3f, burst Dice %.3f", version.key, state, vessel, burst)
-        print(f"  {version.key:<10} {state:<8} vessel Dice {vessel:.3f}  burst Dice {burst:.3f}")
     return rows
 
 

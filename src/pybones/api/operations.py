@@ -21,7 +21,7 @@ from pybones.meshing.marching import extract_surface
 from pybones.meshing.stl import write_stl
 from pybones.segmentation.pipeline import run_segmentation
 from pybones.segmentation.results import load_labels, load_meta
-from pybones.segmentation.stages import no_progress
+from pybones.segmentation.stages import Stage, no_progress
 from pybones.visualization.overlay import overlay
 
 if TYPE_CHECKING:
@@ -37,6 +37,10 @@ if TYPE_CHECKING:
 #: Prefix of the 80-byte STL header (followed by the label key).
 STL_HEADER_PREFIX = "pybones"
 UM3_PER_MM3 = 1e9
+#: Suffix of a file being written; it is renamed to its final name once complete.
+PARTIAL_SUFFIX = ".partial"
+#: Progress steps of :func:`write_mesh_file`: surface extracted, file written.
+MESH_STEPS = 2
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +148,58 @@ def save_mesh(result: MeshResult, label: "Label", path: Path, config: "PyBonesCo
     """
     header = f"{STL_HEADER_PREFIX} {label.key}"
     return write_stl(result.mesh, path, header, config.mesh.chunk_faces)
+
+
+@dataclass(frozen=True, slots=True)
+class MeshFile:
+    """A label's surface, written as a binary STL file.
+
+    Attributes:
+        path: The STL file (coordinates in µm).
+        n_faces: Number of triangles.
+        volume_mm3: Enclosed volume.
+    """
+
+    path: Path
+    n_faces: int
+    volume_mm3: float
+
+
+def write_mesh_file(
+    segmentation: Path,
+    label: "Label",
+    path: Path,
+    config: "PyBonesConfig",
+    progress: "ProgressCallback" = no_progress,
+) -> MeshFile:
+    """Mesh one label and write it as a binary STL file, which appears only once complete.
+
+    The file is written under a temporary name and renamed at the end, so a reader
+    never sees a partial mesh, and a failure or a cancellation leaves no file behind.
+
+    Args:
+        segmentation: Segmentation output directory.
+        label: Foreground label to mesh.
+        path: Output STL file (replaced if it exists).
+        config: Configuration (mesh settings, voxel size).
+        progress: Progress callback, reported as :attr:`Stage.MESH` in
+            :data:`MESH_STEPS` steps; a cancelled tracker stops the job between them.
+
+    Returns:
+        The written file and what it holds.
+    """
+    progress(Stage.MESH, 0, MESH_STEPS)
+    result = mesh_label(segmentation, label, config)
+    progress(Stage.MESH, 1, MESH_STEPS)
+    partial = path.with_name(path.name + PARTIAL_SUFFIX)
+    try:
+        _ = save_mesh(result, label, partial, config)
+        # Last cancellation point: once renamed, the file is there to stay.
+        progress(Stage.MESH, MESH_STEPS, MESH_STEPS)
+        _ = partial.replace(path)
+    finally:
+        partial.unlink(missing_ok=True)
+    return MeshFile(path=path, n_faces=result.mesh.n_faces, volume_mm3=result.volume_mm3)
 
 
 def export_masks(

@@ -1,6 +1,7 @@
 """Tests of the synthetic phantom and its scorer (:mod:`tools.phantom`)."""
 
 import json
+import logging
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -22,6 +23,8 @@ if TYPE_CHECKING:
     from tools.phantom.generator import Phantom
 
 VOXEL = (3.0, 3.0, 3.0)
+#: Logger of the phantom command line (``tools/phantom/__main__.py``).
+PHANTOM_CLI_LOGGER = "tools.phantom.__main__"
 SHAPE = (24, 96, 96)
 
 
@@ -107,9 +110,7 @@ def test_storage_roundtrip(phantom: "Phantom", tmp_path: "Path") -> None:
     np.testing.assert_array_equal(loaded.clotted, phantom.clotted)
 
 
-def test_generate_segment_and_score_cli(
-    tmp_path: "Path", capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_generate_segment_and_score_cli(tmp_path: "Path", caplog: pytest.LogCaptureFixture) -> None:
     """The CLI renders a phantom that pybones segments and the scorer evaluates."""
     settings_path = tmp_path / "phantom.json"
     _ = settings_path.write_text(small_settings().model_dump_json())
@@ -117,10 +118,12 @@ def test_generate_segment_and_score_cli(
     phantom_main(["--settings", str(settings_path), "generate", "-o", str(phantom_dir)])
     slices = phantom_dir / small_settings().files.slices_dir
     pybones_main([*cli_overrides(), "segment", str(slices), "-o", str(seg)])
-    _ = capsys.readouterr()
-    phantom_main(
-        ["--settings", str(settings_path), "score", str(seg), "--phantom", str(phantom_dir)]
-    )
-    out = capsys.readouterr().out
-    assert out.startswith("accuracy ")
-    assert "vessel recall by radius" in out
+    caplog.clear()
+    with caplog.at_level(logging.INFO):
+        phantom_main(
+            ["--settings", str(settings_path), "score", str(seg), "--phantom", str(phantom_dir)]
+        )
+    scores = [r.getMessage() for r in caplog.records if r.name == PHANTOM_CLI_LOGGER]
+    assert len(scores) == 1
+    assert "\naccuracy " in scores[0]
+    assert "vessel recall by radius" in scores[0]
