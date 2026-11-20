@@ -21,7 +21,8 @@ I wanted to know how far the same problem could be taken with a clean method, so
 from scratch. This report covers that rewrite, \textbf{pyBones}. I set myself four goals at the start:
 \begin{itemize}
   \item no Matlab: Python only, with a minimal set of dependencies (numpy and OpenCV for the
-        computations, pydantic for the configuration, scikit-image for marching cubes only);
+        computations, pydantic for the configuration, scikit-image for marching cubes only; later,
+        FastAPI and uvicorn for the web server, and three.js, kept in the repository, for the page);
   \item clean, documented, tested code, every tunable value in a validated configuration file;
   \item computation speed and memory as first-class concerns, but correctness first;
   \item improve the results, and \emph{prove} it.
@@ -56,7 +57,7 @@ Three kinds of material appear, from dark to bright:
 \section{Structure of this report}
 
 Chapter~\ref{chap:legacy} summarises the 2018 project and its limitations. Chapter~\ref{chap:rewrite}
-presents the architecture of the rewrite. Chapter~\ref{chap:segmentation} explains each step of the
+presents the architecture of the rewrite, its web server and the page that replaces our 2018 viewer. Chapter~\ref{chap:segmentation} explains each step of the
 segmentation, why I built it that way, and what it changed. Chapter~\ref{chap:validation} shows how I
 validated the results without any expert annotation, and how every intermediate version of the
 rewrite scores on the same synthetic ground truth. Chapter~\ref{chap:performance} covers speed and

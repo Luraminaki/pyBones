@@ -45,7 +45,30 @@ values will differ; the comparison between versions holds, since they all ran on
   \item \textbf{Compact buffers}: the slices waiting for the 3D burst box are bit-packed (eight times
         smaller), the burst density lives on a 12\um{} grid (sixteen times smaller), the tubularity is
         stored on one byte.
-  \item \textbf{Chunks}: eigenvalues, mesh smoothing and STL writing process bounded batches.
+  \item \textbf{Chunks}: eigenvalues, mesh smoothing, normals and mesh writing process bounded
+        batches.
+\end{itemize}
+
+\paragraph{Meshes} Extracting and smoothing the surface of the vessels takes
+\pbValueMeshVesselSeconds\,s and that of the bone \pbValueMeshBoneSeconds\,s on the same machine, most
+of it in the Taubin smoothing; writing the file adds a few seconds. A mesh job reports
+four weighted stages (block occupancy, surface, smoothing, file), so its progress bar moves with the
+work, and it can be cancelled between them.
+
+\paragraph{On the web page} A page that stays open for hours must not grow: an image cache that never
+empties is enough to crash a browser. So the page holds every resource once:
+\begin{itemize}
+  \item \textbf{Slices are never kept.} Each one is fetched with the browser's cache disabled, shown
+        through a temporary \code{blob:} address that is released as soon as the image is decoded, and
+        the server forbids caching it as well. Scrolling through a stack for hours costs one image.
+  \item \textbf{One slice request at a time.} Dragging the slider never piles renders up on the
+        server: a position asked for during a render waits, and only the latest one is fetched.
+  \item \textbf{Meshes live on the graphics card.} The CPU copy that three.js keeps after uploading a
+        mesh is released, which halves the browser's share; a segmentation left behind frees its
+        meshes. A mesh may be kept by the browser between visits, but it is checked each time, so a
+        rebuilt mesh is never hidden by an old copy.
+  \item \textbf{Following a job holds no thread.} Job events reach the browser through the server's
+        event loop, so any number of open pages cannot starve the slice and list requests.
 \end{itemize}
 
 My last optimisation pass brought the segmentation from 36\,s and 3.3\,GB to the figures above, and the

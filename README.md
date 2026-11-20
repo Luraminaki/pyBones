@@ -124,16 +124,18 @@ lives in one JSON configuration, validated by pydantic.
     stored with its own corners.
   - **GLB** (`.glb`, binary glTF), for the browser (and Blender): each point stored once, loaded
     straight into the GPU. With 16-bit positions (the default), a point is rounded to a grid of
-    65,535 steps across the mesh's bounding box: the error is at most half a step, **0.05 µm on the
-    sample** (a voxel is 3 µm); `32` stores exact floats.
+    65,535 steps across the mesh's bounding box: the error is at most half a step, a small fraction
+    of a voxel on the sample (measured below); `32` stores exact floats.
 
-The vessel mesh of the sample (1.35 million points, 2.7 million triangles, 6 µm grid):
+<!-- meshes:start (written by python -m tools.report figures) -->
+The vessel mesh of the sample (1.35 million points, 2.69 million triangles), with pyBones 0.5.0:
 
-| Format      | Size     | Position error              | Use                                   |
-|-------------|----------|-----------------------------|---------------------------------------|
-| STL         | 134.6 MB | none (32-bit floats)        | other software (ImageJ, MeshLab, ...) |
-| GLB, 32-bit | 64.7 MB  | none (32-bit floats)        | browser, exact positions              |
-| GLB, 16-bit | 48.5 MB  | ≤ 0.05 µm (1/60 of a voxel) | browser (default)                     |
+| Format | Size | Largest position error | Use |
+|---|---|---|---|
+| STL | 134.6 MB | none (32-bit floats) | other software (ImageJ, MeshLab) |
+| GLB, 32-bit | 64.7 MB | none (32-bit floats) | browser, exact positions |
+| GLB, 16-bit | 48.5 MB | 0.05 µm | browser (default) |
+<!-- meshes:end -->
 
 ## VALIDATION
 
@@ -223,11 +225,12 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
 - **No upload**: stacks are read from the data folder on the server's own disk.
 - **A recent browser**: the page needs JavaScript modules, import maps and WebGL 2 (current Firefox,
   Chrome, Edge or Safari). Without WebGL, the 3D tab says so and the rest works.
-- **Large meshes**: on the sample, the vessels are 48.5 MB as 16-bit GLB (2.7 million triangles), the
-  bone 125.4 MB (7 million), the bursts 4.3 MB (see [Mesh files](#how-it-works)). A recent GPU draws
-  all three, but the browser holds them in memory; the bone is off by default. The 6 µm grid
-  (`mesh.downsample` 2) is already a compromise: full resolution quadruples it. Nothing is compressed:
-  on the local machine, compressing would take longer than sending.
+- **Large meshes**: the full vessel and bone meshes of the sample weigh tens to over a hundred MB even
+  as 16-bit GLB (see [Mesh files](#how-it-works), and Table 4.1 of the report for every label). The
+  page keeps them in GPU memory only, and the bone is off by default, but a modest graphics card may
+  struggle with all three. The 6 µm grid (`mesh.downsample` 2) is already a compromise: full
+  resolution quadruples it. Nothing is compressed: on the local machine, compressing would take
+  longer than sending.
 - **Jobs live in memory**: stopping the server cancels the running jobs and forgets the finished
   ones (their results stay on disk). The page remembers the last segmentation viewed in this browser
   only.

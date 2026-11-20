@@ -258,10 +258,10 @@ Meshes are written in micrometres, in one of two formats. Binary STL, for other 
 triangle with its own three corners as 32-bit floats. Binary glTF (GLB), for the browser, stores each
 point once and the triangles as indices into them, and can store the positions as 16-bit integers over
 the mesh's bounding box (the \code{KHR\_mesh\_quantization} extension), with 8-bit normals. A point is
-then off by at most half of the box size divided by 65\,535 on each axis: 0.05\um{} on the sample,
-sixty times less than a voxel. Table~\ref{tab:meshfiles} compares the three choices on the vessel mesh
-of the sample. The storage precision is not the grid the surface is built on: with the default factor
-of 2, that grid is 6\um{}.
+then off by at most half of the box size divided by 65\,535 on each axis: \pbValueMeshErrorUm\um{}
+on the sample, \pbValueMeshErrorVoxelRatio{} times less than a voxel. Table~\ref{tab:meshfiles}
+compares the three choices on the vessel mesh of the sample. The storage precision is not the grid the
+surface is built on: with the default factor of 2, that grid is \pbValueMeshGridUm\um{}.
 
 \begin{table}[ht]
 \centering
@@ -270,13 +270,15 @@ of 2, that grid is 6\um{}.
 \toprule
 Format          & Size          & Position error              & Use \\
 \midrule
-STL             & 134.6\,MB     & none (32-bit floats)        & other software (ImageJ, MeshLab) \\
-GLB, 32-bit     & 64.7\,MB      & none (32-bit floats)        & browser, exact positions \\
-GLB, 16-bit     & 48.5\,MB      & $\leq 0.05$\um{}            & browser (default) \\
+STL             & \pbValueMeshComparedStlMB\,MB      & none (32-bit floats)  & other software (ImageJ, MeshLab) \\
+GLB, 32-bit     & \pbValueMeshComparedGlbFloatMB\,MB & none (32-bit floats)  & browser, exact positions \\
+GLB, 16-bit     & \pbValueMeshVesselGlbMB\,MB        & \pbValueMeshErrorUm\um{} at most & browser (default) \\
 \bottomrule
 \end{tabular}
-\caption{The vessel mesh of the sample (1.35 million points, 2.7 million triangles, 6\um{} grid) in
-each file format.}
+\caption{The vessel mesh of the sample (\pbValueMeshVesselPoints{} million points,
+  \pbValueMeshVesselTriangles{} million triangles, \pbValueMeshGridUm\um{} grid) in each file format.
+  As 16-bit GLB, the bone takes \pbValueMeshBoneGlbMB\,MB (\pbValueMeshBoneTriangles{} million
+  triangles) and the bursts \pbValueMeshBurstGlbMB\,MB.}
 \label{tab:meshfiles}
 \end{table}
 

@@ -79,6 +79,12 @@ from package metadata at runtime; every segmentation records it in its
   - a rebuilt mesh is no longer hidden by the browser's cache: meshes are sent with
     `Cache-Control: no-cache` and an ETag following the file, an unchanged mesh is answered
     `304 Not Modified` (Starlette's `FileResponse` never does), a rebuilt one in full.
+- Report brought up to date with the web work: dependencies (Chapter 1), architecture with `api/`,
+  `server/` and `utils/` (Chapter 3), the memory of the web page and mesh timings (Chapter 6), the
+  limits of the server (Chapter 7), the conclusion and the appendix. Every mesh figure (Table 4.1,
+  sizes, counts, position error, timings) is now measured by `tools.report figures`, which meshes
+  each label in every format (`meshes.csv`); it also writes the README's mesh table between markers.
+  Today's version was re-timed in the same power mode as the others (24 s, 1.7 GB).
 - A finished job's duration no longer keeps growing when it is asked for later (it showed minutes
   for a 14 s job).
 - Mesh files in two formats, chosen by the extension: STL (other software) and GLB (binary glTF, for

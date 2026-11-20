@@ -22,6 +22,7 @@ from tools.report.figures import (
 )
 from tools.report.history import history_rows, write_csv
 from tools.report.latex import history_table, plot_data, readme_scores, values
+from tools.report.meshes import mesh_files, readme_meshes
 from tools.report.settings import DEFAULT_SETTINGS_PATH, load_settings
 
 if TYPE_CHECKING:
@@ -42,8 +43,10 @@ FIGURE_STEPS: "tuple[Callable[[Context], None], ...]" = (
     phantom_figure,
     plot_data,
     history_table,
+    mesh_files,
     values,
     readme_scores,
+    readme_meshes,
 )
 
 

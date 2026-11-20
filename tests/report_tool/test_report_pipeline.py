@@ -21,6 +21,7 @@ from tools.report.extracts import extract_path, load_extract, needed_slices
 from tools.report.history import KEY_COLUMN, history_rows, read_history, write_csv
 from tools.report.latex import README_SCORES_END, README_SCORES_START
 from tools.report.machine import current_machine
+from tools.report.meshes import README_MESHES_END, README_MESHES_START
 from tools.report.runs import RunStats
 from tools.report.settings import ReportSettings
 from tools.report.settings import load_settings as load_report_settings
@@ -121,7 +122,8 @@ def repo(tmp_path: "Path", monkeypatch: pytest.MonkeyPatch) -> "Path":
             mask[20:60] = 255 if name == LEGACY_SERIES[0] else 0
             _ = cv2.imwrite(str(masks / name / f"{name}_{z:03d}.png"), mask)
     _ = (root / settings.readme).write_text(
-        f"# Scores\n{README_SCORES_START}\nold table\n{README_SCORES_END}\nafter\n"
+        f"# Scores\n{README_SCORES_START}\nold table\n{README_SCORES_END}\n"
+        + f"# Meshes\n{README_MESHES_START}\nold meshes\n{README_MESHES_END}\nafter\n"
     )
     monkeypatch.setattr(runs_module, "segment", fake_segment)
     return root
@@ -176,9 +178,13 @@ def test_every_figure_step_runs_on_the_extracts(repo: "Path") -> None:
     values = (ctx.data / "values.tex").read_text()
     assert "\\pbValueCpu" in values
     assert "\\pbValueVesselDice" in values
+    assert "\\pbValueMeshVesselGlbMB" in values
+    assert "\\pbValueMeshErrorVoxelRatio" in values
     readme = (repo / settings.readme).read_text()
     assert "old table" not in readme
     assert "| Vessel |" in readme
+    assert "old meshes" not in readme
+    assert "| GLB, 16-bit |" in readme
     assert readme.endswith("after\n")
 
 

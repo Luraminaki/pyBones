@@ -24,6 +24,7 @@ from tools.report.history import (
     metric_column,
     radius_column,
 )
+from tools.report.meshes import mesh_values
 from tools.report.runs import META_FILE, STATS_FILE, WORKING_TREE_REVISION, read_stats
 
 if TYPE_CHECKING:
@@ -235,6 +236,7 @@ def values(ctx: "Context") -> None:
     for (low, high), name in zip(bands, RADIUS_BAND_NAMES, strict=True):
         entries[f"VesselRecall{name}"] = f"{float(current[radius_column(low, high)]):.2f}"
     entries["ClottedRecall"] = f"{float(current[CLOTTED_RECALL_COLUMN]):.2f}"
+    entries.update(mesh_values(ctx))
     numbers = {  # unformatted twins, for pgfplots coordinates
         "ThrBone": th["bone"],
         "ThrVessel": th["vessel"],

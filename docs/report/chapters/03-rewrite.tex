@@ -36,6 +36,11 @@ The package is split by responsibility:
 \code{analysis/}, \code{visualization/} & agreement metrics, label overlays \\
 \code{cli/}           & the \code{pybones} command (also \code{python -m pybones}); arguments
                         validated into one typed model per sub-command \\
+\code{api/}           & every operation as a plain function; background jobs with progress,
+                        cancellation and pushed status events \\
+\code{server/}        & the local web server (FastAPI) and the web page it serves \\
+\code{utils/}         & logging (one file per run), the ordered thread map, sliding windows along
+                        $z$, format constants \\
 \code{tools/}         & annotation page, synthetic phantom, report benchmark and figures \\
 \bottomrule
 \end{tabularx}
@@ -81,8 +86,10 @@ viewer did, in a browser: segment a stack and follow the run, scroll through its
 overlaid, and turn its meshes around in 3D. It is plain HTML, CSS and JavaScript modules, with no build
 step; the 3D view uses three.js, kept in the repository at a fixed version with the hash of each file,
 so that the page works offline and changes only on purpose. A mesh is sent to the browser once as GLB
-(Section~\ref{sec:meshing}) and drawn by the graphics card: rotating it costs no request. Each step
-of the page was checked in Firefox, and the tests check that every module it imports is served.
+(Section~\ref{sec:meshing}) and drawn by the graphics card: rotating it costs no request. A run can be
+started again from the one on screen, with its settings filled in. Each step of the page was checked
+in Firefox, and the tests check that every module it imports is served and every name it imports
+exists. Chapter~\ref{chap:performance} describes how it keeps the browser's memory bounded.
 
 \begin{figure}[ht]
   \centering

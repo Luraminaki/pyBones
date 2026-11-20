@@ -70,9 +70,10 @@ look at, not a measured accuracy.
 
 The server has no login and must stay on the local machine; it reads stacks from its own disk (no
 upload), and keeps its jobs in memory: stopping it cancels the running ones and forgets the others.
-Meshes go to the browser as GLB (Table~\ref{tab:meshfiles}): 48.5\,MB for the vessels of the sample,
-125.4\,MB for the bone. A recent graphics card draws both, but the browser holds them in memory, and
-the 6\um{} grid is already a compromise: full resolution would quadruple it. Nothing is compressed: on
+Meshes go to the browser as GLB (Table~\ref{tab:meshfiles}): \pbValueMeshVesselGlbMB\,MB for the
+vessels of the sample, \pbValueMeshBoneGlbMB\,MB for the bone. A recent graphics card draws both, but
+they fill its memory, and the \pbValueMeshGridUm\um{} grid is already a compromise: full resolution
+would quadruple it. Nothing is compressed: on
 the local machine, compressing would take longer than sending. The page needs a recent browser
 (JavaScript modules, WebGL~2).
 
