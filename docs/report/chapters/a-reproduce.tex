@@ -2,12 +2,12 @@
 \label{chap:reproduce}
 
 Everything below runs from the repository root, with the dataset saved as
-\code{data\_set.zip} there (see \code{INSTALL.md}).
+\code{data/data\_set.zip} (see \code{INSTALL.md}).
 
 \begin{enumerate}
   \item Segment the stack and generate the phantom:
 \begin{verbatim}
-uv run pybones segment data_set.zip -o output/latest
+uv run pybones segment data/data_set.zip -o output/latest
 uv run python -m tools.phantom generate -o output/phantom
 \end{verbatim}
   \item Run every version listed in \code{tools/report/config.json} on the phantom (and on the real

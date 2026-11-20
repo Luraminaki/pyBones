@@ -8,7 +8,7 @@ id is resolved here, inside its folder.
 import logging
 import re
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -64,12 +64,17 @@ class Library:
         io: File names of the segmentation outputs and slice discovery rules.
         mesh_file_template: Name of a cached mesh inside its segmentation (``{label}``,
             ``{format}``).
+        shapes: Shape of each stack already read, with the modification time and size it
+            was read at (describing a stack decodes a slice: listings happen after every job).
     """
 
     data_dir: Path
     output_dir: Path
     io: "IOConfig"
     mesh_file_template: str
+    shapes: "dict[Path, tuple[int, int, tuple[int, int, int] | None]]" = field(
+        default_factory=dict, compare=False
+    )
 
     @classmethod
     def from_config(cls, config: "LibraryConfig", io: "IOConfig") -> "Library":
@@ -132,16 +137,36 @@ class Library:
             kind = DatasetKind.DIRECTORY if path.is_dir() else DatasetKind.ZIP
             if kind == DatasetKind.ZIP and not zipfile.is_zipfile(path):
                 continue
-            try:
-                with SliceStack(path, self.io) as stack:
-                    depth, height, width = stack.shape
-            except (OSError, ValueError) as exc:
-                logger.debug("Skipping %s: %s", path, exc)
+            shape = self._shape(path)
+            if shape is None:
                 continue
+            depth, height, width = shape
             found.append(
                 DatasetInfo(id=path.name, kind=kind, slices=depth, height=height, width=width)
             )
         return found
+
+    def _shape(self, path: Path) -> tuple[int, int, int] | None:
+        """Read the shape of a stack, again only if the file or folder changed since.
+
+        Args:
+            path: Directory or zip archive.
+
+        Returns:
+            ``(depth, height, width)``, or ``None`` if it holds no readable slice.
+        """
+        stat = path.stat()
+        known = self.shapes.get(path)
+        if known is not None and known[:2] == (stat.st_mtime_ns, stat.st_size):
+            return known[2]
+        shape: tuple[int, int, int] | None = None
+        try:
+            with SliceStack(path, self.io) as stack:
+                shape = stack.shape
+        except (OSError, ValueError) as exc:
+            logger.debug("Not a stack: %s (%s)", path, exc)
+        self.shapes[path] = (stat.st_mtime_ns, stat.st_size, shape)
+        return shape
 
     def dataset_path(self, dataset_id: str) -> Path:
         """Locate a dataset.

@@ -28,13 +28,19 @@ class Stage(StrEnum):
     ANALYSE = "analyse"
     RESOLVE = "resolve"
     CLEAN = "clean"
-    #: Surface extraction of one label (a job of its own, after a segmentation).
-    MESH = "mesh"
+    #: Meshing one label (a job of its own, after a segmentation): block occupancy,
+    #: marching cubes, Taubin smoothing, file writing.
+    OCCUPANCY = "occupancy"
+    SURFACE = "surface"
+    SMOOTHING = "smoothing"
+    WRITING = "writing"
 
 
 #: Stages of a run without / with the 3D refinement.
 STAGES_2D = (Stage.THRESHOLDS, Stage.CLASSIFY)
 STAGES_3D = (*STAGES_2D, Stage.ANALYSE, Stage.RESOLVE, Stage.CLEAN)
+#: Stages of a mesh job.
+MESH_STAGES = (Stage.OCCUPANCY, Stage.SURFACE, Stage.SMOOTHING, Stage.WRITING)
 
 #: Called after each processed item with ``(stage, done, total)``.
 ProgressCallback = Callable[[Stage, int, int], None]

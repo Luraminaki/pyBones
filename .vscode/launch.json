@@ -1,0 +1,118 @@
+{
+    // Debug configurations for pyBones. All of them run in the project venv
+    // (python.defaultInterpreterPath in settings.json).
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "pybones: segment",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pybones.cli.main",
+            "args": ["segment", "data/data_set.zip", "-o", "output/debug"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "pybones: segment (sequential, no refinement)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pybones.cli.main",
+            "args": [
+                "--set", "pipeline.workers=1",
+                "--set", "refinement.enabled=false",
+                "segment", "data/data_set.zip", "-o", "output/debug"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "pybones: preview slice",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pybones.cli.main",
+            "args": [
+                "preview", "output/debug", "-z", "${input:slice}",
+                "--scale", "0.5", "-o", "output/debug/preview_${input:slice}.png"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "pybones: mesh",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pybones.cli.main",
+            "args": [
+                "mesh", "output/debug", "--label", "${input:label}",
+                "-o", "output/debug/${input:label}.stl"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "pybones: print config",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pybones.cli.main",
+            "args": ["config"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "pybones: serve (web page)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pybones.cli.main",
+            "args": ["serve"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "annotation tool: serve",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "tools.annotation",
+            "args": ["serve", "--name", "102OAcentri8sDXZ08", "--open"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "pytest: current file",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": ["-q", "${file}"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ],
+    "inputs": [
+        {
+            "id": "slice",
+            "type": "promptString",
+            "description": "Slice index (z)",
+            "default": "0"
+        },
+        {
+            "id": "label",
+            "type": "pickString",
+            "description": "Label to mesh",
+            "options": ["vessel", "bone", "burst"],
+            "default": "vessel"
+        }
+    ]
+}

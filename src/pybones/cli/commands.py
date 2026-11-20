@@ -13,14 +13,13 @@ import uvicorn
 from pybones.api.operations import (
     compare_label,
     export_masks,
-    mesh_label,
     preview,
-    save_mesh,
     segment,
+    write_mesh_file,
 )
 from pybones.config.loader import load_server_config
 from pybones.segmentation.pipeline import planned_stages
-from pybones.segmentation.stages import ProgressTracker
+from pybones.segmentation.stages import MESH_STAGES, ProgressTracker
 from pybones.server.app import DOCS_PATH, create_app, server_url
 from pybones.utils.constants import JSON_INDENT
 
@@ -112,19 +111,20 @@ def cmd_preview(args: "PreviewArgs", config: "PyBonesConfig") -> None:
 
 
 def cmd_mesh(args: "MeshArgs", config: "PyBonesConfig") -> None:
-    """Mesh one label and save it as a binary STL file (coordinates in µm).
+    """Mesh one label and save it as an STL or GLB file (coordinates in µm), with progress.
 
     Args:
-        args: Segmentation, label and output file.
+        args: Segmentation, label and output file (its extension sets the format).
         config: Effective configuration.
     """
     t0 = time.perf_counter()
-    result = mesh_label(args.segmentation, args.label, config)
-    _ = save_mesh(result, args.label, args.output, config)
+    tracker = ProgressTracker(MESH_STAGES, config.mesh.stage_weights)
+    tracker.add_listener(_print_progress)
+    result = write_mesh_file(args.segmentation, args.label, args.output, config, tracker)
     logger.info(
         "Wrote %s: %s triangles, volume %.4f mm³ in %.1f s",
-        args.output,
-        f"{result.mesh.n_faces:,}",
+        result.path,
+        f"{result.n_faces:,}",
         result.volume_mm3,
         time.perf_counter() - t0,
     )

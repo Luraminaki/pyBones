@@ -1,6 +1,7 @@
-# Raw micro-CT dataset (617 MB) and anything derived from it
+# Raw micro-CT dataset (617 MB, in data/) and anything derived from it; data/ itself is kept
 data_set.zip
-/data/
+/data/*
+!/data/.gitkeep
 output/
 
 # Log files (one per process: <stem>-<pid>.log, rotated)
@@ -15,9 +16,10 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+# ...but not three.js's own build/ folder, vendored for the web page.
+!src/pybones/server/static/vendor/three/build/
 
 # Editors / OS
-.vscode/
 .idea/
 *.m~
 .DS_Store

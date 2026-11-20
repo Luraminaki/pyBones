@@ -22,6 +22,9 @@ from pybones.server.library import ConflictError, NotFoundError
 from pybones.server.schemas import JobView
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
     from pybones.api.jobs import JobManager, JobStatus
     from pybones.config.schema import PyBonesConfig, ServerConfig
     from pybones.meshing.formats import MeshFormat
@@ -45,6 +48,40 @@ class JobTarget:
     segmentation: str
     label: "Label | None"
     mesh_format: "MeshFormat | None"
+
+
+def segmentation_work(
+    source: "Path", out_dir: "Path", config: "PyBonesConfig"
+) -> "Callable[[ProgressTracker], SegmentationMeta]":
+    """Build the work of a segmentation job.
+
+    Args:
+        source: Stack to segment.
+        out_dir: New output folder (created by the run).
+        config: Configuration of the run.
+
+    Returns:
+        The job's work: segments, and removes the output folder if the run does not finish
+        (the pipeline leaves it empty then).
+    """
+
+    def work(tracker: "ProgressTracker") -> "SegmentationMeta":
+        """Segment, removing the output folder if the run does not finish.
+
+        Args:
+            tracker: Progress tracker of the job.
+
+        Returns:
+            The segmentation metadata.
+        """
+        try:
+            return segment(source, out_dir, config, tracker)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                out_dir.rmdir()
+            raise
+
+    return work
 
 
 @dataclass(slots=True)
@@ -165,30 +202,17 @@ class ServerContext:
         """
         config = apply_overrides(self.config, request.overrides)
         source = self.library.dataset_path(request.dataset)
-        out_dir = self.library.new_segmentation_path(request.name)
         target = JobTarget(request.name, None, None)
-
-        def work(tracker: "ProgressTracker") -> "SegmentationMeta":
-            """Segment, removing the output folder if the run does not finish.
-
-            Args:
-                tracker: Progress tracker of the job.
-
-            Returns:
-                The segmentation metadata.
-            """
-            try:
-                return segment(source, out_dir, config, tracker)
-            except BaseException:
-                with contextlib.suppress(OSError):
-                    out_dir.rmdir()
-                raise
-
         with self.submit_lock:
+            # Both checks under the lock: a job finishing in between cannot slip through.
             if self.active_job(target) is not None:
                 raise ConflictError(f"a job is already writing {request.name!r}")
+            out_dir = self.library.new_segmentation_path(request.name)
             job_id = self.jobs.submit(
-                SEGMENTATION_JOB, work, planned_stages(config), config.pipeline.stage_weights
+                SEGMENTATION_JOB,
+                segmentation_work(source, out_dir, config),
+                planned_stages(config),
+                config.pipeline.stage_weights,
             )
             self._record(job_id, target)
         return self.job(job_id)

@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from pybones import __version__
 from pybones.config.schema import PyBonesConfig
 from pybones.server.context import Context
-from pybones.server.schemas import VersionInfo
+from pybones.server.schemas import OVERRIDABLE_SECTIONS, ServerInfo, VersionInfo
 
 router = APIRouter(tags=["system"])
 
@@ -20,6 +20,26 @@ def get_version() -> VersionInfo:
         The version.
     """
     return VersionInfo(version=__version__)
+
+
+@router.get("/server")
+def get_server(context: Context) -> ServerInfo:
+    """Describe this server: version, folders and limits the web page adapts to.
+
+    Args:
+        context: Server state.
+
+    Returns:
+        The server description.
+    """
+    return ServerInfo(
+        version=__version__,
+        data_dir=str(context.library.data_dir),
+        output_dir=str(context.library.output_dir),
+        max_preview_scale=context.server.api.max_preview_scale,
+        default_mesh_format=context.server.api.default_mesh_format.value,
+        overridable_sections=sorted(OVERRIDABLE_SECTIONS),
+    )
 
 
 @router.get("/config")

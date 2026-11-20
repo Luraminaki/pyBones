@@ -3,6 +3,7 @@
 Routes (all under ``/api``; interactive documentation at ``/docs``)::
 
     GET    /version                               version of pyBones
+    GET    /server                                version, folders and limits (for the page)
     GET    /config                                base configuration of new segmentations
     GET    /config/schema                         its JSON schema (types, bounds, descriptions)
     GET    /datasets                              slice stacks of the data folder
@@ -17,7 +18,8 @@ Routes (all under ``/api``; interactive documentation at ``/docs``)::
     GET    /jobs/{id}/events                      follow it (Server-Sent Events)
     DELETE /jobs/{id}                             cancel it (202)
 
-``GET /`` (outside ``/api``) redirects a browser to the documentation.
+Everything outside ``/api`` and ``/docs`` is the web page (:data:`STATIC_DIR`, plain
+HTML, CSS and JavaScript modules; three.js is vendored under ``vendor/``).
 
 Errors use HTTP status codes with FastAPI's ``{"detail": ...}`` body: 404 for an
 unknown id, 409 for a name already taken or a segmentation written by an older pyBones, 422 for
@@ -26,11 +28,13 @@ invalid input.
 
 from contextlib import asynccontextmanager
 from http import HTTPStatus
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from pybones import __version__
 from pybones.api.jobs import JobManager
@@ -52,6 +56,10 @@ DOCS_PATH = "/docs"
 #: Listening addresses meaning "every interface": a browser reaches them as localhost.
 ANY_HOSTS = frozenset({"0.0.0.0", "::"})
 LOCALHOST = "localhost"
+#: The web page: served at the root, after the API and its documentation.
+STATIC_DIR = Path(__file__).with_name("static")
+PAGE_MOUNT = "/"
+PAGE_NAME = "page"
 TITLE = "pyBones"
 DESCRIPTION = "Segmentation and 3D modelling of the intra-osseous vascular network (µCT)."
 
@@ -155,14 +163,6 @@ def create_app(config: "PyBonesConfig", server: "ServerConfig") -> FastAPI:
     app.add_exception_handler(IncompatibleOutputError, conflict)
     for module in (system, datasets, segmentations, jobs):
         app.include_router(module.router, prefix=API_PREFIX)
-
-    @app.get("/", include_in_schema=False)
-    def home() -> RedirectResponse:
-        """Send a browser to the API documentation (until the web page exists).
-
-        Returns:
-            A redirection to :data:`DOCS_PATH`.
-        """
-        return RedirectResponse(DOCS_PATH)
-
+    # Last: the mount answers every path the routes above did not claim.
+    app.mount(PAGE_MOUNT, StaticFiles(directory=STATIC_DIR, html=True), name=PAGE_NAME)
     return app

@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 import pytest
 
 from pybones.api.operations import (
-    MESH_STEPS,
     PARTIAL_SUFFIX,
     compare_label,
     export_masks,
@@ -18,7 +17,7 @@ from pybones.api.operations import (
 from pybones.meshing.gltf import read_glb
 from pybones.meshing.stl import read_stl
 from pybones.segmentation.labels import Label
-from pybones.segmentation.stages import CancelledError, ProgressTracker, Stage
+from pybones.segmentation.stages import MESH_STAGES, CancelledError, ProgressTracker
 from pybones.utils.constants import BGR_CHANNELS
 from tests.helpers import N_SYNTHETIC_SLICES, SLICE_SHAPE, small_config
 
@@ -26,7 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from pybones.segmentation.stages import Progress
+    from pybones.segmentation.stages import Progress, Stage
 
 PREVIEW_SCALE = 0.5
 
@@ -85,54 +84,58 @@ def test_export_and_compare_agree_with_themselves(segmentation: "Path", tmp_path
         _ = compare_label(segmentation, Label.VESSEL, tmp_path / "png", config)
 
 
-def test_mesh_file_appears_only_when_complete(segmentation: "Path", tmp_path: "Path") -> None:
-    """The STL is written in steps of the mesh stage; a cancelled run leaves no file at all."""
+def test_mesh_file_reports_every_stage_and_appears_only_when_complete(
+    segmentation: "Path", tmp_path: "Path"
+) -> None:
+    """Meshing reports its four stages in order; a cancelled run leaves no file at all."""
     config = small_config()
     path = tmp_path / "vessel.stl"
-    steps: list[int] = []
+    seen: list[Stage] = []
 
-    def record(stage: Stage, done: int, total: int) -> None:
-        """Record a progress update.
+    def record(stage: "Stage", done: int, total: int) -> None:
+        """Record the stages reported, in order, and check each update.
 
         Args:
             stage: Reported stage.
             done: Steps done.
             total: Steps in the stage.
         """
-        assert (stage, total) == (Stage.MESH, MESH_STEPS)
-        steps.append(done)
+        assert 0 <= done <= total
+        if not seen or seen[-1] != stage:
+            seen.append(stage)
 
     result = write_mesh_file(segmentation, Label.VESSEL, path, config, record)
-    assert steps == list(range(MESH_STEPS + 1))
+    assert seen == list(MESH_STAGES)
     assert len(read_stl(path)) == result.n_faces
-    for cancel_at in range(MESH_STEPS):  # after the last step, the file stays
-        tracker = ProgressTracker((Stage.MESH,), {Stage.MESH: 1.0})
-        tracker.add_listener(cancel_after(tracker, cancel_at))
-        cancelled = tmp_path / f"cancelled_{cancel_at}.stl"
+    # Cancelled at any stage up to the file being written: no file, no leftover.
+    for stage in MESH_STAGES:
+        tracker = ProgressTracker(MESH_STAGES, config.mesh.stage_weights)
+        tracker.add_listener(cancel_in(tracker, stage))
+        cancelled = tmp_path / f"cancelled_{stage}.stl"
         with pytest.raises(CancelledError):
             _ = write_mesh_file(segmentation, Label.VESSEL, cancelled, config, tracker)
         assert not cancelled.exists()
     assert list(tmp_path.glob(f"*{PARTIAL_SUFFIX}")) == []
 
 
-def cancel_after(tracker: ProgressTracker, step: int) -> "Callable[[Progress], None]":
-    """Build a listener cancelling a run once it reported ``step``.
+def cancel_in(tracker: ProgressTracker, stage: "Stage") -> "Callable[[Progress], None]":
+    """Build a listener cancelling a run at its first update in ``stage``.
 
     Args:
         tracker: Tracker to cancel.
-        step: Step after which to cancel.
+        stage: Stage in which to cancel.
 
     Returns:
         The listener.
     """
 
     def listener(progress: "Progress") -> None:
-        """Cancel the run at the chosen step.
+        """Cancel the run once it reaches the chosen stage.
 
         Args:
             progress: Reported progress.
         """
-        if progress.done == step:
+        if progress.stage == stage:
             tracker.cancel()
 
     return listener

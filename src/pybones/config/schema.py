@@ -11,7 +11,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validat
 
 from pybones.meshing.formats import MeshFormat
 from pybones.segmentation.labels import FOREGROUND_LABELS, Label, label_keys
-from pybones.segmentation.stages import STAGES_3D, Stage
+from pybones.segmentation.stages import MESH_STAGES, STAGES_3D, Stage
 from pybones.utils.constants import UINT8_MAX
 
 #: Largest mesh downsampling factor: factor³ must fit the uint16 block counters of the
@@ -306,7 +306,25 @@ class MeshConfig(Section):
         description="GLB positions: 16-bit integers over the bounding box (error <= half of "
         + "its size / 65535, 8-bit normals) or 32-bit floats. STL is always 32-bit."
     )
+    stage_weights: dict[Stage, Annotated[float, Field(gt=0.0, le=1.0)]] = Field(
+        description="Relative duration of each meshing stage, for the progress of a mesh job "
+        + "(measured on the vessels and the bone of the reference stack)."
+    )
     taubin: TaubinConfig
+
+    @model_validator(mode="after")
+    def _mesh_stages_weighted(self) -> Self:
+        """Check that the weights are exactly those of the meshing stages.
+
+        Returns:
+            The validated section.
+
+        Raises:
+            ValueError: If a meshing stage has no weight, or another stage has one.
+        """
+        if set(self.stage_weights) != set(MESH_STAGES):
+            raise ValueError(f"stage_weights must weight exactly {[s.value for s in MESH_STAGES]}")
+        return self
 
     def factor_for(self, label: Label) -> int:
         """Downsampling factor configured for ``label``.
@@ -391,7 +409,12 @@ class LibraryConfig(Section):
 class ApiConfig(Section):
     """Limits and timings of the web API."""
 
-    max_preview_scale: float = Field(gt=0.0, le=16.0, description="Largest slice image scale.")
+    max_preview_scale: float = Field(
+        gt=0.0,
+        le=1.0,
+        description="Largest slice image scale (1 = full size: a browser zooms on its own, and an "
+        + "enlarged slice would be built in server memory for nothing).",
+    )
     default_mesh_format: MeshFormat = Field(
         description="Mesh format when a request names none (glb for the browser, stl to export)."
     )

@@ -1,5 +1,6 @@
 """Tests of the stacks and segmentations the server reaches (:mod:`pybones.server.library`)."""
 
+import zipfile
 from typing import TYPE_CHECKING
 
 import pytest
@@ -13,6 +14,9 @@ from tests.helpers import N_SYNTHETIC_SLICES, SEGMENTATION, SLICE_SHAPE, STACK_D
 
 if TYPE_CHECKING:
     from tests.helpers import Folders
+
+#: Slices kept when a stack is rewritten shorter.
+SHORTER_STACK = 3
 
 
 @pytest.fixture
@@ -96,3 +100,21 @@ def test_mesh_files_are_listed_once_written(library: Library) -> None:
     """A mesh file inside the segmentation shows in its summary."""
     _ = library.mesh_path(SEGMENTATION, Label.VESSEL, MeshFormat.GLB).write_bytes(b"")
     assert library.summary(SEGMENTATION).meshes == {Label.VESSEL.key: [MeshFormat.GLB.value]}
+
+
+def test_stack_shapes_are_read_again_when_the_stack_changes(
+    library: Library, folders: "Folders"
+) -> None:
+    """A listed stack is described from memory until its file changes, then read again."""
+    first = {d.id: d.slices for d in library.datasets()}
+    assert first[STACK_ZIP] == N_SYNTHETIC_SLICES
+    archive = folders.data / STACK_ZIP
+    with zipfile.ZipFile(archive) as source:
+        kept = sorted(source.namelist())[:SHORTER_STACK]
+        content = {name: source.read(name) for name in kept}
+    with zipfile.ZipFile(archive, "w") as rewritten:
+        for name, data in content.items():
+            rewritten.writestr(name, data)
+    again = {d.id: d.slices for d in library.datasets()}
+    assert again[STACK_ZIP] == SHORTER_STACK
+    assert again[STACK_DIR] == N_SYNTHETIC_SLICES

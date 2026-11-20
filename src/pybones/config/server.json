@@ -10,7 +10,7 @@
     "mesh_file_template": "mesh_{label}.{format}"
   },
   "api": {
-    "max_preview_scale": 4.0,
+    "max_preview_scale": 1.0,
     "default_mesh_format": "glb",
     "event_heartbeat_s": 15.0
   }

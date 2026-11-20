@@ -14,7 +14,7 @@ from pybones.config.loader import (
     override_section,
 )
 from pybones.segmentation.labels import Label
-from pybones.segmentation.stages import STAGES_3D, Stage
+from pybones.segmentation.stages import MESH_STAGES, STAGES_3D
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -81,10 +81,13 @@ def test_unknown_keys_are_rejected(tmp_path: "Path") -> None:
 
 
 def test_stage_weights_cover_the_segmentation_stages_only() -> None:
-    """Every segmentation stage needs a weight; the mesh stage (its own job) does not."""
+    """Segmentation and meshing weigh their own stages (mesh jobs have their own weights)."""
     weights = load_config().pipeline.stage_weights
     assert set(weights) == set(STAGES_3D)
-    assert Stage.MESH not in weights
+    assert not set(weights) & set(MESH_STAGES)
+    assert set(load_config().mesh.stage_weights) == set(MESH_STAGES)
+    with pytest.raises(ValidationError, match="weight exactly"):
+        _ = load_config(overrides=['mesh.stage_weights={"occupancy": 0.5, "surface": 0.5}'])
     partial = json.dumps({s.value: 1.0 for s in STAGES_3D[1:]})
     with pytest.raises(ValidationError, match="misses"):
         _ = load_config(overrides=[f"pipeline.stage_weights={partial}"])
@@ -127,6 +130,7 @@ def test_server_config_loads_and_merges(tmp_path: "Path") -> None:
         'library.mesh_file_template="meshes/{label}.{format}"',  # not a plain file name
         'api.default_mesh_format="obj"',  # not a mesh format
         "api.max_preview_scale=0",  # must be > 0
+        "api.max_preview_scale=2",  # enlarging is the browser's job
         "api.event_heartbeat_s=0",  # must be > 0
     ],
 )

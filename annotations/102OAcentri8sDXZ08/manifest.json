@@ -1,5 +1,5 @@
 {
-  "source": "data_set.zip",
+  "source": "data/data_set.zip",
   "segmentation": "output/latest",
   "segmentation_version": "0.2.0",
   "crop_size": 256,

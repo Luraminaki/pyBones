@@ -41,8 +41,6 @@ STL_HEADER_PREFIX = "pybones"
 UM3_PER_MM3 = 1e9
 #: Suffix of a file being written; it is renamed to its final name once complete.
 PARTIAL_SUFFIX = ".partial"
-#: Progress steps of :func:`write_mesh_file`: surface extracted, file written.
-MESH_STEPS = 2
 
 logger = logging.getLogger(__name__)
 
@@ -118,19 +116,25 @@ def preview(
     return out
 
 
-def mesh_label(segmentation: Path, label: "Label", config: "PyBonesConfig") -> MeshResult:
+def mesh_label(
+    segmentation: Path,
+    label: "Label",
+    config: "PyBonesConfig",
+    progress: "ProgressCallback" = no_progress,
+) -> MeshResult:
     """Extract the smoothed surface of one label.
 
     Args:
         segmentation: Segmentation output directory.
         label: Foreground label to mesh.
         config: Configuration (mesh settings, voxel size).
+        progress: Progress callback (the meshing stages up to :attr:`Stage.SMOOTHING`).
 
     Returns:
         The mesh and its volume.
     """
     labels = load_labels(segmentation, config.io)
-    mesh = extract_surface(labels, label, config.mesh, config.acquisition.voxel_size_um)
+    mesh = extract_surface(labels, label, config.mesh, config.acquisition.voxel_size_um, progress)
     volume_mm3 = mesh.volume(config.mesh.chunk_faces) / UM3_PER_MM3
     logger.info("Meshed %s: %d triangles, %.4f mm3", label.key, mesh.n_faces, volume_mm3)
     return MeshResult(mesh=mesh, volume_mm3=volume_mm3)
@@ -202,21 +206,21 @@ def write_mesh_file(
         label: Foreground label to mesh.
         path: Output file, ``.stl`` or ``.glb`` (replaced if it exists).
         config: Configuration (mesh settings, voxel size).
-        progress: Progress callback, reported as :attr:`Stage.MESH` in
-            :data:`MESH_STEPS` steps; a cancelled tracker stops the job between them.
+        progress: Progress callback, reported through the meshing stages
+            (:data:`~pybones.segmentation.stages.MESH_STAGES`); a cancelled tracker stops the
+            job at its next update, up to the end of :attr:`Stage.WRITING`.
 
     Returns:
         The written file and what it holds.
     """
     mesh_format = MeshFormat.from_path(path)  # an unsupported extension fails before the work
-    progress(Stage.MESH, 0, MESH_STEPS)
-    result = mesh_label(segmentation, label, config)
-    progress(Stage.MESH, 1, MESH_STEPS)
+    result = mesh_label(segmentation, label, config, progress)
+    progress(Stage.WRITING, 0, 1)
     partial = path.with_name(path.name + PARTIAL_SUFFIX)
     try:
         _ = save_mesh(result, label, partial, config, mesh_format)
         # Last cancellation point: once renamed, the file is there to stay.
-        progress(Stage.MESH, MESH_STEPS, MESH_STEPS)
+        progress(Stage.WRITING, 1, 1)
         _ = partial.replace(path)
     finally:
         partial.unlink(missing_ok=True)

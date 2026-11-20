@@ -73,6 +73,9 @@ filterwarnings = [
 [tool.basedpyright]
 # Same checker as the editor extension; `uv run basedpyright` reports what VS Code shows.
 include = ["src", "tests", "tools"]
+# The uv-managed venv, found the same way on every OS (no interpreter path in .vscode/).
+venvPath = "."
+venv = ".venv"
 pythonVersion = "3.12"
 typeCheckingMode = "recommended"
 # numpy / OpenCV / pydantic expose many partially-typed or `Any` values; these rules would only

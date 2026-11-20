@@ -3,6 +3,7 @@
 import json
 import queue
 import threading
+import time
 from typing import TYPE_CHECKING
 
 import pytest
@@ -25,6 +26,8 @@ if TYPE_CHECKING:
 WEIGHTS = dict.fromkeys(Stage, 1.0)
 WAIT_S = 30.0
 FAILURE = "boom"
+#: Wait long enough for a running clock to move.
+SETTLE_S = 0.05
 
 
 @pytest.fixture
@@ -237,7 +240,7 @@ def test_mesh_job_writes_the_stl_file(
     assert (result.path, path.is_file(), result.n_faces > 0) == (path, True, True)
     assert (status.kind, status.state) == (MESH_JOB, JobState.SUCCEEDED)
     assert status.progress is not None
-    assert status.progress.stage == Stage.MESH
+    assert (status.progress.stage, status.progress.fraction) == (Stage.WRITING, 1.0)
 
 
 def test_events_repeat_the_status_when_idle(manager: JobManager) -> None:
@@ -250,3 +253,29 @@ def test_events_repeat_the_status_when_idle(manager: JobManager) -> None:
     assert first.state == repeated.state == JobState.RUNNING
     release.set()
     assert [s.state for s in stream][-1] == JobState.SUCCEEDED
+
+
+def test_a_finished_job_keeps_its_duration(manager: JobManager) -> None:
+    """The elapsed time of a finished job stops at its end instead of following the clock."""
+
+    def quick(tracker: "ProgressTracker") -> int:
+        """Report one update and finish.
+
+        Args:
+            tracker: Progress tracker of the job.
+
+        Returns:
+            0.
+        """
+        tracker(Stage.THRESHOLDS, 1, 1)
+        return 0
+
+    job_id = manager.submit("test", quick, STAGES_2D, WEIGHTS)
+    _ = manager.result(job_id, WAIT_S)
+    first = manager.status(job_id).progress
+    time.sleep(SETTLE_S)
+    later = manager.status(job_id).progress
+    assert first is not None
+    assert later is not None
+    assert later.elapsed_s == first.elapsed_s
+    assert later.remaining_s == 0.0

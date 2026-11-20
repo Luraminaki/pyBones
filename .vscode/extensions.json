@@ -1,0 +1,11 @@
+{
+    // Offered by VS Code when the folder is opened on a machine that lacks them.
+    "recommendations": [
+        "ms-python.python",
+        "ms-python.debugpy",
+        "detachhead.basedpyright",
+        "charliermarsh.ruff"
+    ],
+    // Pylance would duplicate basedpyright's diagnostics (python.languageServer is "None").
+    "unwantedRecommendations": ["ms-python.vscode-pylance"]
+}

@@ -1,18 +1,20 @@
 """Background jobs: list, inspect, follow (Server-Sent Events) and cancel."""
 
+import asyncio
+import contextlib
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Request
-from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 
+from pybones.api.jobs import FINISHED_STATES
 from pybones.server.context import Context
 from pybones.server.library import NotFoundError
 from pybones.server.schemas import JobView
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator, Generator
+    from collections.abc import AsyncIterator, Callable
 
     from pybones.api.jobs import JobStatus
     from pybones.server.context import ServerContext
@@ -24,41 +26,78 @@ SSE_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
-def next_status(events: "Generator[JobStatus, None, None]") -> "JobStatus | None":
-    """Wait for the next status of a job (blocking: run it in a worker thread).
+def offer_latest(inbox: "asyncio.Queue[JobStatus]", status: "JobStatus") -> None:
+    """Queue a status, dropping the oldest one if the client lags (runs in the event loop).
 
     Args:
-        events: The job's event iterator.
+        inbox: The stream's queue.
+        status: Status to send.
+    """
+    while True:
+        try:
+            inbox.put_nowait(status)
+        except asyncio.QueueFull:
+            with contextlib.suppress(asyncio.QueueEmpty):
+                _ = inbox.get_nowait()
+        else:
+            return
+
+
+def sse_event(context: "ServerContext", status: "JobStatus") -> str:
+    """Format a status as one Server-Sent Event.
+
+    Args:
+        context: Server state (adds the job's target).
+        status: Job status.
 
     Returns:
-        The next status, or ``None`` once the job has finished.
+        ``data: <JobView JSON>`` and the blank line ending the event.
     """
-    return next(events, None)
+    return f"data: {context.view(status).model_dump_json()}\n\n"
 
 
 async def sse_stream(
-    context: "ServerContext", events: "Generator[JobStatus, None, None]", request: Request
+    context: "ServerContext",
+    job_id: str,
+    first: "JobStatus",
+    inbox: "asyncio.Queue[JobStatus]",
+    unsubscribe: "Callable[[], None]",
+    request: Request,
 ) -> "AsyncIterator[str]":
-    """Turn a job's statuses into Server-Sent Events, until it finishes or the client leaves.
+    """Send a job's statuses as Server-Sent Events, until it finishes or the client leaves.
 
-    Each wait runs in a worker thread and lasts at most ``api.event_heartbeat_s``, so
-    a departed client is noticed (and unsubscribed) even while the job is quiet.
+    Statuses arrive in ``inbox`` from the job's thread through the event loop, so a
+    waiting stream holds no worker thread. When nothing came for ``api.event_heartbeat_s``,
+    the current status is sent again, which also reveals a departed client.
 
     Args:
         context: Server state.
-        events: The job's event iterator (closed at the end, which unsubscribes).
+        job_id: Job id.
+        first: The job's status when the stream opened.
+        inbox: Statuses sent since.
+        unsubscribe: Stops the job from feeding ``inbox`` (called at the end).
         request: The streaming request (to detect a departed client).
 
     Yields:
-        One ``data: <JobView JSON>`` event per status.
+        One event per status; the last one has a finished state.
     """
+    heartbeat = context.server.api.event_heartbeat_s
+    status = first
     try:
-        while (status := await run_in_threadpool(next_status, events)) is not None:
-            yield f"data: {context.view(status).model_dump_json()}\n\n"
+        yield sse_event(context, status)
+        while status.state not in FINISHED_STATES:
+            try:
+                status = await asyncio.wait_for(inbox.get(), heartbeat)
+            except TimeoutError:
+                try:
+                    status = context.jobs.status(job_id)
+                except KeyError:  # forgotten meanwhile: nothing more to say
+                    return
+            yield sse_event(context, status)
             if await request.is_disconnected():
                 return
     finally:
-        events.close()
+        unsubscribe()
 
 
 @router.get("")
@@ -110,13 +149,26 @@ async def follow_job(context: Context, job_id: str, request: Request) -> Streami
     Raises:
         NotFoundError: If no job has this id.
     """
+    loop = asyncio.get_running_loop()
+    inbox: asyncio.Queue[JobStatus] = asyncio.Queue(maxsize=context.config.jobs.event_queue_size)
+
+    def deliver(status: "JobStatus") -> None:
+        """Hand a status from the job's thread to the event loop (never blocks).
+
+        Args:
+            status: Status sent.
+        """
+        with contextlib.suppress(RuntimeError):  # the loop is closing: nobody to tell
+            _ = loop.call_soon_threadsafe(offer_latest, inbox, status)
+
     try:
-        _ = context.jobs.status(job_id)
+        first, unsubscribe = context.jobs.subscribe(job_id, deliver)
     except KeyError:
         raise NotFoundError(f"no job {job_id!r}") from None
-    events = context.jobs.events(job_id, context.server.api.event_heartbeat_s)
     return StreamingResponse(
-        sse_stream(context, events, request), media_type=SSE_MEDIA_TYPE, headers=SSE_HEADERS
+        sse_stream(context, job_id, first, inbox, unsubscribe, request),
+        media_type=SSE_MEDIA_TYPE,
+        headers=SSE_HEADERS,
     )
 
 

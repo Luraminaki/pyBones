@@ -40,7 +40,7 @@ class SliceStack:
     or directly from a zip archive (no extraction needed).
 
     Example:
-        >>> with SliceStack(Path("data_set.zip"), config.io) as stack:
+        >>> with SliceStack(Path("data/data_set.zip"), config.io) as stack:
         ...     for img in stack:
         ...         ...
 

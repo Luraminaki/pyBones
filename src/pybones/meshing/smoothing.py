@@ -16,16 +16,25 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from pybones.meshing.mesh import Mesh
+from pybones.segmentation.stages import Stage, no_progress
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from pybones.config.schema import TaubinConfig
+    from pybones.segmentation.stages import ProgressCallback
 
 _COORDS = 3
+#: A λ (shrinking) pass then a μ (inflating) pass per iteration.
+_PASSES_PER_ITERATION = 2
 
 
-def taubin_smooth(mesh: Mesh, taubin: "TaubinConfig", chunk_faces: int) -> Mesh:
+def taubin_smooth(
+    mesh: Mesh,
+    taubin: "TaubinConfig",
+    chunk_faces: int,
+    progress: "ProgressCallback" = no_progress,
+) -> Mesh:
     """Smooth a mesh with Taubin's λ|μ algorithm (topology unchanged).
 
     The umbrella operator (mean of the neighbours) is accumulated face chunk by
@@ -38,6 +47,8 @@ def taubin_smooth(mesh: Mesh, taubin: "TaubinConfig", chunk_faces: int) -> Mesh:
         mesh: Input mesh.
         taubin: Number of iterations and the λ (> 0) / μ (< -λ) factors.
         chunk_faces: Faces processed at a time.
+        progress: Progress callback, reported as :attr:`Stage.SMOOTHING` after each λ or μ
+            pass (``2 x iterations`` in all).
 
     Returns:
         A new mesh with moved vertices and the same faces (``mesh`` itself if
@@ -53,6 +64,9 @@ def taubin_smooth(mesh: Mesh, taubin: "TaubinConfig", chunk_faces: int) -> Mesh:
     inv_degree = (1.0 / np.maximum(degree, 1))[:, None]
     vertices = mesh.vertices.astype(np.float64)
     neighbour_sum = np.empty_like(vertices)
+    passes = _PASSES_PER_ITERATION * taubin.iterations
+    done = 0
+    progress(Stage.SMOOTHING, done, passes)
     for _ in range(taubin.iterations):
         for factor in (taubin.lambda_factor, taubin.mu_factor):
             neighbour_sum.fill(0.0)
@@ -65,6 +79,8 @@ def taubin_smooth(mesh: Mesh, taubin: "TaubinConfig", chunk_faces: int) -> Mesh:
             neighbour_sum *= inv_degree
             neighbour_sum -= vertices
             vertices += factor * neighbour_sum
+            done += 1
+            progress(Stage.SMOOTHING, done, passes)
     return Mesh(vertices=vertices.astype(np.float32), faces=mesh.faces)
 
 

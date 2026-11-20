@@ -1,0 +1,52 @@
+{
+    // Interpreter: the uv-managed project venv, .venv (Python 3.12; create it with `uv sync`).
+    // No path here: it differs between Linux / macOS (.venv/bin/python) and Windows
+    // (.venv\Scripts\python.exe), and the Python extension selects a workspace .venv by itself.
+    // basedpyright finds it through pyproject.toml ([tool.basedpyright] venvPath / venv).
+    "python.terminal.activateEnvironment": true,
+    // Type checking: basedpyright, configured in pyproject.toml ([tool.basedpyright]) so that the
+    // editor and `uv run basedpyright` report the same diagnostics.
+    "python.analysis.typeCheckingMode": "off",
+    "python.analysis.useLibraryCodeForTypes": true,
+    "python.languageServer": "None",
+
+    // Tests: pytest, configured in pyproject.toml.
+    "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestArgs": ["tests"],
+
+    // Lint / format: ruff only (rules in pyproject.toml).
+    "ruff.nativeServer": true,
+    "flake8.enabled": false,
+    "pylint.enabled": false,
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.rulers": [100]
+    },
+    "editor.formatOnSave": false,
+    "editor.inlayHints.enabled": "off",
+
+    "files.exclude": {
+        "**/.git": true,
+        "**/.DS_Store": true,
+        "**/__pycache__": true,
+        "**/.pytest_cache": true,
+        "**/.ruff_cache": true,
+        "*.egg-info": true,
+        "*.venv": true
+    },
+    // Large generated data: keep it out of search and file watching.
+    "search.exclude": {
+        "output/**": true,
+        "data/**": true,
+        "uv.lock": true
+    },
+    "files.watcherExclude": {
+        "output/**": true,
+        "**/.venv/**": true
+    },
+
+    "breadcrumbs.enabled": true,
+    "git.autofetch": true,
+    "explorer.confirmDelete": false
+}

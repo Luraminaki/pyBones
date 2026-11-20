@@ -4,7 +4,7 @@
   "worktrees_dir": "output/report/worktrees",
   "runs_dir": "output/report/runs",
   "phantom_dir": "output/phantom",
-  "dataset": "data_set.zip",
+  "dataset": "data/data_set.zip",
   "legacy_masks": "docs/report/2018/masks",
   "data_dir": "docs/report/data",
   "extracts_dir": "docs/report/data/runs",

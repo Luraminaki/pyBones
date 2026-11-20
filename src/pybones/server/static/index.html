@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    // Apply a stored theme before the stylesheet paints (js/theme.js holds the logic).
+    try {
+      const theme = localStorage.getItem('pybones.theme');
+      if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+    } catch {
+      // best effort: the prefers-color-scheme media query decides
+    }
+  </script>
+  <title>pyBones</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/build/three.module.js",
+        "three/addons/": "./vendor/three/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="announcer" class="visually-hidden" role="status" aria-live="polite"></div>
+
+  <div id="file-protocol-warning" class="banner" role="alert" hidden>
+    This page must be served by pyBones: start <code>pybones serve</code> and open the address it
+    prints (by default <code>http://127.0.0.1:8000</code>).
+  </div>
+  <script>
+    // A classic script: module scripts do not run at all from file://.
+    if (location.protocol === 'file:') document.getElementById('file-protocol-warning').hidden = false;
+  </script>
+
+  <header class="topbar">
+    <div class="brand">
+      <img src="icon.svg" alt="" width="28" height="28">
+      <span class="brand-name">pyBones</span>
+      <span id="version" class="muted"></span>
+    </div>
+    <nav class="topbar-actions">
+      <a href="/docs" target="_blank" rel="noopener">API documentation</a>
+      <button id="theme-toggle" type="button" class="ghost" aria-label="Colour theme">Theme: system</button>
+    </nav>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <section class="panel" aria-labelledby="segmentations-title">
+        <div class="panel-head">
+          <h2 id="segmentations-title">Segmentations</h2>
+          <button id="refresh" type="button" class="ghost small" title="Reload the lists">Refresh</button>
+        </div>
+        <ul id="segmentation-list" class="cards"></ul>
+        <p id="segmentation-empty" class="hint" hidden></p>
+      </section>
+
+      <section class="panel" aria-labelledby="new-title">
+        <h2 id="new-title">New segmentation</h2>
+        <p class="hint">Each run gets a name of its own; a run never overwrites another.</p>
+        <form id="segment-form" novalidate>
+          <label for="dataset">Stack</label>
+          <select id="dataset" name="dataset" required></select>
+          <p id="dataset-empty" class="hint" hidden></p>
+
+          <label for="seg-name">Name</label>
+          <input id="seg-name" name="name" required maxlength="128" autocomplete="off"
+                 pattern="[A-Za-z0-9][A-Za-z0-9._\-]*"
+                 title="Letters, digits, dot, dash or underscore; not starting with a dot">
+
+          <details>
+            <summary>Settings for this run</summary>
+            <label for="overrides">One <code>section.key=value</code> per line</label>
+            <textarea id="overrides" name="overrides" rows="3" spellcheck="false"
+                      placeholder="refinement.enabled=false&#10;segmentation.burst.density=0.3"></textarea>
+          </details>
+
+          <button type="submit" id="segment-submit">Segment</button>
+        </form>
+      </section>
+
+      <section class="panel" aria-labelledby="jobs-title">
+        <h2 id="jobs-title">Jobs</h2>
+        <ul id="job-list" class="jobs"></ul>
+        <p id="jobs-empty" class="hint">No job yet.</p>
+      </section>
+    </aside>
+
+    <section class="viewer" aria-labelledby="viewer-title">
+      <div id="viewer-empty" class="viewer-empty">
+        <h2>No segmentation selected</h2>
+        <p class="muted">Pick one in the list, or segment a stack.</p>
+      </div>
+
+      <div id="viewer-content" hidden>
+        <div class="viewer-head">
+          <div>
+            <h2 id="viewer-title"></h2>
+            <p id="viewer-meta" class="muted"></p>
+            <button id="segment-again" type="button" class="ghost small"
+                    title="Fill in the New segmentation form with this run's stack and settings">Segment again…</button>
+          </div>
+          <div class="tabs" role="tablist" aria-label="View">
+            <button type="button" role="tab" id="tab-slices" aria-controls="panel-slices" aria-selected="true">Slices</button>
+            <button type="button" role="tab" id="tab-3d" aria-controls="panel-3d" aria-selected="false">3D</button>
+          </div>
+        </div>
+
+        <div id="panel-slices" role="tabpanel" aria-labelledby="tab-slices" class="tab-panel">
+          <div class="slice-controls">
+            <label for="slice-z">Slice</label>
+            <input id="slice-z" type="range" min="0" max="0" value="0">
+            <output id="slice-z-value" for="slice-z"></output>
+            <label for="slice-scale">Size</label>
+            <select id="slice-scale"></select>
+          </div>
+          <div class="slice-stage">
+            <img id="slice-image" alt="Slice with its labels overlaid">
+            <div id="slice-loading" class="spinner" hidden></div>
+          </div>
+          <ul id="legend" class="legend"></ul>
+        </div>
+
+        <div id="panel-3d" role="tabpanel" aria-labelledby="tab-3d" class="tab-panel" hidden>
+          <div id="mesh-controls" class="mesh-controls"></div>
+          <div id="scene" class="scene">
+            <p id="scene-message" class="scene-message muted">Choose the labels to show.</p>
+          </div>
+          <p class="hint">
+            Left-drag turns or moves the view (the switch above; hold Shift for the other one), right-drag
+            always moves it; the wheel, a two-finger swipe or + / − zoom; the arrow keys move it once the
+            view has the focus. On a touch screen: one finger turns or moves, two fingers move and pinch
+            to zoom. Coordinates in µm.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toasts" class="toasts" aria-live="assertive"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -45,6 +45,26 @@ class VersionInfo(Body):
     version: str
 
 
+class ServerInfo(Body):
+    """``GET /api/server``: what a front end needs to know about this server.
+
+    Attributes:
+        version: Version of pyBones serving the API.
+        data_dir: Absolute folder the stacks are read from.
+        output_dir: Absolute folder the segmentations are written to.
+        max_preview_scale: Largest slice image scale.
+        default_mesh_format: Mesh format when a request names none.
+        overridable_sections: Configuration sections a segmentation request may override.
+    """
+
+    version: str
+    data_dir: str
+    output_dir: str
+    max_preview_scale: float
+    default_mesh_format: str
+    overridable_sections: list[str]
+
+
 class DatasetKind(StrEnum):
     """How a stack is stored."""
 

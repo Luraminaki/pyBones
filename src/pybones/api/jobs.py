@@ -6,7 +6,7 @@ Events: no polling), cancels it with :meth:`JobManager.cancel`, and collects the
 result with :meth:`JobManager.result`::
 
     manager = JobManager(config.jobs)
-    job_id = manager.submit_segmentation(Path("data_set.zip"), Path("output/run"), config)
+    job_id = manager.submit_segmentation(Path("data/data_set.zip"), Path("output/run"), config)
     for status in manager.events(job_id):      # an SSE endpoint yields these as they come
         send(f"data: {status.model_dump_json()}\n\n")
     manager.cancel(job_id)                     # stops at the next slice, leaves no partial files
@@ -27,6 +27,7 @@ import logging
 import queue
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from enum import StrEnum
 from typing import TYPE_CHECKING, ClassVar
@@ -35,10 +36,10 @@ from pydantic import BaseModel, ConfigDict
 
 from pybones.api.operations import segment, write_mesh_file
 from pybones.segmentation.pipeline import planned_stages
-from pybones.segmentation.stages import CancelledError, ProgressTracker, Stage
+from pybones.segmentation.stages import MESH_STAGES, CancelledError, ProgressTracker, Stage
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Mapping
+    from collections.abc import Generator, Mapping
     from concurrent.futures import Future
     from pathlib import Path
 
@@ -52,9 +53,6 @@ if TYPE_CHECKING:
 JOB_THREAD_PREFIX = "pybones-job"
 SEGMENTATION_JOB = "segmentation"
 MESH_JOB = "mesh"
-#: Stages of a mesh job (a single one: its weight is irrelevant).
-MESH_PLAN = (Stage.MESH,)
-MESH_WEIGHTS = {Stage.MESH: 1.0}
 
 logger = logging.getLogger(__name__)
 
@@ -132,8 +130,9 @@ class _Job:
         state: Current state.
         error: Failure message, if any.
         submitted_at: Submission time (seconds since the epoch).
-        subscribers: Event queues of the clients following the job.
+        subscribers: Listeners of the clients following the job (each gets every status sent).
         last_event: Monotonic time of the last progress event sent.
+        final_elapsed_s: How long the job ran, frozen when it finished (``None`` before).
     """
 
     def __init__(self, job_id: str, kind: str, tracker: ProgressTracker) -> None:
@@ -151,8 +150,13 @@ class _Job:
         self.state: JobState = JobState.QUEUED
         self.error: str | None = None
         self.submitted_at: float = time.time()
-        self.subscribers: list[queue.Queue[JobStatus]] = []
+        self.subscribers: list[StatusListener] = []
         self.last_event: float = 0.0
+        self.final_elapsed_s: float | None = None
+
+
+#: Receives the status of a followed job; called from the job's thread, so it must not block.
+StatusListener = Callable[[JobStatus], None]
 
 
 def put_latest(events: "queue.Queue[JobStatus]", status: JobStatus) -> None:
@@ -280,7 +284,7 @@ class JobManager:
             """
             return write_mesh_file(segmentation, label, path, config, tracker)
 
-        return self.submit(MESH_JOB, work, MESH_PLAN, MESH_WEIGHTS)
+        return self.submit(MESH_JOB, work, MESH_STAGES, config.mesh.stage_weights)
 
     def _run(self, job: _Job, work: "Callable[[ProgressTracker], object]") -> object:
         """Run a job in a worker thread and record how it ended.
@@ -325,6 +329,7 @@ class JobManager:
         """
         with self._lock:
             job.state, job.error = state, error
+            job.final_elapsed_s = job.tracker.snapshot().elapsed_s
         self._publish(job, state_changed=True)
         logger.info("Job %s %s", job.job_id, state)
 
@@ -344,8 +349,41 @@ class JobManager:
         if not subscribers:
             return
         status = self._describe(job)
-        for events in subscribers:
-            put_latest(events, status)
+        for listener in subscribers:
+            try:
+                listener(status)
+            except Exception:  # a broken follower must not break the job
+                logger.exception("Listener of job %s failed", job.job_id)
+
+    def subscribe(
+        self, job_id: str, listener: StatusListener
+    ) -> "tuple[JobStatus, Callable[[], None]]":
+        """Follow a job with a callback: every status sent from now on reaches ``listener``.
+
+        The listener runs in the job's thread: it must hand the status over quickly
+        (to a queue, an event loop...) and never block. An async server uses this to
+        follow jobs without holding a thread per follower.
+
+        Args:
+            job_id: Job id.
+            listener: Called with each status sent (state changes, throttled progress).
+
+        Returns:
+            The job's status now, and a function that stops the listener.
+
+        Raises:
+            KeyError: If no job has this id (or it was forgotten).
+        """
+        job = self._job(job_id)
+        with self._lock:
+            job.subscribers.append(listener)
+
+        def unsubscribe() -> None:
+            """Stop sending statuses to the listener (calling it twice is harmless)."""
+            with self._lock, contextlib.suppress(ValueError):
+                job.subscribers.remove(listener)
+
+        return self._describe(job), unsubscribe
 
     def events(
         self, job_id: str, heartbeat_s: float | None = None
@@ -366,10 +404,17 @@ class JobManager:
         """
         job = self._job(job_id)
         events: queue.Queue[JobStatus] = queue.Queue(maxsize=self._config.event_queue_size)
-        with self._lock:
-            job.subscribers.append(events)
+
+        def enqueue(status: JobStatus) -> None:
+            """Queue a status for this follower (oldest dropped if it lags).
+
+            Args:
+                status: Status sent.
+            """
+            put_latest(events, status)
+
+        status, unsubscribe = self.subscribe(job_id, enqueue)
         try:
-            status = self._describe(job)
             yield status
             while status.state not in FINISHED_STATES:
                 try:
@@ -378,8 +423,7 @@ class JobManager:
                     status = self._describe(job)
                 yield status
         finally:
-            with self._lock:
-                job.subscribers.remove(events)
+            unsubscribe()
 
     def _forget_old_jobs(self) -> None:
         """Drop the oldest finished jobs beyond the history size (caller holds the lock)."""
@@ -423,7 +467,7 @@ class JobManager:
             Its status now.
         """
         with self._lock:
-            state, error = job.state, job.error
+            state, error, final_elapsed = job.state, job.error, job.final_elapsed_s
         progress = None
         if state != JobState.QUEUED:
             p = job.tracker.snapshot()
@@ -434,8 +478,9 @@ class JobManager:
                 done=p.done,
                 total=p.total,
                 fraction=1.0 if state == JobState.SUCCEEDED else p.fraction,
-                elapsed_s=p.elapsed_s,
-                remaining_s=p.remaining_s,
+                # A finished job's duration stops at its end, however late it is asked for.
+                elapsed_s=p.elapsed_s if final_elapsed is None else final_elapsed,
+                remaining_s=p.remaining_s if final_elapsed is None else 0.0,
             )
         return JobStatus(
             job_id=job.job_id,

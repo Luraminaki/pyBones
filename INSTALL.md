@@ -104,8 +104,9 @@ the configuration, **scikit-image** for marching cubes only.
 
 The µCT stack (100 slices, 2300 x 1487, 16-bit TIFF, ~685 MB) is not versioned. Download it
 from [Google Drive](https://drive.google.com/file/d/1y0qstBI9n7ujrAe_rba5TdLauAi6bJex/view?usp=drive_link)
-and put the archive at the repository root as `data_set.zip`: pyBones reads the slices straight from
-the zip, no extraction needed. A directory of slices works as well.
+and put the archive in the repository's `data/` folder, as `data/data_set.zip`: pyBones reads the
+slices straight from the zip, no extraction needed. A directory of slices works as well. `data/` is
+where the web server looks for stacks; git ignores its content (only `data/.gitkeep` is versioned).
 
 The dataset is not covered by the MIT License of the code: see
 [LICENSE AND DATA](README.md#license-and-data) in the README before reusing it.
@@ -113,14 +114,14 @@ The dataset is not covered by the MIT License of the code: see
 ## RUN
 
 ```sh
-pybones segment data_set.zip -o output/run                       # ~25 s, ~1.7 GB peak (*)
-python -m pybones segment data_set.zip -o output/run             # same command, as a module
+pybones segment data/data_set.zip -o output/run                  # ~25 s, ~1.7 GB peak (*)
+python -m pybones segment data/data_set.zip -o output/run        # same command, as a module
 pybones preview output/run -z 50 --scale 0.5 -o slice50.png
 pybones mesh output/run --label vessel -o vessels.stl             # µm, Taubin-smoothed
 pybones mesh output/run --label vessel -o vessels.glb             # same, glTF (16-bit positions)
 pybones export output/run --label vessel -o output/vessel_png     # ImageJ image sequence
 pybones config > my_config.json                                   # effective configuration
-pybones --config my_config.json --set pipeline.workers=1 segment data_set.zip -o output/run
+pybones --config my_config.json --set pipeline.workers=1 segment data/data_set.zip -o output/run
 ```
 
 Every run of `pybones` or of a tool logs to its own file, `logs/<program>-<pid>.log` (time, process,
@@ -139,19 +140,9 @@ differs, change `acquisition.voxel_size_um` and everything follows.
 
 ## WEB SERVER
 
-The server reads its stacks from a `data/` folder and writes segmentations to `output/` (both relative
-to the folder you start it from). Put the dataset where it looks, without moving it away from the
-repository root where the other commands expect it:
-
-```sh
-mkdir -p data && ln -s ../data_set.zip data/      # Linux / macOS: a link, no copy
-```
-
-```powershell
-mkdir data; copy data_set.zip data\              # Windows: a copy
-```
-
-Then start it from the repository root:
+The server reads its stacks from the `data/` folder (where the [dataset](#dataset) goes) and writes
+segmentations to `output/`, both relative to the folder you start it from. Any folder or zip archive
+of 16-bit slices put in `data/` shows up on the page. Start it from the repository root:
 
 ```sh
 pybones serve                                     # or: uv run pybones serve
@@ -161,12 +152,27 @@ and open **<http://127.0.0.1:8000>** in a web browser on the same machine. The t
 address (and the folders in use) when the server starts; Ctrl+C stops it, which also cancels the
 running jobs and removes their partial outputs.
 
-There is no web page yet: the address leads to the interactive API documentation (`/docs`), where
-each request can be tried with "Try it out". A typical session:
+The page, in a few steps:
+
+1. **New segmentation**: pick a stack of `data/`, keep or change the suggested name, and press
+   *Segment*. Each run gets its own name; to run the segmentation you are looking at again (e.g. with
+   one setting changed), press *Segment again…* under its title: the form is filled with its stack
+   and its settings. Under *Settings for this run*, one `section.key=value` per line changes the configuration
+   for this run only, e.g. `refinement.enabled=false`. The *Jobs* panel shows the stage, the progress
+   and the time left (~35 s on the sample); *Cancel* stops the run and removes its partial files.
+2. **Slices**: when the run ends, the new segmentation opens. Drag the slider to move through the
+   stack; *Size* sets the image scale.
+3. **3D**: tick the labels to show. A mesh that does not exist yet is built first (a job, ~15 s for
+   the vessels of the sample, ~30 s for the bone), then loaded. Left-drag turns the view, or moves it
+   with the *Move* switch (Shift swaps the two); right-drag always moves it; the wheel, a two-finger
+   swipe or the + / − buttons zoom; *Reset view* looks down the stack again.
+
+Everything the page does goes through the HTTP API, documented and testable at
+**<http://127.0.0.1:8000/docs>** ("Try it out"). The same session by hand:
 
 1. `GET /api/datasets`: the stacks found in `data/` (here `data_set.zip`).
-2. `POST /api/segmentations` with `{"dataset": "data_set.zip", "name": "run1"}`: starts a job
-   (~35 s on the sample); `"overrides": ["refinement.enabled=false"]` changes settings for this run.
+2. `POST /api/segmentations` with `{"dataset": "data_set.zip", "name": "run1"}`: starts a job;
+   `"overrides": ["refinement.enabled=false"]` changes settings for this run.
 3. `GET /api/jobs/segmentation-1/events`: its progress, pushed as it happens (Server-Sent Events).
 4. `GET /api/segmentations/run1/slices/50?scale=0.4`: a slice with its labels, as a PNG image.
 5. `POST /api/segmentations/run1/meshes/vessel`, then once its job succeeded,
@@ -212,7 +218,7 @@ from pybones.config.loader import load_config
 
 config = load_config()
 jobs = JobManager(config.jobs)
-job_id = jobs.submit_segmentation(Path("data_set.zip"), Path("output/run"), config)
+job_id = jobs.submit_segmentation(Path("data/data_set.zip"), Path("output/run"), config)
 for status in jobs.events(job_id):             # pushed as they happen: no polling
     print(status.model_dump_json())            # state, stage k/n, fraction, remaining time
 meta = jobs.result(job_id)                     # or jobs.cancel(job_id) from another thread
@@ -221,6 +227,21 @@ meta = jobs.result(job_id)                     # or jobs.cancel(job_id) from ano
 `events()` is made for Server-Sent Events: a web endpoint sends each status as
 `data: <json>\n\n`. Progress events are throttled (`jobs.event_interval_s`); state changes always go
 through; a slow client loses its oldest snapshots, never the newest.
+
+VS Code settings (basedpyright, Ruff, pytest), launch configurations (segment, serve, preview, mesh,
+the annotation tool, the current test file) and recommended extensions are versioned in `.vscode/`,
+and work the same on Linux, macOS and Windows: no interpreter path is written there. After
+`uv sync`, VS Code selects the project's `.venv` by itself (check the interpreter shown in the status
+bar; *Python: Select Interpreter* picks it otherwise), and basedpyright finds it through
+`[tool.basedpyright]` in `pyproject.toml`.
+
+The web page lives in `src/pybones/server/static/`: plain HTML, CSS and JavaScript modules, no build
+step, no package manager. three.js (MIT) is vendored under `static/vendor/three/`: only the files the
+page imports, at the same paths as in the npm package, with a `manifest.json` recording the version,
+the npm integrity hash and each file's SHA-256. `tests/server/test_page.py` checks those hashes, and
+that every import of every module resolves to a served file. To update three.js: download the new
+package from the npm registry, check its integrity against the registry's, copy the same files, and
+rewrite the manifest; the test then confirms the set is complete.
 
 [Ruff](https://docs.astral.sh/ruff/) also enforces the project conventions: no magic values, Google
 docstrings, type-only imports under `if TYPE_CHECKING:` (quoted annotations), no imports outside the
@@ -282,11 +303,11 @@ winget install MiKTeX.MiKTeX
 ### Generating the report
 
 Every figure, plot, table and measured value of the report is generated from the data and from the git
-history; nothing is typed by hand. From the repository root, with `data_set.zip` in place:
+history; nothing is typed by hand. From the repository root, with `data/data_set.zip` in place:
 
 ```sh
 # 1. Segment the stack and render the synthetic phantom
-uv run pybones segment data_set.zip -o output/latest
+uv run pybones segment data/data_set.zip -o output/latest
 uv run python -m tools.phantom generate -o output/phantom
 
 # 2. Run every milestone version listed in tools/report/config.json (each in its own git worktree

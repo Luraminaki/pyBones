@@ -38,6 +38,11 @@ A local annotation page, ready for whoever can provide expert labels:
 
 ![Annotation tool](screenshots/05-annotation-tool.png)
 
+The web page (`pybones serve`): segmentations, a segmentation run with its live progress, and the
+meshes of the whole stack in 3D (bone see-through, vessels in red, bursts in blue):
+
+![Web page](screenshots/06-web-page.png)
+
 ## VERSION
 
 The current version lives in [pyproject.toml](pyproject.toml) and is read from package metadata at
@@ -65,29 +70,28 @@ full version history.
 
 ## TL;DR
 
-"I just want to see it work." With [uv](https://docs.astral.sh/uv/) and `data_set.zip` at the root:
+"I just want to see it work." With [uv](https://docs.astral.sh/uv/) and the dataset saved as
+`data/data_set.zip` ([INSTALL.md](INSTALL.md#dataset)):
 
 ```sh
 uv sync
-uv run pybones segment data_set.zip -o output/run
+uv run pybones segment data/data_set.zip -o output/run
 uv run pybones preview output/run -z 50 --scale 0.5 -o slice50.png
 uv run pybones mesh output/run --label vessel -o vessels.stl   # or vessels.glb
 ```
 
 `pybones` (or `python -m pybones`) is the single entry point; see `pybones --help`.
 
-To drive it from a web browser instead, start the local server (it reads its stacks from `data/`):
+To work from a web browser instead, start the local server (it lists the stacks of `data/`):
 
 ```sh
-mkdir -p data && ln -s ../data_set.zip data/    # Windows: copy data_set.zip into data\
 uv run pybones serve
 ```
 
-Then open **<http://127.0.0.1:8000>** in a browser (Ctrl+C in the terminal stops the server). For now
-it leads to the interactive API documentation (FastAPI's Swagger UI), also reachable directly at
-**<http://127.0.0.1:8000/docs>**: every request is listed there with its parameters and answers, and
-can be tried with "Try it out". The web page with the slice and 3D viewers is the next step. Details:
-[INSTALL.md](INSTALL.md#web-server).
+Then open **<http://127.0.0.1:8000>** in a browser (Ctrl+C in the terminal stops the server): segment a
+stack and follow its progress, scroll through its slices with the labels overlaid, and turn its meshes
+around in 3D. The HTTP API behind the page is documented, and can be tried request by request, at
+**<http://127.0.0.1:8000/docs>** (FastAPI's Swagger UI). Details: [INSTALL.md](INSTALL.md#web-server).
 
 ## INSTALLATION
 
@@ -163,7 +167,8 @@ src/pybones/
   visualization/  label overlays
   cli/            pybones command
   api/            operations as functions, background jobs (progress, cancellation, events)
-  server/         local web server (FastAPI): HTTP API over api/
+  server/         local web server (FastAPI): HTTP API over api/, and the web page (static/:
+                  HTML, CSS, JavaScript modules, three.js 0.187 vendored)
 tools/            annotation page, synthetic phantom, report benchmark & figures
 tests/            mirrors src/ and tools/ (pytest, synthetic data)
 docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it compares against
@@ -216,11 +221,16 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
 
 - **Local only**: no login and no access control; it listens on `127.0.0.1` and must stay there.
 - **No upload**: stacks are read from the data folder on the server's own disk.
-- **No web page yet**: the API works and is documented in the browser; the viewers come next.
-- **Large meshes**: the vessel mesh of the sample is 48.5 MB as 16-bit GLB (2.7 million triangles),
-  the bone mesh about 2.6 times more (see [Mesh files](#how-it-works)). A recent GPU draws that, but it takes RAM in the browser, and
-  the 6 µm grid (`mesh.downsample` 2) is already a compromise: full resolution quadruples it.
-  Nothing is compressed: on the local machine, compressing would take longer than sending.
+- **A recent browser**: the page needs JavaScript modules, import maps and WebGL 2 (current Firefox,
+  Chrome, Edge or Safari). Without WebGL, the 3D tab says so and the rest works.
+- **Large meshes**: on the sample, the vessels are 48.5 MB as 16-bit GLB (2.7 million triangles), the
+  bone 125.4 MB (7 million), the bursts 4.3 MB (see [Mesh files](#how-it-works)). A recent GPU draws
+  all three, but the browser holds them in memory; the bone is off by default. The 6 µm grid
+  (`mesh.downsample` 2) is already a compromise: full resolution quadruples it. Nothing is compressed:
+  on the local machine, compressing would take longer than sending.
+- **Jobs live in memory**: stopping the server cancels the running jobs and forgets the finished
+  ones (their results stay on disk). The page remembers the last segmentation viewed in this browser
+  only.
 - **One job at a time** by default (`jobs.max_concurrent`): a segmentation takes ~1.7 GB of RAM.
 - **Cached meshes are not rebuilt by themselves**: a mesh is built once per label and format and kept
   next to its segmentation; after changing the mesh settings (grid, smoothing, precision), build it
@@ -231,8 +241,8 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
 - Vascular quantification (the original goal): centrelines, network graph, node / branch counts,
   calibre and branch lengths.
 - Bridging small vessel gaps (clots) along the vessel direction.
-- A web page on top of the local web server: slices with their labels, and an in-browser 3D view of
-  the meshes (GLB).
+- Web page: the raw slice without overlay, measurements in 3D (distances, a picked vessel's calibre),
+  and the configuration of a run as a form built from its schema (`GET /api/config/schema`).
 
 ## LICENSE AND DATA
 

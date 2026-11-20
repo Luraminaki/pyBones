@@ -21,8 +21,8 @@ from package metadata at runtime; every segmentation records it in its
   followed with Server-Sent Events, cancelling them, rendering slices (PNG) and serving meshes
   (binary STL). Clients address everything by id, never by path; errors use HTTP status codes. Its
   settings live in a separate `server.json`, so that deployment settings never enter `meta.json`.
-  Interactive API documentation (Swagger UI) at `http://127.0.0.1:8000/docs`, where `/` redirects
-  until the web page exists. Meshes take the segmentation's voxel size and the server's mesh settings;
+  Interactive API documentation (Swagger UI) at `http://127.0.0.1:8000/docs`; `GET /api/server`
+  describes the server (folders, limits) for the page. Meshes take the segmentation's voxel size and the server's mesh settings;
   asking for an existing mesh again rebuilds it.
 - Mesh jobs: `JobManager.submit_mesh` and `write_mesh_file` (written under a temporary name, renamed
   once complete; a cancelled job leaves no file). New `mesh` stage; `pipeline.stage_weights` only
@@ -39,6 +39,48 @@ from package metadata at runtime; every segmentation records it in its
   answers 409 when it is asked for. Outputs are not kept compatible across versions while alpha.
 - Configuration file names (`io.*_file`, `io.*_template`) now really refuse paths: a field's own
   pattern (its extension) used to replace the "no `/` or `\`" rule instead of adding to it.
+- Web page at `http://127.0.0.1:8000` (`pybones serve`): segmentations and stacks, a form to segment
+  a stack (with per-run settings), jobs followed live with progress, time left and cancel, a slice
+  viewer with the labels overlaid, and a 3D viewer of the GLB meshes (three.js; bone see-through,
+  meshes built on demand). Plain HTML/CSS/JavaScript modules, no build step; light and dark themes.
+  three.js 0.187.0 (MIT) is vendored with a manifest of file hashes, checked by the tests, as is
+  every import of every module. Checked in Firefox: segmenting, slices, all three meshes.
+  *Segment again…* fills the form with the shown segmentation's stack and the settings it was made
+  with (those differing from the defaults). The 3D view has a Rotate / Move switch for the left
+  button, + / − zoom buttons, zoom towards the cursor and arrow keys, besides right-drag and the wheel.
+- Mesh jobs report real progress: four weighted stages (`occupancy`, `surface`, `smoothing`,
+  `writing`; `mesh.stage_weights`, measured on the sample) instead of one stage that sat at 0 % until
+  the very end; they can now be cancelled in the middle. `pybones mesh` shows the same progress line
+  as `pybones segment` and writes its file under a temporary name until complete.
+- VS Code settings, launch configurations and recommended extensions are versioned in `.vscode/`
+  (with a "serve" launch), with no OS-specific interpreter path: VS Code selects the workspace
+  `.venv`, and basedpyright finds it through `pyproject.toml` on Linux, macOS and Windows.
+- The dataset now lives in `data/` (`data/data_set.zip`), where the web server looks for stacks:
+  commands, report tool, annotation manifest and documentation follow; `data/.gitkeep` keeps the
+  folder in the repository, its content stays ignored.
+- Review of the server and the page (memory and robustness):
+  - event streams no longer hold a worker thread each: jobs push their statuses to the event loop
+    (`JobManager.subscribe`), so many open streams cannot starve slice and list requests of threads
+    (checked with 60 streams open during a run);
+  - the browser keeps meshes in GPU memory only (the CPU copy three.js keeps is released once
+    uploaded: ~175 MB less for the bone and vessels of the sample);
+  - one slice request at a time, the latest slider position winning: dragging never piles renders
+    up on the server; slices are served at most at full size (`api.max_preview_scale` 1: an
+    enlarged slice would be built in server memory for nothing, 164 MB at the old maximum of 4);
+  - job rows are updated in place (Cancel could miss a click while progress arrived), and a job is
+    followed by one event stream however many parts of the page watch it;
+  - the name of a new segmentation is checked under the same lock as the running jobs (a run
+    finishing at that moment could have let a second one write into its folder);
+  - stack descriptions are kept until the stack changes (each listing decoded a slice of every
+    stack);
+  - slices never accumulate in the browser: the page fetches each one with `cache: 'no-store'`,
+    shows it through a temporary `blob:` URL revoked once decoded, and the server sends
+    `Cache-Control: no-store` as well;
+  - a rebuilt mesh is no longer hidden by the browser's cache: meshes are sent with
+    `Cache-Control: no-cache` and an ETag following the file, an unchanged mesh is answered
+    `304 Not Modified` (Starlette's `FileResponse` never does), a rebuilt one in full.
+- A finished job's duration no longer keeps growing when it is asked for later (it showed minutes
+  for a 14 s job).
 - Mesh files in two formats, chosen by the extension: STL (other software) and GLB (binary glTF, for
   the browser), written with numpy only. GLB stores each point once, with smooth vertex normals, and
   by default 16-bit positions over the mesh's bounding box (`mesh.glb_position_bits`, error at most

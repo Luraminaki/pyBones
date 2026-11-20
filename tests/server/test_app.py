@@ -15,7 +15,6 @@ from pybones.api.jobs import JobState
 from pybones.meshing.formats import MeshFormat
 from pybones.meshing.gltf import read_glb
 from pybones.segmentation.stages import STAGES_2D, Stage
-from pybones.server.app import DOCS_PATH
 from pybones.server.context import ServerContext
 from pybones.server.routes.jobs import SSE_MEDIA_TYPE
 from pybones.server.routes.segmentations import MESH_MEDIA_TYPES, PNG_MEDIA_TYPE
@@ -107,6 +106,12 @@ def test_version_and_configuration(client: "TestClient") -> None:
     assert config["pipeline"]["workers"] == context_of(client).config.pipeline.workers
     schema = client.get("/api/config/schema").json()
     assert "segmentation" in schema["properties"]
+    server = client.get("/api/server").json()
+    assert server["version"] == __version__
+    assert server["output_dir"] == str(context_of(client).library.output_dir)
+    assert server["default_mesh_format"] == "glb"
+    assert "refinement" in server["overridable_sections"]
+    assert "io" not in server["overridable_sections"]
 
 
 def test_datasets_and_segmentations_are_listed(client: "TestClient") -> None:
@@ -274,9 +279,24 @@ def test_unknown_jobs_are_not_found(client: "TestClient") -> None:
     assert client.delete("/api/jobs/nope").status_code == HTTPStatus.NOT_FOUND
 
 
-def test_home_page_leads_to_the_documentation(client: "TestClient") -> None:
-    """A browser opening the server's address lands on the API documentation."""
-    response = client.get("/", follow_redirects=False)
-    assert response.status_code == HTTPStatus.TEMPORARY_REDIRECT
-    assert response.headers["location"] == DOCS_PATH
-    assert client.get(DOCS_PATH).status_code == HTTPStatus.OK
+def test_slices_are_never_kept_by_the_browser(client: "TestClient") -> None:
+    """Slices are rendered on demand: the browser is told to keep none of them."""
+    response = client.get(f"/api/segmentations/{SEGMENTATION}/slices/0", params={"scale": 0.5})
+    assert response.headers["cache-control"] == "no-store"
+
+
+def test_meshes_are_revalidated_and_a_rebuild_is_seen(client: "TestClient") -> None:
+    """A current mesh is answered 304 without a body; a rebuilt one has a new ETag."""
+    url = f"/api/segmentations/{SEGMENTATION}/meshes/burst"
+    _ = build_mesh(client, url, {})
+    first = client.get(url)
+    assert first.headers["cache-control"] == "no-cache"
+    etag = first.headers["etag"]
+    unchanged = client.get(url, headers={"If-None-Match": etag})
+    assert unchanged.status_code == HTTPStatus.NOT_MODIFIED
+    assert unchanged.content == b""
+    _ = build_mesh(client, url, {})  # rebuilt: same address, new file
+    rebuilt = client.get(url, headers={"If-None-Match": etag})
+    assert rebuilt.status_code == HTTPStatus.OK
+    assert rebuilt.headers["etag"] != etag
+    assert rebuilt.content
