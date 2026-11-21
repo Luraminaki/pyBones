@@ -432,7 +432,9 @@ uv run python -m tools.report history
 
 # 3. Render the figures, plot data, history table, measured values (values.tex), the README's tables
 #    and screenshots 01-04; mesh today's run in every format; generate, segment and measure the
-#    branching phantom and measure the sample's vessel network (chapter 6). About two minutes.
+#    branching phantom and measure the sample's vessel network (chapter 6); time each progress stage
+#    of the segmentation, a mesh and the quantification, and warn about a stage weight that no
+#    longer matches its share (stage_weight_tolerance). About three minutes.
 uv run python -m tools.report figures
 
 # 4. Build the PDF (settings in docs/report/latexmkrc; the PDF is copied to docs/report/report.pdf)

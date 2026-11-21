@@ -214,6 +214,7 @@ def measure_network(
     network = build_network(points, distances, kinds, shape, voxel_um, config.pruning)
     measures = branch_measures(network, distances)
     summary = summarize(network, measures, distances, shape, voxel_um)
+    progress(Stage.NETWORK, 1, 1)
     return MeasuredNetwork(network, distances, measures, summary)
 
 

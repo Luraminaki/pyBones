@@ -56,6 +56,26 @@ of it in the Taubin smoothing; writing the file adds a few seconds. A mesh job r
 four weighted stages (block occupancy, surface, smoothing, file), so its progress bar moves with the
 work, and it can be cancelled between them.
 
+\paragraph{Progress} Every long operation reports weighted stages, and its progress bar and estimate
+of the time left are only right if each weight matches the stage's share of the run. Weights set once
+drift as the code gets faster in one place and not another, so the report tool measures them on the
+sample every time it runs: a stopwatch listens to each stage's progress reports, and a stage lasts
+from the previous stage's last report to its own last one, so the work before its first report counts
+too. Table~\ref{tab:stage-weights} compares each weight with its measured share; the tool warns when
+one is more than \pbValueStageWeightTolerance{} off, and the weights of this version were set from these
+measurements. Some stages are one long step that cannot report its own progress (the skeleton, the
+surface of a mesh): there, the page keeps the time ticking, and the server sends every new stage at
+once, so that a long silent stage is never shown under the name of the previous one.
+
+\begin{table}[ht]
+  \centering
+  \small
+  \input{data/stage_weights.tex}
+  \caption{Progress stages of the three long operations on the sample: configured weight (normalised
+    over the stages that run) and measured share of the run's time.}
+  \label{tab:stage-weights}
+\end{table}
+
 \paragraph{On the web page} A page that stays open for hours must not grow: an image cache that never
 empties is enough to crash a browser. So the page holds every resource once:
 \begin{itemize}

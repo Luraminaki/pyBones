@@ -14,7 +14,7 @@ from pybones.api.operations import MeshFile
 from pybones.config.loader import load_config
 from pybones.quantification.measures import NetworkSummary
 from pybones.segmentation.labels import Label
-from pybones.segmentation.pipeline import run_segmentation
+from pybones.segmentation.pipeline import planned_stages, run_segmentation
 from pybones.segmentation.results import SegmentationMeta
 from pybones.segmentation.stages import QUANTIFY_STAGES, STAGES_2D, CancelledError, Stage
 from tests.helpers import small_config
@@ -228,7 +228,7 @@ def test_events_push_every_state_change_in_order(
 
 
 def test_progress_events_are_throttled(slice_dir: "Path", tmp_path: "Path") -> None:
-    """With a long interval, progress events are skipped; state changes still arrive."""
+    """With a long interval, per-slice progress is skipped; each stage and state still arrive."""
     config = load_config(overrides=["jobs.event_interval_s=60"]).jobs
     jobs = JobManager(config)
     try:
@@ -237,7 +237,9 @@ def test_progress_events_are_throttled(slice_dir: "Path", tmp_path: "Path") -> N
     finally:
         jobs.shutdown()
     running = [s for s in statuses if s.state == JobState.RUNNING]
-    assert len(running) <= 2  # the start, and at most one progress event in the first minute
+    stages = [s.progress.stage for s in running if s.progress is not None and s.progress.stage]
+    assert len(stages) == len(set(stages))  # one status per stage, never one per slice
+    assert len(running) <= 1 + len(planned_stages(small_config()))  # and the start
     assert statuses[-1].state == JobState.SUCCEEDED
 
 
@@ -331,3 +333,38 @@ def test_quantification_job_writes_the_network(
     assert status.progress is not None
     assert status.progress.stage_count == len(QUANTIFY_STAGES)
     assert (seg / config.quantification.files.network_file).is_file()
+
+
+def test_a_new_stage_is_never_held_back() -> None:
+    """A stage starting right after another is sent at once, whatever the progress throttle."""
+    jobs = JobManager(load_config(overrides=["jobs.event_interval_s=60"]).jobs)
+    go, started, release = threading.Event(), threading.Event(), threading.Event()
+
+    def two_stages(tracker: "ProgressTracker") -> str:
+        """Once allowed, end a stage and start the next one at once, then wait.
+
+        Args:
+            tracker: Progress tracker of the job.
+
+        Returns:
+            ``"done"``.
+        """
+        _ = go.wait(WAIT_S)
+        tracker(Stage.THRESHOLDS, 1, 1)
+        tracker(Stage.CLASSIFY, 0, 1)  # well within the throttle interval
+        started.set()
+        _ = release.wait(WAIT_S)
+        return "done"
+
+    job_id = jobs.submit("test", two_stages, STAGES_2D, WEIGHTS)
+    sent: list[JobStatus] = []
+    _, unsubscribe = jobs.subscribe(job_id, sent.append)
+    go.set()
+    assert started.wait(WAIT_S)
+    release.set()
+    assert jobs.result(job_id, WAIT_S) == "done"
+    unsubscribe()
+    jobs.shutdown()
+    stages = [s.progress.stage for s in sent if s.progress is not None]
+    assert Stage.THRESHOLDS in stages
+    assert Stage.CLASSIFY in stages

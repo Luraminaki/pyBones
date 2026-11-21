@@ -79,6 +79,7 @@ class _Job:
         submitted_at: Submission time (seconds since the epoch).
         subscribers: Listeners of the clients following the job (each gets every status sent).
         last_event: Monotonic time of the last progress event sent.
+        last_stage: Stage of the last status sent (``None`` before any).
         final_elapsed_s: How long the job ran, frozen when it finished (``None`` before).
     """
 
@@ -99,6 +100,7 @@ class _Job:
         self.submitted_at: float = time.time()
         self.subscribers: list[StatusListener] = []
         self.last_event: float = 0.0
+        self.last_stage: Stage | None = None
         self.final_elapsed_s: float | None = None
 
 
@@ -164,13 +166,13 @@ class JobManager:
             self._jobs[job.job_id] = job
             self._forget_old_jobs()
 
-        def on_progress(_progress: "Progress") -> None:
-            """Publish the job's progress (throttled).
+        def on_progress(progress: "Progress") -> None:
+            """Publish the job's progress (throttled within a stage).
 
             Args:
-                _progress: New snapshot (the status is rebuilt from the job).
+                progress: New snapshot (its stage; the status is rebuilt from the job).
             """
-            self._publish(job, state_changed=False)
+            self._publish(job, state_changed=False, stage=progress.stage)
 
         tracker.add_listener(on_progress)
         job.future = self._pool.submit(self._run, job, work)
@@ -284,18 +286,27 @@ class JobManager:
         self._publish(job, state_changed=True)
         logger.info("Job %s %s", job.job_id, state)
 
-    def _publish(self, job: _Job, state_changed: bool) -> None:
+    def _publish(self, job: _Job, state_changed: bool, stage: "Stage | None" = None) -> None:
         """Push the job's status to its subscribers.
+
+        A new state or a new stage is always sent: a stage starting right after another
+        would otherwise be held back until its first progress, which a long single-step
+        stage (a skeleton, a surface) never sends. Progress within a stage is throttled.
 
         Args:
             job: The job.
-            state_changed: State changes are always sent; progress updates are throttled.
+            state_changed: Whether the job's state changed.
+            stage: Stage of the progress being published (``None`` for a state change).
         """
         now = time.monotonic()
         with self._lock:
-            if not state_changed and now - job.last_event < self._config.event_interval_s:
+            new_stage = stage is not None and stage != job.last_stage
+            recent = now - job.last_event < self._config.event_interval_s
+            if not state_changed and not new_stage and recent:
                 return
             job.last_event = now
+            if stage is not None:
+                job.last_stage = stage
             subscribers = tuple(job.subscribers)
         if not subscribers:
             return

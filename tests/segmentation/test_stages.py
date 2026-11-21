@@ -13,7 +13,7 @@ from pybones.segmentation.stages import (
     ProgressTracker,
     Stage,
 )
-from tests.helpers import cancel_in, small_config
+from tests.helpers import FakeClock, cancel_in, small_config
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -24,26 +24,6 @@ if TYPE_CHECKING:
 
 #: Equal weights make the expected fractions easy to read.
 EQUAL = dict.fromkeys(Stage, 1.0)
-
-
-class FakeClock:
-    """A clock that only moves when told to.
-
-    Attributes:
-        now: Current time, in seconds.
-    """
-
-    def __init__(self) -> None:
-        """Start at time 0."""
-        self.now: float = 0.0
-
-    def __call__(self) -> float:
-        """Read the clock.
-
-        Returns:
-            The current time.
-        """
-        return self.now
 
 
 def test_snapshot_before_any_update() -> None:

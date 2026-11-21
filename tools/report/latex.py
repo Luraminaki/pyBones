@@ -222,6 +222,7 @@ def values(ctx: "Context") -> None:
         "System": latex_text(machine.system),
         "Python": machine.python,
         "PowerProfile": latex_text(machine.power_profile),
+        "StageWeightTolerance": f"{ctx.settings.stage_weight_tolerance:.2f}",
         "Workers": f"{min(workers, machine.logical_cores)}",
         "Version": meta["pybones_version"],
         "ProfileCore": f"{profile_core:,.0f}",

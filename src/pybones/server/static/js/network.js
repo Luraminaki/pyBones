@@ -2,7 +2,7 @@
 
 import { api, JOB_KINDS } from './api.js';
 import { activeJob, JOB_FINISHED, JOB_UPDATED, startOrJoin } from './jobs.js';
-import { el, percent, toast } from './ui.js';
+import { duration, el, percent, toast } from './ui.js';
 
 const LENGTH_DIGITS = 1;
 const RATIO_DIGITS = 2;
@@ -74,7 +74,9 @@ function onJob(event, finished) {
   nodes.button.disabled = !finished;
   if (!finished) {
     const p = status.progress;
-    nodes.status.textContent = p ? `Measuring · ${p.stage ?? 'starting'} · ${percent(p.fraction)}` : 'Waiting for a worker…';
+    nodes.status.textContent = p
+      ? `Measuring · ${p.stage ?? 'starting'} · ${percent(p.fraction)} · ${duration(p.elapsed_s)}`
+      : 'Waiting for a worker…';
   } else if (status.state === 'succeeded') {
     void load();
   } else {

@@ -65,5 +65,6 @@
     "work_dir": "output/report/network",
     "tolerance_um": 6.0,
     "junction_tolerance_um": 20.0
-  }
+  },
+  "stage_weight_tolerance": 0.05
 }

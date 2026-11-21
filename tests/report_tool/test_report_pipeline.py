@@ -1,5 +1,6 @@
 """End-to-end test of the report tool on synthetic data: history, extracts, figures, values."""
 
+import csv
 import json
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +26,7 @@ from tools.report.network import NETWORK_JSON, NETWORK_TABLE, REAL_KEY
 from tools.report.runs import RunStats
 from tools.report.settings import ReportSettings
 from tools.report.settings import load_settings as load_report_settings
+from tools.report.stages import STAGE_WEIGHTS_CSV
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -192,6 +194,12 @@ def test_every_figure_step_runs_on_the_extracts(repo: "Path") -> None:
     assert "\\pbValueVesselDice" in values
     assert "\\pbValueMeshVesselGlbMB" in values
     assert "\\pbValueMeshErrorVoxelRatio" in values
+    with (ctx.data / STAGE_WEIGHTS_CSV).open() as fh:
+        rows = list(csv.DictReader(fh))
+    assert {r["operation"] for r in rows} == {"segmentation", "mesh", "quantification"}
+    for operation in {r["operation"] for r in rows}:
+        shares = [float(r["measured"]) for r in rows if r["operation"] == operation]
+        assert sum(shares) == pytest.approx(1.0, abs=0.01)
     assert "\\pbValueNetBranches" in values
     assert "\\pbValueNetSegRadiusThick" in values
     record = json.loads((ctx.data / NETWORK_JSON).read_text())

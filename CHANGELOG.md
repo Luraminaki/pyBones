@@ -9,6 +9,22 @@ The current version lives in [pyproject.toml](pyproject.toml) and is read
 from package metadata at runtime; every segmentation records it in its
 `meta.json`. The [report](docs/report/) measures what each step below changed.
 
+## Unreleased
+
+- Progress you can trust during long silent stages:
+  - the server sends every new stage at once (only progress within a stage is throttled): a stage
+    starting right after another, like the quantification's skeleton or a mesh's surface, used to be
+    held back until its end, the page showing the previous stage's name all along;
+  - the page keeps a running job's times moving between two statuses (elapsed up, time left down),
+    in the jobs panel, the Network tab and the 3D view.
+- Progress stage weights are measured: `python -m tools.report figures` times each stage of the
+  segmentation, a mesh and the quantification on the sample (`stage_weights.csv`, a table in the
+  performance chapter) and warns when a weight is more than `stage_weight_tolerance` (0.05) off. The
+  defaults were set from these measurements (segmentation resolve 0.12 -> 0.17, mesh occupancy
+  0.24 -> 0.30, among others); every stage is now within 0.02 of its share.
+- `measure_network` reports the end of its last stage itself (its graph work counted for nothing
+  when it ran on its own).
+
 ## 0.6.0-alpha
 
 Vascular quantification, the original goal of the project: a segmentation's vessel network is

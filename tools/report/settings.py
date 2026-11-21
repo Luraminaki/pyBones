@@ -214,6 +214,8 @@ class ReportSettings(_Section):
         versions: Versions to benchmark, oldest first.
         figures: Figure settings.
         network: The vascular network section of the report.
+        stage_weight_tolerance: Largest gap between a progress stage's weight and its measured
+            share before the report tool warns.
     """
 
     uv_executable: NonEmpty
@@ -232,6 +234,7 @@ class ReportSettings(_Section):
     versions: tuple[Version, ...] = Field(min_length=1)
     figures: FigureSettings
     network: NetworkReport
+    stage_weight_tolerance: float = Field(gt=0.0, le=1.0)
 
     @model_validator(mode="after")
     def _consistent_keys(self) -> Self:

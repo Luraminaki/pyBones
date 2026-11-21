@@ -239,3 +239,23 @@ def truncated_window(z: int, window: int, depth: int) -> tuple[int, int]:
     """
     half = window // 2
     return max(0, z - half), min(depth, z + half + 1)
+
+
+class FakeClock:
+    """A clock that only moves when told to.
+
+    Attributes:
+        now: Current time, in seconds.
+    """
+
+    def __init__(self) -> None:
+        """Start at time 0."""
+        self.now: float = 0.0
+
+    def __call__(self) -> float:
+        """Read the clock.
+
+        Returns:
+            The current time.
+        """
+        return self.now

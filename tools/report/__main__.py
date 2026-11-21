@@ -24,6 +24,7 @@ from tools.report.latex import history_table, plot_data, readme_scores, values
 from tools.report.meshes import mesh_files, readme_meshes
 from tools.report.network import network_files
 from tools.report.settings import DEFAULT_SETTINGS_PATH, load_settings
+from tools.report.stages import stage_weights
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -45,6 +46,7 @@ FIGURE_STEPS: "tuple[Callable[[Context], None], ...]" = (
     history_table,
     mesh_files,
     network_files,
+    stage_weights,
     values,
     readme_scores,
     readme_meshes,

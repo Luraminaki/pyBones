@@ -29,11 +29,11 @@
     "workers": 4,
     "extra_in_flight": 2,
     "stage_weights": {
-      "thresholds": 0.05,
-      "classify": 0.62,
-      "analyse": 0.12,
-      "resolve": 0.12,
-      "clean": 0.09
+      "thresholds": 0.02,
+      "classify": 0.65,
+      "analyse": 0.11,
+      "resolve": 0.17,
+      "clean": 0.05
     }
   },
   "thresholds": {
@@ -84,9 +84,9 @@
     "chunk_faces": 1048576,
     "glb_position_bits": 16,
     "stage_weights": {
-      "occupancy": 0.24,
-      "surface": 0.10,
-      "smoothing": 0.58,
+      "occupancy": 0.30,
+      "surface": 0.09,
+      "smoothing": 0.53,
       "writing": 0.08
     },
     "taubin": {
@@ -114,10 +114,10 @@
       "centrelines_file": "centrelines.npz"
     },
     "stage_weights": {
-      "cavities": 0.38,
-      "skeleton": 0.55,
-      "calibre": 0.04,
-      "network": 0.03
+      "cavities": 0.35,
+      "skeleton": 0.58,
+      "calibre": 0.05,
+      "network": 0.02
     },
     "max_radius_um": 60,
     "distance_tile_slices": 32,

@@ -4,14 +4,21 @@
 import { api, followJob, FINISHED_STATES, JOB_KINDS } from './api.js';
 import { announce, duration, el, percent, toast } from './ui.js';
 
-/** Event sent on `document` with each new status of a job (detail: the JobStatus). */
+/**
+ * Event sent on `document` with each new status of a job, and every second while it runs, its times
+ * advanced (detail: the JobStatus).
+ */
 export const JOB_UPDATED = 'pybones:job-updated';
 /** Event sent on `document` once a followed job is over (detail: its final JobStatus). */
 export const JOB_FINISHED = 'pybones:job-finished';
 // Finished jobs kept in the panel (the running ones always are).
 const FINISHED_SHOWN = 6;
+// How often the times of a running job advance between two statuses from the server.
+const TICK_MS = 1000;
+const MS_PER_S = 1000;
 
-const jobs = new Map(); // job id -> {status, node, parts}
+const jobs = new Map(); // job id -> {status, receivedAt, node, parts}
+let ticker = null; // the one-second timer, set only while a job runs
 // Jobs being followed: one event stream each, however many parts of the page ask.
 const following = new Map(); // job id -> promise of the final status
 let list;
@@ -45,7 +52,7 @@ function detail(status) {
   if (status.state === 'succeeded') return `Done in ${elapsed}`;
   const stage = p.stage ? `${p.stage} (${p.stage_index}/${p.stage_count})` : 'starting';
   const left = p.remaining_s === null ? '' : ` · ~${duration(p.remaining_s)} left`;
-  return `${stage} · ${percent(p.fraction)}${left}`;
+  return `${stage} · ${percent(p.fraction)} · ${elapsed}${left}`;
 }
 
 /**
@@ -114,9 +121,49 @@ function update(status) {
     jobs.set(status.job_id, job);
   }
   job.status = status;
-  patch(job, status);
+  job.receivedAt = performance.now();
   empty.hidden = jobs.size > 0;
+  show(job, status);
+  if (status.state === 'running' && ticker === null) ticker = setInterval(tick, TICK_MS);
+}
+
+/**
+ * Show a status in a job's row and tell the other modules.
+ * @param {{node: HTMLElement, parts: Object<string, HTMLElement>}} job The row.
+ * @param {import('./api.js').JobStatus} status The status to show.
+ */
+function show(job, status) {
+  patch(job, status);
   document.dispatchEvent(new CustomEvent(JOB_UPDATED, { detail: status }));
+}
+
+/**
+ * Advance the times of a running job's status by the time since it arrived: the elapsed time
+ * grows and the time left shrinks, so a long stage that reports nothing still shows life.
+ * @param {import('./api.js').JobStatus} status Status as the server sent it.
+ * @param {number} seconds Seconds since it arrived.
+ * @returns {import('./api.js').JobStatus} The status now (unchanged unless running).
+ */
+export function aged(status, seconds) {
+  const p = status.progress;
+  if (status.state !== 'running' || !p) return status;
+  const remaining = p.remaining_s === null ? null : Math.max(0, p.remaining_s - seconds);
+  return { ...status, progress: { ...p, elapsed_s: p.elapsed_s + seconds, remaining_s: remaining } };
+}
+
+/** Show every running job with its times advanced; stop the timer once none runs. */
+function tick() {
+  const now = performance.now();
+  let running = false;
+  for (const job of jobs.values()) {
+    if (job.status.state !== 'running') continue;
+    running = true;
+    show(job, aged(job.status, (now - job.receivedAt) / MS_PER_S));
+  }
+  if (!running) {
+    clearInterval(ticker);
+    ticker = null;
+  }
 }
 
 /**
