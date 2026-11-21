@@ -79,6 +79,9 @@ from package metadata at runtime; every segmentation records it in its
   - a rebuilt mesh is no longer hidden by the browser's cache: meshes are sent with
     `Cache-Control: no-cache` and an ETag following the file, an unchanged mesh is answered
     `304 Not Modified` (Starlette's `FileResponse` never does), a rebuilt one in full.
+- The page read the voxel size's axes in the wrong order (`(z, y, x)` in the configuration):
+  invisible on cubic voxels, wrong on others. INSTALL's dependency list now names FastAPI and
+  uvicorn.
 - Report brought up to date with the web work: dependencies (Chapter 1), architecture with `api/`,
   `server/` and `utils/` (Chapter 3), the memory of the web page and mesh timings (Chapter 6), the
   limits of the server (Chapter 7), the conclusion and the appendix. Every mesh figure (Table 4.1,

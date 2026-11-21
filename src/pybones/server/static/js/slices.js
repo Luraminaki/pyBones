@@ -65,7 +65,7 @@ export function showSegmentation(summary) {
   const sameStack = segmentation === summary.id;
   segmentation = summary.id;
   const [depth] = summary.shape_zyx;
-  voxelZ = summary.voxel_size_um[2];
+  [voxelZ] = summary.voxel_size_um; // (z, y, x) µm
   nodes.slider.max = String(depth - 1);
   if (!sameStack) nodes.slider.value = String(Math.floor(depth / 2));
   load();

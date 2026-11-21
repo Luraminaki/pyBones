@@ -98,7 +98,8 @@ pip install -U .                 # or: pip install -U -e . --group dev  (pip >= 
 ```
 
 Dependencies are deliberately few: **numpy** and **OpenCV** for the computations, **pydantic** for
-the configuration, **scikit-image** for marching cubes only.
+the configuration, **scikit-image** for marching cubes only, and **FastAPI** with **uvicorn** for
+the web server. three.js, for the page's 3D view, is kept in the repository.
 
 ## DATASET
 

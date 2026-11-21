@@ -34,7 +34,7 @@ function recalled() {
 }
 
 function describe(summary) {
-  const [x, y, z] = summary.voxel_size_um;
+  const [z, y, x] = summary.voxel_size_um; // the configuration's order
   const fractions = ['bone', 'vessel', 'burst']
     .map((label) => `${label} ${percent(summary.label_fractions[label] ?? 0, 1)}`)
     .join(' · ');

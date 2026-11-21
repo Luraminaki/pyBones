@@ -98,7 +98,7 @@ class SegmentationSummary(Body):
         source: Path of the stack it was made from.
         pybones_version: Version of pyBones that made it.
         shape_zyx: Shape of the label volume.
-        voxel_size_um: Voxel size it was made with, ``(x, y, z)``.
+        voxel_size_um: Voxel size it was made with, ``(z, y, x)`` in µm.
         label_fractions: Fraction of the volume per label key.
         meshes: Formats ready to download, by label key (labels without a mesh omitted).
     """
