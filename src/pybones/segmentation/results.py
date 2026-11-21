@@ -123,9 +123,12 @@ def load_meta(out_dir: "Path", io_config: "IOConfig") -> SegmentationMeta:
         except json.JSONDecodeError:
             data = None
         written_by = data.get(_VERSION_KEY) if isinstance(data, dict) else None
-        version = f"pyBones {written_by}" if written_by else _UNKNOWN_VERSION
+        if written_by == __version__:  # same version number: an earlier development build
+            origin = f"an earlier build of pyBones {written_by}, with another configuration format"
+        else:
+            origin = f"pyBones {written_by}" if written_by else _UNKNOWN_VERSION
         raise IncompatibleOutputError(
-            f"{out_dir} was written by {version} and cannot be read by pyBones {__version__} "
+            f"{out_dir} was written by {origin} and cannot be read by pyBones {__version__} "
             + f"({exc.error_count()} differences): segment the stack again"
         ) from exc
 

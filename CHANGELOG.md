@@ -11,18 +11,23 @@ from package metadata at runtime; every segmentation records it in its
 
 ## Unreleased
 
-- Vascular network: a *bubble* (two branches joining the same two junctions around a small hole of
-  the vessel mask, the loop shorter than the vessel's circumference) is now one vessel, its longer
-  strand pruned. On the segmented branching phantom: 74 junctions that are not forks instead of 90,
-  no real fork lost; on the exact mask, 10 instead of 12 and a length closer to the truth. On the
-  sample: 3,641 junctions instead of 4,325, 624 mm of vessels instead of 680 (doubled strands).
-- Corrected explanation (report, README, page): most junctions that are not forks come from loops the
-  skeleton draws around holes and folds of the vessel mask (29 independent loops in the segmented
-  phantom's network, 6 in its exact mask's, where vessels cross), not mainly from bone contact; and
-  the network length is close to the truth as the net of two opposite errors, not because it is
-  reliable (4 % short on the phantom now that doubled strands are gone). Phantom scores count each
-  network's independent loops. Tried and dropped, measured on the phantom: longer spurs against bone,
-  closing the vessel mask before thinning (fewer false junctions, but real forks and length lost).
+- Vascular network: loops barely longer than their vessel's circumference are holes or folds of the
+  vessel mask, not structures. Every loop shorter than `quantification.pruning.loop_factor` (1.5)
+  circumferences loses its longest branch, found with a minimum spanning tree of the network, so
+  nothing is ever disconnected (two strands around a small hole, a *bubble*, are the simplest case).
+  On the segmented branching phantom: 59 junctions that are not forks instead of 90, 10 independent
+  loops instead of 49 (4 in the exact mask, where vessels cross), 2 real forks lost of 26; the exact
+  mask keeps all its 40 forks. On the sample: 3,129 junctions instead of 4,325, 591 mm of vessels
+  instead of 680 (doubled strands gone); the network stage takes 0.8 s instead of 0.3 (the loop
+  search runs only once no cheaper removal applies).
+- Corrected explanation (report, README, page): most junctions that are not forks come from small
+  loops the skeleton draws around holes and folds of the vessel mask, not mainly from bone contact;
+  and the network length is the net of two opposite errors (now about 8 % short on the phantom,
+  mostly thin vessels missed), not reliable by itself. Phantom scores count each network's
+  independent loops. Tried and dropped, measured on the phantom: longer spurs against bone, closing
+  the vessel mask before thinning (fewer false junctions removed, more real forks and length lost).
+- An output written by an earlier build of the same version, with another configuration format, now
+  says so, instead of "written by pyBones 0.6.0 and cannot be read by pyBones 0.6.0".
 - Progress you can trust during long silent stages:
   - the server sends every new stage at once (only progress within a stage is throttled): a stage
     starting right after another, like the quantification's skeleton or a mesh's surface, used to be

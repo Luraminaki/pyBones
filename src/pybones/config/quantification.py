@@ -28,6 +28,12 @@ class PruningConfig(Section):
     )
     min_spur_um: Length = Field(description="... and never shorter than this.")
     min_fragment_um: Length = Field(description="Isolated branches shorter than this are specks.")
+    loop_factor: float = Field(
+        ge=0.0,
+        le=100.0,
+        description="A loop shorter than this many vessel circumferences is a hole or a fold "
+        + "of the vessel mask: its longest branch is removed (0: loops kept).",
+    )
     junction_merge_factor: float = Field(
         ge=0.0,
         le=100.0,

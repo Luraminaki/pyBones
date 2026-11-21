@@ -60,6 +60,7 @@ KEEP_ALL = PruningConfig(
     spur_radius_factor=0.0,
     min_spur_um=0.0,
     min_fragment_um=0.0,
+    loop_factor=0.0,
     junction_merge_factor=0.0,
 )
 

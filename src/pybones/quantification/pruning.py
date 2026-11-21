@@ -14,6 +14,8 @@ Each operation acts on every instance at once; only the passes loop.
 from typing import TYPE_CHECKING
 
 import numpy as np
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import dijkstra, minimum_spanning_tree
 
 from pybones.quantification.network import (
     NO_BRANCH,
@@ -35,6 +37,8 @@ if TYPE_CHECKING:
 _PAIR = 2
 #: A loop around the vessel itself is shorter than its circumference, 2 pi r.
 TAU = 2 * np.pi
+#: Loop searches run from this many sources at once (bounded memory: sources x nodes).
+_LOOP_CHUNK = 256
 
 
 def _remove(state: GraphState, removed: "NDArray[np.bool_]") -> GraphState:
@@ -128,38 +132,60 @@ def _merge_pairs(state: GraphState, dissolve: "NDArray[np.bool_]") -> GraphState
     return GraphState(start, end, length, state.kind, state.node_length, point_branch, point_node)
 
 
-def _bubbles(
-    state: GraphState, between_forks: "NDArray[np.bool_]", radius: "NDArray[np.float64]"
+def _small_loops(
+    state: GraphState,
+    between_forks: "NDArray[np.bool_]",
+    radius: "NDArray[np.float64]",
+    loop_factor: float,
 ) -> "NDArray[np.bool_]":
-    """Find the extra strands of bubbles: branches joining the same two junctions as a shorter one.
+    """Find the branches that close loops smaller than their vessel.
 
-    Where the vessel mask has a hole or a fold, its skeleton splits into two strands for a short
-    way: two branches between the same two junctions. When the loop they make is shorter than the
-    vessel's circumference there, it is one vessel, and the longer strand goes.
+    Where the vessel mask has a hole or a fold, its skeleton goes around it: a loop barely
+    longer than the vessel's circumference, through two junctions (a bubble) or more. Real
+    loops (vessels crossing, anastomoses) are much larger. In a minimum spanning tree of the
+    network (by length), every branch left out closes exactly one loop with the tree, and is the
+    longest branch of that loop: it goes when the loop is shorter than ``loop_factor`` times the
+    circumference there. Tree branches never go, so nothing is ever disconnected.
 
     Args:
         state: Current network.
         between_forks: Branches joining two different junctions.
         radius: Larger radius of each branch's two end nodes.
+        loop_factor: Loops shorter than this many circumferences are removed (0: none).
 
     Returns:
         The branches to remove.
     """
-    candidates = np.flatnonzero(between_forks)
-    if len(candidates) == 0:
-        return np.zeros(len(state.length), np.bool_)
-    n_nodes = len(state.kind)
-    low = np.minimum(state.start[candidates], state.end[candidates])
-    high = np.maximum(state.start[candidates], state.end[candidates])
-    pair = low * n_nodes + high
-    order = np.lexsort((state.length[candidates], pair))  # by pair, shortest first
-    ranked, pair = candidates[order], pair[order]
-    first = np.concatenate([[True], pair[1:] != pair[:-1]])
-    shortest = np.maximum.accumulate(np.where(first, np.arange(len(pair)), 0))
-    loop = state.length[ranked] + state.length[ranked[shortest]]
-    extra = ~first & (loop < TAU * radius[ranked])
     removed = np.zeros(len(state.length), np.bool_)
-    removed[ranked[extra]] = True
+    candidates = np.flatnonzero(between_forks)
+    if loop_factor == 0 or len(candidates) == 0:
+        return removed
+    n_nodes = len(state.kind)
+    order = candidates[np.argsort(state.length[candidates], kind="stable")]
+    low = np.minimum(state.start[order], state.end[order])
+    high = np.maximum(state.start[order], state.end[order])
+    _, first = np.unique(low * n_nodes + high, return_index=True)  # shortest of parallel branches
+    graph = coo_matrix(
+        (state.length[order[first]], (low[first], high[first])), shape=(n_nodes, n_nodes)
+    ).tocsr()
+    tree = minimum_spanning_tree(graph)
+    tree = (tree + tree.T).tocsr()
+    in_tree = np.zeros(len(order), np.bool_)
+    in_tree[first] = np.asarray(tree[low[first], high[first]]).ravel() > 0
+    closing = np.flatnonzero(~in_tree)
+    # The rest of the loop must be shorter than this for the loop to be small.
+    limit = loop_factor * TAU * radius[order[closing]] - state.length[order[closing]]
+    closing, limit = closing[limit > 0], limit[limit > 0]
+    if len(closing) == 0:
+        return removed
+    sources, row = np.unique(low[closing], return_inverse=True)
+    around = np.full(len(closing), np.inf)
+    for start in range(0, len(sources), _LOOP_CHUNK):
+        chunk = slice(start, start + _LOOP_CHUNK)
+        reach = dijkstra(tree, directed=False, indices=sources[chunk], limit=float(limit.max()))
+        here = (row >= start) & (row < start + _LOOP_CHUNK)
+        around[here] = reach[row[here] - start, high[closing[here]]]
+    removed[order[closing[around < limit]]] = True
     return removed
 
 
@@ -171,8 +197,8 @@ def prune(
 ) -> GraphState:
     """Apply the cleaning operations, one kind at a time, until none applies.
 
-    In order of priority: remove spurs, specks and rings; contract short links between
-    junctions; join the branches meeting two by two. Each operation acts on every
+    In order of priority: remove spurs, specks and rings; then small loops; contract short links
+    between junctions; join the branches meeting two by two. Each operation acts on every
     instance at once; the loop ends when the network no longer changes.
 
     Args:
@@ -200,10 +226,14 @@ def prune(
         spur = ((s_free & e_fork) | (e_free & s_fork)) & (state.length < spur_limit)
         speck = s_free & e_free & (state.length < rules.min_fragment_um)
         ring = s_fork & (s == e) & (state.length < TAU * radius_ext[s])
-        bubble = _bubbles(
-            state, s_fork & e_fork & (s != e), np.maximum(radius_ext[s], radius_ext[e])
-        )
-        removable = spur | speck | ring | bubble
+        removable = spur | speck | ring
+        if not removable.any():  # the loop search is the costly one: only once nothing cheaper goes
+            removable = _small_loops(
+                state,
+                s_fork & e_fork & (s != e),
+                np.maximum(radius_ext[s], radius_ext[e]),
+                rules.loop_factor,
+            )
         if removable.any():
             state = _remove(state, removable)
             continue

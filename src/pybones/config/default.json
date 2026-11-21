@@ -105,6 +105,7 @@
       "spur_radius_factor": 2.0,
       "min_spur_um": 6.0,
       "min_fragment_um": 15.0,
+      "loop_factor": 1.5,
       "junction_merge_factor": 1.0
     },
     "anchor_margin_um": 3.0,
@@ -114,10 +115,10 @@
       "centrelines_file": "centrelines.npz"
     },
     "stage_weights": {
-      "cavities": 0.35,
-      "skeleton": 0.58,
+      "cavities": 0.33,
+      "skeleton": 0.56,
       "calibre": 0.05,
-      "network": 0.02
+      "network": 0.06
     },
     "max_radius_um": 60,
     "distance_tile_slices": 32,

@@ -1,20 +1,20 @@
 {
   "real": {
-    "branches": 10512,
-    "truncated_branches": 1443,
-    "loops": 141,
-    "junctions": 3641,
-    "free_ends": 5900,
+    "branches": 9546,
+    "truncated_branches": 1440,
+    "loops": 129,
+    "junctions": 3129,
+    "free_ends": 6029,
     "face_ends": 1819,
     "burst_ends": 385,
-    "total_length_mm": 624.1667406008341,
+    "total_length_mm": 590.8974665368058,
     "stack_volume_mm3": 9.23427,
-    "length_density_mm_per_mm3": 67.5924291363404,
-    "median_branch_length_um": 34.4558441227157,
+    "length_density_mm_per_mm3": 63.98962414319765,
+    "median_branch_length_um": 36.87758621965183,
     "median_radius_um": 6.7082037925720215,
-    "median_tortuosity": 1.1252137384132181
+    "median_tortuosity": 1.128385872532125
   },
-  "real_seconds": 17.496272463000423,
+  "real_seconds": 18.343696608000755,
   "radius_bins_um": [
     0.0,
     6.0,
@@ -22,39 +22,39 @@
     25.0
   ],
   "true_mask": {
-    "centreline_recall": 0.9142150803461063,
-    "centreline_precision": 0.9630252100840336,
+    "centreline_recall": 0.9095179233621755,
+    "centreline_precision": 0.9637901861252115,
     "true_junctions": 54,
     "matched_junctions": 40,
     "crossing_junctions": 7,
-    "spurious_junctions": 10,
-    "independent_cycles": 6,
-    "radius_offset_um": -0.6761884689331055,
-    "radius_abs_error_um": 0.5113067626953125,
+    "spurious_junctions": 8,
+    "independent_cycles": 4,
+    "radius_offset_um": -0.6651067733764648,
+    "radius_abs_error_um": 0.512789249420166,
     "radius_offset_by_band_um": [
       -0.14797544479370117,
       -0.601651668548584,
       -0.9636592864990234
     ],
     "true_length_mm": 22.86933308806581,
-    "measured_length_mm": 23.669642073962333
+    "measured_length_mm": 23.50194796289965
   },
   "segmented": {
-    "centreline_recall": 0.6865265760197775,
-    "centreline_precision": 0.7517314864144912,
+    "centreline_recall": 0.6825710754017306,
+    "centreline_precision": 0.7637824023366192,
     "true_junctions": 54,
-    "matched_junctions": 26,
-    "crossing_junctions": 9,
-    "spurious_junctions": 74,
-    "independent_cycles": 29,
+    "matched_junctions": 24,
+    "crossing_junctions": 8,
+    "spurious_junctions": 59,
+    "independent_cycles": 10,
     "radius_offset_um": -0.777043342590332,
-    "radius_abs_error_um": 0.9296140670776367,
+    "radius_abs_error_um": 0.9221410751342773,
     "radius_offset_by_band_um": [
       0.8195934295654297,
       -0.5058813095092773,
       -1.5499982833862305
     ],
     "true_length_mm": 22.86933308806581,
-    "measured_length_mm": 21.95602140072061
+    "measured_length_mm": 21.155738985338434
   }
 }

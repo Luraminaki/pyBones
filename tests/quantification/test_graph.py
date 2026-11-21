@@ -22,6 +22,7 @@ RULES = PruningConfig(
     spur_radius_factor=1.5,
     min_spur_um=3.0,
     min_fragment_um=5.0,
+    loop_factor=1.0,
     junction_merge_factor=1.0,
 )
 RADIUS = 2.0
@@ -272,3 +273,14 @@ def test_a_long_loop_is_two_vessels() -> None:
     net = network(MAIN + LONG_DETOUR, RULES)
     assert (net.node_kind == NodeKind.JUNCTION).sum() == 2
     assert len(net.branch_length_um) == 4
+
+
+#: The small detour with a spoke back to the main line: small loops through three or four junctions.
+SPOKED_DETOUR = [*SMALL_DETOUR, (5, 21, 13)]
+
+
+def test_small_loops_through_several_junctions_are_one_vessel() -> None:
+    """Loops smaller than the vessel are a hole or a fold, through two junctions or more."""
+    assert_one_open_branch(network(MAIN + SPOKED_DETOUR, RULES))
+    thin = network(MAIN + SPOKED_DETOUR, RULES, radius=THIN)
+    assert (thin.node_kind == NodeKind.JUNCTION).sum() >= 3  # real loops in a thinner vessel

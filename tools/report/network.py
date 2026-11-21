@@ -204,6 +204,7 @@ def network_values(ctx: "Context") -> dict[str, str]:
         "NetJunctionTolerance": f"{report.junction_tolerance_um:g}",
         "NetAnchorMargin": f"{quantification.anchor_margin_um:g}",
         "NetSpurFactor": f"{quantification.pruning.spur_radius_factor:g}",
+        "NetLoopFactor": f"{quantification.pruning.loop_factor:g}",
         "NetTrueForks": f"{seg.true_junctions}",
         "NetTrueMaskMissed": f"{true.true_junctions - true.matched_junctions}",
         "NetTrueMaskCycles": f"{true.independent_cycles}",

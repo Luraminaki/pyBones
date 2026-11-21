@@ -115,14 +115,15 @@ every command, the tools and how to build the report: [INSTALL.md](INSTALL.md), 
 4. **3D refinement**: ambiguous blobs are decided by what they touch in 3D (vessel, bone, nothing) and
    by their shape (a plate is never a vessel); 3D specks are removed.
 5. **Meshing**: marching cubes, Taubin smoothing, STL or GLB files in µm.
-6. **Vascular network** (`pybones quantify`, or the page's Network tab): the vessel mask, its cavities
-   filled, is thinned to one-voxel centrelines (scikit-image); touching centreline voxels become a
-   graph of branches between junctions and ends. Spurs shorter than the vessel's width, specks and
-   rings are pruned, and forks closer than their radii merge, in µm. Each branch gets its length,
-   chord, tortuosity and radius (distance from the centreline to the wall); ends against a face of
-   the stack or a burst are flagged, their branches truncated. Three files land next to the labels:
-   `network.json` (summary and nodes), `branches.csv` (one row per branch) and `centrelines.npz`.
-   On the sample: 17 s, 1.2 GB; 624 mm of vessels in 10,512 branches, median radius 6.7 µm.
+6. **Vascular network** (`pybones quantify`, or the page's Network tab): the vessel mask, its
+   cavities filled, is thinned to one-voxel centrelines (scikit-image); touching centreline voxels
+   become a graph of branches between junctions and ends. Spurs shorter than the vessel's width,
+   specks and loops barely longer than the vessel's circumference are pruned, and forks closer than
+   their radii merge, in µm. Each branch gets its length, chord, tortuosity and radius (distance
+   from the centreline to the wall); ends against a face of the stack or a burst are flagged, their
+   branches truncated. Three files land next to the labels: `network.json` (summary and nodes),
+   `branches.csv` (one row per branch) and `centrelines.npz`. On the sample: 18 s, 1.2 GB; 591 mm of
+   vessels in 9,546 branches, median radius 6.7 µm.
 
    Its three 3D steps are interchangeable (`quantification.backends`; both give the same result,
    tested against each other and against brute force):
@@ -220,11 +221,12 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
 
 - **Junctions that are not forks**: wherever the vessel mask has a hole or a fold (often where a
   vessel presses against the bone), the centreline goes around it and draws a loop, and each loop
-  adds about two junctions. The smallest loops are removed; on the network phantom, most of the
-  measured junctions of the segmentation are still not forks (26 of 54 true forks found, 74 others;
-  chapter 6 of the report). Counts of junctions and branches are therefore upper bounds.
-- **Lengths are close, for two reasons**: about 4 % short on the phantom, the net of thin vessels
-  missed (shorter) and strands doubled around holes (longer).
+  adds about two junctions. Loops barely longer than their vessel's circumference are removed (real
+  loops are several times longer); on the network phantom, the measured junctions of the segmentation
+  are still mostly not forks (24 of 54 true forks found, 59 others; chapter 6 of the report). Counts
+  of junctions and branches are therefore upper bounds.
+- **Lengths come from two errors**: about 8 % short on the phantom, mostly the thin vessels missed;
+  strands doubled around holes would lengthen it, but most are removed with the small loops.
 - **Radius bias depends on the calibre**: thin vessels read about 0.8 µm wide of the truth, thick ones
   about 1.6 µm narrow, so no single correction applies and none is made. Radii also come in steps of
   the voxel grid (√k × 3 µm).
