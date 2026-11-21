@@ -7,14 +7,9 @@ import pytest
 
 from pybones.config.loader import load_config
 from pybones.meshing.marching import extract_surface, occupancy
-from pybones.meshing.stl import (
-    STL_COUNT_DTYPE,
-    STL_HEADER_BYTES,
-    STL_RECORD,
-    read_stl,
-    write_stl,
-)
+from pybones.meshing.stl import STL_COUNT_DTYPE, STL_HEADER_BYTES, STL_RECORD, write_stl
 from pybones.segmentation.labels import FOREGROUND_LABELS, Label
+from tests.helpers import read_stl
 
 if TYPE_CHECKING:
     from pathlib import Path

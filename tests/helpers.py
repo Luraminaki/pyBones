@@ -10,6 +10,8 @@ import numpy as np
 
 from pybones.config.loader import load_config
 from pybones.config.quantification import PruningConfig
+from pybones.meshing.stl import STL_COUNT_DTYPE, STL_HEADER_BYTES, STL_RECORD
+from pybones.segmentation.classifier import extract_features, finalize_slice, smooth, upsample_grid
 from pybones.segmentation.scales import resolve_pixel_params
 from pybones.utils.constants import UINT16_MAX
 from tools.phantom.settings import PhantomSettings
@@ -22,6 +24,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from pybones.config.schema import PyBonesConfig
+    from pybones.segmentation.classifier import Thresholds
     from pybones.segmentation.scales import PixelParams
     from pybones.segmentation.stages import Progress, ProgressTracker, Stage
 
@@ -243,6 +246,43 @@ def truncated_window(z: int, window: int, depth: int) -> tuple[int, int]:
     """
     half = window // 2
     return max(0, z - half), min(depth, z + half + 1)
+
+
+def classify_slice(
+    img: "NDArray[np.uint16]", thresholds: "Thresholds", params: "PixelParams"
+) -> "NDArray[np.uint8]":
+    """Classify a single slice on its own (2D burst density, no neighbouring slices).
+
+    The pipeline never does this (it always looks at a window of slices); the tests use it as
+    the 2D reference the pipeline is compared with.
+
+    Args:
+        img: Raw ``uint16`` slice.
+        thresholds: Global thresholds.
+        params: Segmentation parameters in pixel units.
+
+    Returns:
+        ``uint8`` label image of the same shape as ``img``.
+    """
+    features = extract_features([smooth(img, params.smoothing_sigma)], 0, thresholds, params)
+    core = upsample_grid(features.burst_density >= params.burst_density, params, img.shape)
+    return finalize_slice(features.masks, core, params)
+
+
+def read_stl(path: "Path") -> "NDArray[np.float32]":
+    """Read the triangles of a binary STL file back (pyBones only writes them).
+
+    Args:
+        path: STL file.
+
+    Returns:
+        ``(F, 3, 3)`` triangle coordinates.
+    """
+    with path.open("rb") as fh:
+        _ = fh.seek(STL_HEADER_BYTES)
+        n = int(np.frombuffer(fh.read(STL_COUNT_DTYPE.itemsize), dtype=STL_COUNT_DTYPE)[0])
+        records = np.fromfile(fh, dtype=STL_RECORD, count=n)
+    return records["vertices"]
 
 
 class FakeClock:

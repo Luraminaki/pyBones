@@ -20,7 +20,7 @@ import re
 from collections import defaultdict
 from typing import TYPE_CHECKING, override
 
-from tests.test_conventions import ROOT, SOURCE_DIRS, project_files, python_files
+from tests.test_conventions import ROOT, SCRIPT_SUFFIXES, SOURCE_DIRS, project_files, python_files
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -38,7 +38,6 @@ _NOISE_LINE = re.compile(r"^(//|\*|/\*|import |export \{|[}\])]+;?,?$|\{$|\} els
 _IMPLICIT = {"self", "cls"}
 _TEST_PREFIX = "test_"
 _DUNDER = "__"
-SCRIPT_SUFFIXES = (".js", ".mjs")
 
 Function = ast.FunctionDef | ast.AsyncFunctionDef
 

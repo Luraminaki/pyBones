@@ -6,12 +6,12 @@ import numpy as np
 import pytest
 
 from pybones.io.slices import SliceStack
-from pybones.segmentation.classifier import classify_slice, estimate_thresholds
+from pybones.segmentation.classifier import estimate_thresholds
 from pybones.segmentation.labels import FINAL_LABELS, Label
 from pybones.segmentation.pipeline import iter_classified, planned_stages, run_segmentation
 from pybones.segmentation.results import load_labels, load_meta
 from pybones.segmentation.scales import resolve_pixel_params, resolve_tubularity
-from tests.helpers import N_SYNTHETIC_SLICES, SLICE_SHAPE, small_config
+from tests.helpers import N_SYNTHETIC_SLICES, SLICE_SHAPE, classify_slice, small_config
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -5,14 +5,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 
-from pybones.segmentation.classifier import (
-    Thresholds,
-    classify_slice,
-    estimate_thresholds,
-    extract_features,
-)
+from pybones.segmentation.classifier import Thresholds, estimate_thresholds, extract_features
 from pybones.segmentation.labels import Label
-from tests.helpers import SLICE_SHAPE, small_config, small_params, synthetic_slice
+from tests.helpers import SLICE_SHAPE, classify_slice, small_config, small_params, synthetic_slice
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray

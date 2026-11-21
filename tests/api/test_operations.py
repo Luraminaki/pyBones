@@ -13,12 +13,11 @@ from pybones.api.operations import (
     write_mesh_file,
 )
 from pybones.meshing.gltf import read_glb
-from pybones.meshing.stl import read_stl
 from pybones.segmentation.labels import Label
 from pybones.segmentation.pipeline import run_segmentation
 from pybones.segmentation.stages import MESH_STAGES, CancelledError, ProgressTracker
 from pybones.utils.constants import BGR_CHANNELS, PARTIAL_SUFFIX
-from tests.helpers import N_SYNTHETIC_SLICES, SLICE_SHAPE, cancel_in, small_config
+from tests.helpers import N_SYNTHETIC_SLICES, SLICE_SHAPE, cancel_in, read_stl, small_config
 
 if TYPE_CHECKING:
     from pathlib import Path

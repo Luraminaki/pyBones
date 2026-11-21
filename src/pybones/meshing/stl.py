@@ -1,4 +1,4 @@
-"""Binary STL reading and chunked, vectorized writing."""
+"""Binary STL writing, chunked and vectorized."""
 
 from typing import TYPE_CHECKING
 
@@ -8,8 +8,6 @@ from pybones.meshing.mesh import face_normals
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from numpy.typing import NDArray
 
     from pybones.meshing.mesh import Mesh
 
@@ -48,19 +46,3 @@ def write_stl(mesh: "Mesh", path: "Path", header: str, chunk_faces: int) -> "Pat
             chunk["normal"] = face_normals(tri)
             chunk.tofile(fh)
     return path
-
-
-def read_stl(path: "Path") -> "NDArray[np.float32]":
-    """Read the triangles of a binary STL file.
-
-    Args:
-        path: STL file.
-
-    Returns:
-        ``(F, 3, 3)`` triangle coordinates.
-    """
-    with path.open("rb") as fh:
-        _ = fh.seek(STL_HEADER_BYTES)
-        n = int(np.frombuffer(fh.read(STL_COUNT_DTYPE.itemsize), dtype=STL_COUNT_DTYPE)[0])
-        records = np.fromfile(fh, dtype=STL_RECORD, count=n)
-    return records["vertices"]

@@ -87,7 +87,7 @@ function resize() {
 }
 
 /** Frame the visible meshes, looking down the stack (+z) with image rows going down. */
-export function fitView() {
+function fitView() {
   const box = new THREE.Box3();
   for (const entry of current?.labels.values() ?? []) {
     if (entry.object?.visible) box.expandByObject(entry.object);

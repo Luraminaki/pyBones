@@ -359,21 +359,3 @@ def finalize_slice(
     labels[masks.vessel] = Label.VESSEL
     labels[burst] = Label.BURST
     return labels
-
-
-def classify_slice(
-    img: "NDArray[np.uint16]", thresholds: Thresholds, params: "PixelParams"
-) -> "NDArray[np.uint8]":
-    """Classify a single slice on its own (2D burst density, no neighbouring slices).
-
-    Args:
-        img: Raw ``uint16`` slice.
-        thresholds: Global thresholds (see :func:`estimate_thresholds`).
-        params: Segmentation parameters in pixel units.
-
-    Returns:
-        ``uint8`` label image of the same shape as ``img``.
-    """
-    features = extract_features([smooth(img, params.smoothing_sigma)], 0, thresholds, params)
-    core = upsample_grid(features.burst_density >= params.burst_density, params, img.shape)
-    return finalize_slice(features.masks, core, params)
