@@ -16,7 +16,7 @@ from pybones.quantification.skeleton import ScikitImageSkeletonizer
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from pybones.config.schema import QuantificationConfig
+    from pybones.config.quantification import QuantificationConfig
     from pybones.quantification.protocols import CavityFiller, DistanceProbe, Skeletonizer
 
 CAVITY_FILLERS: "Mapping[CavityBackend, Callable[[QuantificationConfig], CavityFiller]]" = {

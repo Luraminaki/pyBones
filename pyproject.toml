@@ -52,7 +52,11 @@ select = [
 [tool.ruff.lint.flake8-type-checking]
 quote-annotations = true
 strict = true
-runtime-evaluated-base-classes = ["pydantic.BaseModel", "pybones.cli.arguments.ArgsModel"]
+runtime-evaluated-base-classes = [
+    "pydantic.BaseModel",
+    "pybones.cli.arguments.ArgsModel",
+    "pybones.config.fields.Section",
+]
 # FastAPI reads the signatures of the routes at runtime (parameters, bodies, responses).
 runtime-evaluated-decorators = [
     "fastapi.APIRouter.get",

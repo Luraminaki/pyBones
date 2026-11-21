@@ -5,7 +5,7 @@ from typing import Annotated, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from pybones.api.jobs import JobStatus
+from pybones.api.job_status import JobStatus
 from pybones.config.loader import override_section
 
 #: Ids of datasets and segmentations: the name of an entry directly inside the data or

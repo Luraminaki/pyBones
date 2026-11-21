@@ -5,15 +5,23 @@ file (``default.json`` ships with the package). All sections are strict: unknown
 keys are rejected and models are immutable.
 """
 
-from typing import Annotated, ClassVar, Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, Field, model_validator
 
-from pybones.meshing.formats import MeshFormat
-from pybones.quantification.protocols import CavityBackend, DistanceBackend, SkeletonBackend
+from pybones.config.fields import (
+    Area,
+    ColorBGR,
+    FileName,
+    Fraction,
+    Length,
+    Micrometres,
+    Section,
+    Volume,
+)
+from pybones.config.quantification import QuantificationConfig
 from pybones.segmentation.labels import FOREGROUND_LABELS, Label, label_keys
-from pybones.segmentation.stages import MESH_STAGES, QUANTIFY_STAGES, STAGES_3D, Stage
-from pybones.utils.constants import UINT8_MAX
+from pybones.segmentation.stages import MESH_STAGES, STAGES_3D, Stage
 
 #: Largest mesh downsampling factor: factor³ must fit the uint16 block counters of the
 #: occupancy grid.
@@ -49,47 +57,6 @@ def _keyed_by(labels: tuple[Label, ...]) -> AfterValidator:
         return mapping
 
     return AfterValidator(check)
-
-
-#: Physical quantities: generous but finite ranges (1 m, 1 m², 1 m³ as upper bounds).
-Micrometres = Annotated[float, Field(gt=0.0, le=1e6)]
-Length = Annotated[float, Field(ge=0.0, le=1e6)]
-Area = Annotated[float, Field(ge=0.0, le=1e12)]
-Volume = Annotated[float, Field(ge=0.0, le=1e18)]
-Fraction = Annotated[float, Field(ge=0.0, le=1.0)]
-Channel = Annotated[int, Field(ge=0, le=UINT8_MAX)]
-ColorBGR = tuple[Channel, Channel, Channel]
-#: Characters that would turn a file name into a path.
-PATH_SEPARATORS = ("/", "\\")
-
-
-def _plain_name(name: str) -> str:
-    """Check that a configured file name stays inside its folder.
-
-    A validator rather than a ``pattern``: a field adding its own ``pattern`` (e.g. an
-    extension) would replace this one instead of adding to it.
-
-    Args:
-        name: Configured file name.
-
-    Returns:
-        ``name``, unchanged.
-
-    Raises:
-        ValueError: If it is empty or holds a path separator.
-    """
-    if not name or any(sep in name for sep in PATH_SEPARATORS):
-        raise ValueError(f"must be a plain file name (no {' or '.join(PATH_SEPARATORS)}): {name!r}")
-    return name
-
-
-FileName = Annotated[str, AfterValidator(_plain_name)]
-
-
-class Section(BaseModel):
-    """Base of every configuration section: strict and immutable."""
-
-    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
 
 
 class IOConfig(Section):
@@ -342,86 +309,6 @@ class MeshConfig(Section):
         return self.downsample[label.key]
 
 
-class QuantificationBackends(Section):
-    """Implementation of each step of the quantification (interchangeable, same results)."""
-
-    cavities: CavityBackend = Field(description="Filling the cavities of the vessel mask.")
-    skeleton: SkeletonBackend = Field(description="Thinning the vessels to centrelines.")
-    distances: DistanceBackend = Field(description="Distance to the wall (the calibre).")
-
-
-class PruningConfig(Section):
-    """When a piece of the centreline network is an artefact (see quantification.graph)."""
-
-    spur_radius_factor: float = Field(
-        ge=0.0,
-        le=100.0,
-        description="A free-end branch shorter than this many vessel radii "
-        + "at its fork is a bump of the surface.",
-    )
-    min_spur_um: Length = Field(description="... and never shorter than this.")
-    min_fragment_um: Length = Field(description="Isolated branches shorter than this are specks.")
-    junction_merge_factor: float = Field(
-        ge=0.0,
-        le=100.0,
-        description="Two forks joined by a branch shorter than this many "
-        + "times their radii together are one fork.",
-    )
-
-
-class QuantificationFiles(Section):
-    """Files the quantification writes into the segmentation folder."""
-
-    network_file: Annotated[FileName, Field(pattern=r"\.json$")] = Field(
-        description="Summary and node table."
-    )
-    branches_file: Annotated[FileName, Field(pattern=r"\.csv$")] = Field(
-        description="One row per branch."
-    )
-    centrelines_file: Annotated[FileName, Field(pattern=r"\.npz$")] = Field(
-        description="Centreline voxels, their branch, node and wall distance."
-    )
-
-
-class QuantificationConfig(Section):
-    """Vascular quantification: centrelines, network, per-branch measures."""
-
-    backends: QuantificationBackends
-    pruning: PruningConfig
-    anchor_margin_um: Length = Field(
-        description="An end this much beyond its own radius from a face of the stack, or "
-        + "from a burst, continues there (it is not a free end)."
-    )
-    files: QuantificationFiles
-    stage_weights: dict[Stage, Annotated[float, Field(gt=0.0, le=1.0)]] = Field(
-        description="Relative duration of each quantification stage (progress bar)."
-    )
-    max_radius_um: Micrometres = Field(
-        description="Largest vessel radius measured (distances are capped there)."
-    )
-    distance_tile_slices: int = Field(
-        ge=1, le=10_000, description="Depth of a tile of the scipy distance backend (memory)."
-    )
-    distance_tile_pixels: int = Field(
-        ge=8, le=100_000, description="In-plane side of a tile of the scipy distance backend."
-    )
-
-    @model_validator(mode="after")
-    def _quantify_stages_weighted(self) -> Self:
-        """Check that the weights are exactly those of the quantification stages.
-
-        Returns:
-            The validated section.
-
-        Raises:
-            ValueError: If a stage has no weight, or another stage has one.
-        """
-        if set(self.stage_weights) != set(QUANTIFY_STAGES):
-            names = [s.value for s in QUANTIFY_STAGES]
-            raise ValueError(f"stage_weights must weight exactly {names}")
-        return self
-
-
 class RenderConfig(Section):
     """2D overlays."""
 
@@ -461,58 +348,3 @@ class PyBonesConfig(Section):
     mesh: MeshConfig
     quantification: QuantificationConfig
     render: RenderConfig
-
-
-class HttpConfig(Section):
-    """Address of the web server (local by default: no authentication)."""
-
-    host: Annotated[str, Field(min_length=1)] = Field(description="Interface to listen on.")
-    port: int = Field(ge=1, le=65535, description="TCP port.")
-    shutdown_timeout_s: int = Field(
-        ge=0, le=3600, description="Grace period for open connections when stopping."
-    )
-
-
-class LibraryConfig(Section):
-    """Folders the web server reads stacks from and writes segmentations to."""
-
-    data_dir: Annotated[str, Field(min_length=1)] = Field(
-        description="Folder of the slice stacks (directories or zip archives)."
-    )
-    output_dir: Annotated[str, Field(min_length=1)] = Field(
-        description="Folder of the segmentation outputs (one sub-folder each)."
-    )
-    mesh_file_template: Annotated[FileName, Field(pattern=r"\{label\}.*\.\{format\}$")] = Field(
-        description="Name of a label's cached mesh inside its segmentation folder; "
-        + "{format} is the extension (stl, glb)."
-    )
-
-
-class ApiConfig(Section):
-    """Limits and timings of the web API."""
-
-    max_preview_scale: float = Field(
-        gt=0.0,
-        le=1.0,
-        description="Largest slice image scale (1 = full size: a browser zooms on its own, and an "
-        + "enlarged slice would be built in server memory for nothing).",
-    )
-    default_mesh_format: MeshFormat = Field(
-        description="Mesh format when a request names none (glb for the browser, stl to export)."
-    )
-    event_heartbeat_s: float = Field(
-        gt=0.0, le=3600.0, description="Status repeated on an idle event stream after this time."
-    )
-
-
-class ServerConfig(Section):
-    """Root of the web server configuration (``server.json``).
-
-    Kept apart from :class:`PyBonesConfig` on purpose: every segmentation stores its
-    :class:`PyBonesConfig`, and deployment settings are neither results nor
-    reproducibility information.
-    """
-
-    http: HttpConfig
-    library: LibraryConfig
-    api: ApiConfig

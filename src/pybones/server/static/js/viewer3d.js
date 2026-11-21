@@ -9,6 +9,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { api, meshUrl } from './api.js';
 import { activeJob, JOB_FINISHED, JOB_UPDATED, track } from './jobs.js';
 import { THEME_CHANGED } from './theme.js';
+import { dispose, releaseAfterUpload, triangles } from './mesh_memory.js';
 import { cssColor, duration, el, LABELS, megabytes, percent, toast } from './ui.js';
 
 const FORMAT = 'glb';
@@ -26,7 +27,6 @@ const FAR_RATIO = 50;
 const SKY_LIGHT = 1.4;
 const KEY_LIGHT = 1.6;
 const MEGA = 1e6;
-const VERTICES_PER_TRIANGLE = 3;
 // One click on + / − moves the camera this much closer / farther.
 const ZOOM_STEP = 1.3;
 // Image rows go down the screen, as in the slice viewer: "up" is -y.
@@ -164,58 +164,6 @@ function updateMessage() {
   const busy = [...(current?.labels.values() ?? [])].some((e) => e.loading);
   message.hidden = shown;
   message.textContent = busy ? 'Loading…' : 'Choose the labels to show.';
-}
-
-/**
- * Count the triangles of a loaded mesh.
- * @param {THREE.Object3D} object The mesh's scene.
- * @returns {number} Triangles.
- */
-function triangles(object) {
-  let count = 0;
-  object.traverse((child) => {
-    if (child.isMesh) {
-      const { index, attributes } = child.geometry;
-      count += (index ?? attributes.position).count / VERTICES_PER_TRIANGLE;
-    }
-  });
-  return count;
-}
-
-/**
- * Keep a mesh in GPU memory only. three.js keeps a CPU copy of every array after uploading
- * it (for picking, bounds, re-uploads), which doubles the browser's memory: 175 MB more for
- * the bone and vessels of the sample. Bounds are computed first (fitting the view uses
- * them); then each array is dropped as soon as it is on the GPU. Nothing here picks
- * triangles, and the arrays never change, so nothing needs the copy again.
- * @param {THREE.Object3D} object The mesh's scene.
- */
-function releaseAfterUpload(object) {
-  object.traverse((child) => {
-    if (!child.isMesh) return;
-    const geometry = child.geometry;
-    geometry.computeBoundingBox();
-    geometry.computeBoundingSphere();
-    const buffers = [...Object.values(geometry.attributes), geometry.index].filter(Boolean);
-    for (const attribute of buffers) {
-      // Interleaved attributes (16-bit positions, 8-bit normals) live in a shared buffer.
-      const owner = attribute.isInterleavedBufferAttribute ? attribute.data : attribute;
-      owner.onUpload(function drop() { this.array = null; });
-    }
-  });
-}
-
-/**
- * Free the GPU memory of a mesh (geometry and materials).
- * @param {THREE.Object3D} object The mesh's scene.
- */
-function dispose(object) {
-  object.traverse((child) => {
-    if (child.isMesh) {
-      child.geometry.dispose();
-      child.material.dispose();
-    }
-  });
 }
 
 /**

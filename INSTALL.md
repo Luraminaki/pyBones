@@ -137,7 +137,7 @@ quiet). `pybones config` writes its JSON on stdout, so that it can be redirected
 lists the machine every timing was measured on.
 
 Every tunable value lives in [src/pybones/config/default.json](src/pybones/config/default.json) and
-is validated (types, bounds) by [src/pybones/config/schema.py](src/pybones/config/schema.py). A user
+is validated (types, bounds) by the schemas in [src/pybones/config/](src/pybones/config/). A user
 file only needs the values it changes. Sizes are physical (µm): if the voxel size of your scan
 differs, change `acquisition.voxel_size_um` and everything follows.
 

@@ -8,8 +8,9 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 
-from pybones.quantification.graph import NO_BRANCH, EndKind, NodeKind, build_network
+from pybones.quantification.graph import build_network
 from pybones.quantification.measures import branch_measures, end_kinds, summarize
+from pybones.quantification.network import NO_BRANCH, EndKind, NodeKind
 from pybones.quantification.pipeline import BRANCH_COLUMNS, run_quantification
 from pybones.segmentation.pipeline import run_segmentation
 from pybones.segmentation.stages import QUANTIFY_STAGES, CancelledError, ProgressTracker

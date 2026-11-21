@@ -6,20 +6,14 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 
-from pybones.config.schema import PruningConfig
-from pybones.quantification.graph import (
-    NO_BRANCH,
-    NO_NODE,
-    EndKind,
-    NodeKind,
-    build_network,
-    drop_corner_links,
-    find_links,
-)
+from pybones.config.quantification import PruningConfig
+from pybones.quantification.graph import build_network
+from pybones.quantification.links import drop_corner_links, find_links
+from pybones.quantification.network import NO_BRANCH, NO_NODE, EndKind, NodeKind
 from tests.helpers import KEEP_ALL, line
 
 if TYPE_CHECKING:
-    from pybones.quantification.graph import Network
+    from pybones.quantification.network import Network
 
 SHAPE = (20, 40, 40)
 UNIT = (1.0, 1.0, 1.0)

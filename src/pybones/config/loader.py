@@ -4,7 +4,8 @@ import json
 from importlib import resources
 from typing import TYPE_CHECKING, Any
 
-from pybones.config.schema import PyBonesConfig, ServerConfig
+from pybones.config.schema import PyBonesConfig
+from pybones.config.server import ServerConfig
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

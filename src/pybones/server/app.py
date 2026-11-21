@@ -37,7 +37,8 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from pybones import __version__
-from pybones.api.jobs import JobManager, UnknownJobError
+from pybones.api.job_status import UnknownJobError
+from pybones.api.jobs import JobManager
 from pybones.segmentation.results import IncompatibleOutputError
 from pybones.server.context import ServerContext
 from pybones.server.library import ConflictError, Library, NotFoundError
@@ -48,7 +49,8 @@ if TYPE_CHECKING:
 
     from fastapi import Request
 
-    from pybones.config.schema import PyBonesConfig, ServerConfig
+    from pybones.config.schema import PyBonesConfig
+    from pybones.config.server import ServerConfig
 
 API_PREFIX = "/api"
 #: Interactive API documentation (Swagger UI).

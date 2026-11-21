@@ -19,15 +19,15 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from pybones.quantification.graph import NO_BRANCH, NO_NODE, NodeKind
+from pybones.quantification.network import NO_BRANCH, NO_NODE, NodeKind
 from pybones.utils.constants import UM_PER_MM
-from tools.phantom.generator import SegmentState
+from tools.phantom.vessels import SegmentState
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-    from pybones.quantification.graph import Network
-    from tools.phantom.generator import VesselNetwork
+    from pybones.quantification.network import Network
+    from tools.phantom.vessels import VesselNetwork
 
 _CHUNK = 2048
 #: Coordinates compared at once by the brute-force searches (8 bytes each: ~64 MB).

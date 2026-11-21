@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-    from pybones.config.schema import ServerConfig
+    from pybones.config.server import ServerConfig
 
 
 @pytest.fixture

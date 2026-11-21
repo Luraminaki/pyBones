@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from pybones import __version__
-from pybones.api.jobs import JobState
+from pybones.api.job_status import JobState
 from pybones.meshing.formats import MeshFormat
 from pybones.meshing.gltf import read_glb
 from pybones.segmentation.stages import STAGES_2D, Stage

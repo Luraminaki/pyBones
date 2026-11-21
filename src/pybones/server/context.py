@@ -14,14 +14,16 @@ from typing import TYPE_CHECKING, Annotated, cast
 # FastAPI reads the annotations of dependencies at runtime (`get_context` below).
 from fastapi import Depends, Request  # noqa: TC002
 
-from pybones.api.jobs import FINISHED_STATES, UnknownJobError
+from pybones.api.job_status import FINISHED_STATES, UnknownJobError
 from pybones.config.loader import apply_overrides
 from pybones.server.library import ConflictError
 from pybones.server.schemas import JobView
 
 if TYPE_CHECKING:
-    from pybones.api.jobs import JobManager, JobStatus
-    from pybones.config.schema import PyBonesConfig, ServerConfig
+    from pybones.api.job_status import JobStatus
+    from pybones.api.jobs import JobManager
+    from pybones.config.schema import PyBonesConfig
+    from pybones.config.server import ServerConfig
     from pybones.meshing.formats import MeshFormat
     from pybones.segmentation.labels import Label
     from pybones.server.library import Library

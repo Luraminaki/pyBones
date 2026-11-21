@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING, Any
 import cv2
 import numpy as np
 
-from tools.phantom.generator import Phantom, VesselNetwork
+from tools.phantom.generator import Phantom
+from tools.phantom.vessels import VesselNetwork
 
 if TYPE_CHECKING:
     from pathlib import Path

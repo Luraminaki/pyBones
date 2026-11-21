@@ -25,7 +25,8 @@ from pybones.server.schemas import (
 )
 
 if TYPE_CHECKING:
-    from pybones.config.schema import IOConfig, LibraryConfig
+    from pybones.config.schema import IOConfig
+    from pybones.config.server import LibraryConfig
     from pybones.segmentation.labels import Label
     from pybones.segmentation.results import SegmentationMeta
 

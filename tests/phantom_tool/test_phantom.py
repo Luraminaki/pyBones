@@ -13,10 +13,11 @@ from pybones.cli.main import main as pybones_main
 from pybones.segmentation.labels import FINAL_LABELS, Label
 from tests.helpers import cli_overrides
 from tools.phantom.__main__ import main as phantom_main
-from tools.phantom.generator import SegmentState, VesselNetwork, render_phantom
+from tools.phantom.generator import render_phantom
 from tools.phantom.scoring import score_phantom
 from tools.phantom.settings import PhantomSettings, load_settings
 from tools.phantom.storage import load_phantom, save_phantom
+from tools.phantom.vessels import SegmentState, VesselNetwork
 
 if TYPE_CHECKING:
     from pathlib import Path

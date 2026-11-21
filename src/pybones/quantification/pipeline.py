@@ -34,9 +34,10 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
 
-    from pybones.config.schema import PyBonesConfig, QuantificationConfig
-    from pybones.quantification.graph import Network
+    from pybones.config.quantification import QuantificationConfig
+    from pybones.config.schema import PyBonesConfig
     from pybones.quantification.measures import BranchMeasures, NetworkSummary
+    from pybones.quantification.network import Network
     from pybones.segmentation.stages import ProgressCallback
 
 #: Columns of the branch table, in order.

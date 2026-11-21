@@ -11,13 +11,13 @@ from typing import TYPE_CHECKING, ClassVar
 import numpy as np
 from pydantic import BaseModel, ConfigDict
 
-from pybones.quantification.graph import NO_BRANCH, NO_NODE, EndKind, NodeKind
+from pybones.quantification.network import NO_BRANCH, NO_NODE, EndKind, NodeKind
 from pybones.utils.constants import UM_PER_MM
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-    from pybones.quantification.graph import Network
+    from pybones.quantification.network import Network
 
 _DIMS = 3
 
@@ -34,8 +34,8 @@ def end_kinds(
 
     A centreline stops short of a face of the stack, or of a burst, by about the vessel's
     radius: an end within its own radius plus ``margin_um`` of a face continues outside the
-    stack (:attr:`~.graph.EndKind.FACE`, which wins), of a burst inside it
-    (:attr:`~.graph.EndKind.BURST`).
+    stack (:attr:`~.network.EndKind.FACE`, which wins), of a burst inside it
+    (:attr:`~.network.EndKind.BURST`).
 
     Args:
         points: ``(N, 3)`` centreline voxels.
@@ -46,7 +46,7 @@ def end_kinds(
         margin_um: Extra reach beyond the radius.
 
     Returns:
-        ``(N,)`` :class:`~.graph.EndKind` per voxel.
+        ``(N,)`` :class:`~.network.EndKind` per voxel.
     """
     voxel = np.asarray(voxel_um)
     position = points.astype(np.float64) * voxel

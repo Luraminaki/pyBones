@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 
 from pybones.config.loader import load_config
-from pybones.config.schema import PruningConfig
+from pybones.config.quantification import PruningConfig
 from pybones.segmentation.scales import resolve_pixel_params
 from pybones.utils.constants import UINT16_MAX
 

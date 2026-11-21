@@ -6,15 +6,16 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pytest
 
-from pybones.quantification.graph import EndKind, build_network
+from pybones.quantification.graph import build_network
+from pybones.quantification.network import EndKind
 from tests.helpers import KEEP_ALL, line
-from tools.phantom.generator import SegmentState, VesselNetwork
 from tools.phantom.network_scoring import score_network
+from tools.phantom.vessels import SegmentState, VesselNetwork
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
-    from pybones.quantification.graph import Network
+    from pybones.quantification.network import Network
 
 SHAPE = (20, 60, 60)
 VOXEL = (2.0, 2.0, 2.0)

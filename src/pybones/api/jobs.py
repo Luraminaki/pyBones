@@ -31,22 +31,19 @@ import threading
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from enum import StrEnum
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict
-
+from pybones.api.job_status import (
+    FINISHED_STATES,
+    MESH_JOB,
+    SEGMENTATION_JOB,
+    JobState,
+    JobStatus,
+    UnknownJobError,
+)
 from pybones.api.operations import write_mesh_file
 from pybones.segmentation.pipeline import planned_stages, run_segmentation
-
-# Pydantic reads the type of `JobStatus.progress` at runtime.
-from pybones.segmentation.stages import (  # noqa: TC001
-    MESH_STAGES,
-    CancelledError,
-    Progress,
-    ProgressTracker,
-    Stage,
-)
+from pybones.segmentation.stages import MESH_STAGES, CancelledError, ProgressTracker
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping
@@ -55,54 +52,11 @@ if TYPE_CHECKING:
 
     from pybones.config.schema import JobsConfig, PyBonesConfig
     from pybones.segmentation.labels import Label
+    from pybones.segmentation.stages import Progress, Stage
 
 #: Name prefix of the job threads, as shown in the logs.
 JOB_THREAD_PREFIX = "pybones-job"
-SEGMENTATION_JOB = "segmentation"
-MESH_JOB = "mesh"
-
 logger = logging.getLogger(__name__)
-
-
-class UnknownJobError(LookupError):
-    """No job has this id (never submitted, or forgotten since it finished)."""
-
-
-class JobState(StrEnum):
-    """Life cycle of a job."""
-
-    QUEUED = "queued"
-    RUNNING = "running"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
-#: States after which a job does not change any more.
-FINISHED_STATES = frozenset({JobState.SUCCEEDED, JobState.FAILED, JobState.CANCELLED})
-
-
-class JobStatus(BaseModel):
-    """What a front end shows about a job (JSON-ready: ``status.model_dump_json()``).
-
-    Attributes:
-        job_id: Identifier returned by :meth:`JobManager.submit`.
-        kind: What the job does, e.g. ``segmentation``.
-        state: Where it is in its life cycle.
-        progress: Its progress (``None`` while queued); a finished job's is frozen at its
-            end (time left 0, and 100 % if it succeeded).
-        error: Why it failed, if it did.
-        submitted_at: Submission time (seconds since the epoch).
-    """
-
-    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True)
-
-    job_id: str
-    kind: str
-    state: JobState
-    progress: Progress | None
-    error: str | None
-    submitted_at: float
 
 
 class _Job:
@@ -182,7 +136,7 @@ class JobManager:
         self,
         kind: str,
         work: "Callable[[ProgressTracker], object]",
-        plan: tuple[Stage, ...],
+        plan: "tuple[Stage, ...]",
         weights: "Mapping[Stage, float]",
     ) -> str:
         """Queue a job.

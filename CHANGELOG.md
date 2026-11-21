@@ -11,6 +11,15 @@ from package metadata at runtime; every segmentation records it in its
 
 ## Unreleased
 
+- Modules split by responsibility, none over ~460 lines:
+  - `quantification.graph` becomes `links` (touching voxels, staircase corners), `network` (types,
+    nodes and branches), `pruning` and `graph` (`build_network`);
+  - the phantom generator becomes `canvas`, `vessels` (walks and the true network) and `generator`;
+  - the configuration schema becomes `config.fields` (shared field types), `config.quantification`,
+    `config.server` and `config.schema`;
+  - the job status types move to `api.job_status`;
+  - the 3D viewer's mesh memory helpers move to `mesh_memory.js`, now tested with Node.
+  Names are imported from their new modules (no re-exports).
 - MIT License for the code; README section on the data (not covered by the license, shared for
   research and education, removable on request).
 - Jobs push their status: `JobManager.events(job_id)` yields every state change and throttled

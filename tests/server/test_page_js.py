@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from pybones.api.jobs import FINISHED_STATES
+from pybones.api.job_status import FINISHED_STATES
 from pybones.segmentation.labels import FINAL_LABELS, Label
 from pybones.server.app import STATIC_DIR
 

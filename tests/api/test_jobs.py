@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from pybones.api.jobs import MESH_JOB, JobManager, JobState, UnknownJobError, put_latest
+from pybones.api.job_status import MESH_JOB, JobState, UnknownJobError
+from pybones.api.jobs import JobManager, put_latest
 from pybones.api.operations import MeshFile
 from pybones.config.loader import load_config
 from pybones.segmentation.labels import Label
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
 
-    from pybones.api.jobs import JobStatus
+    from pybones.api.job_status import JobStatus
     from pybones.segmentation.stages import ProgressTracker
 
 WEIGHTS = dict.fromkeys(Stage, 1.0)

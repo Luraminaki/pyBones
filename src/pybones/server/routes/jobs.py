@@ -8,14 +8,14 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
-from pybones.api.jobs import FINISHED_STATES, UnknownJobError
+from pybones.api.job_status import FINISHED_STATES, UnknownJobError
 from pybones.server.context import Context
 from pybones.server.schemas import JobView
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
 
-    from pybones.api.jobs import JobStatus
+    from pybones.api.job_status import JobStatus
     from pybones.server.context import ServerContext
 
 SSE_MEDIA_TYPE = "text/event-stream"
