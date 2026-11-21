@@ -8,10 +8,9 @@ import numpy as np
 import pytest
 
 from pybones.segmentation.pipeline import run_segmentation
-from tests.helpers import small_config, synthetic_slice
+from tests.helpers import small_config, small_phantom_settings, synthetic_slice
 from tools.phantom.generator import render_phantom
 from tools.phantom.settings import PhantomSettings
-from tools.phantom.settings import load_settings as load_phantom_settings
 from tools.phantom.storage import save_phantom
 from tools.report import history as history_module
 from tools.report import runs as runs_module
@@ -22,6 +21,7 @@ from tools.report.history import KEY_COLUMN, history_rows, read_history, write_c
 from tools.report.latex import README_SCORES_END, README_SCORES_START
 from tools.report.machine import current_machine
 from tools.report.meshes import README_MESHES_END, README_MESHES_START
+from tools.report.network import NETWORK_JSON, NETWORK_TABLE, REAL_KEY
 from tools.report.runs import RunStats
 from tools.report.settings import ReportSettings
 from tools.report.settings import load_settings as load_report_settings
@@ -36,6 +36,9 @@ N_SLICES = 16
 CROP = {"z": 7, "y": 150, "x": 30, "size": 64}
 LEGACY_SERIES = ("travee", "vaisseaux")
 VOXEL = (3.0, 3.0, 3.0)
+PHANTOM_SHAPE = (12, 96, 96)
+#: Rows of the network score table: the true mask and the segmentation.
+SCORED_ROWS = ("true mask", "segmentation")
 
 
 def report_settings() -> ReportSettings:
@@ -69,11 +72,17 @@ def phantom_settings() -> PhantomSettings:
     Returns:
         The validated settings.
     """
-    data = json.loads(load_phantom_settings().model_dump_json())
-    data["shape_zyx"] = [12, 96, 96]
-    data["trabeculae"].update(plates=3, rods=4)
-    data["vessels"].update(count=6)
-    data["bursts"].update(count=1, radius_um=[40, 50])
+    return small_phantom_settings(PHANTOM_SHAPE)
+
+
+def network_phantom_settings() -> PhantomSettings:
+    """Shrink the default phantom and let its vessels branch, for the network step.
+
+    Returns:
+        The validated settings.
+    """
+    data = json.loads(phantom_settings().model_dump_json())
+    data["vessels"].update(count=4, branch_probability=0.2, branch_depth=1)
     return PhantomSettings.model_validate(data)
 
 
@@ -114,6 +123,9 @@ def repo(tmp_path: "Path", monkeypatch: pytest.MonkeyPatch) -> "Path":
         _ = cv2.imwrite(str(stack / f"img_{z:02d}.png"), synthetic_slice(seed=z))
     ph_settings = phantom_settings()
     save_phantom(render_phantom(ph_settings, VOXEL), root / settings.phantom_dir, ph_settings)
+    network_settings = root / settings.network.phantom_settings
+    network_settings.parent.mkdir(parents=True, exist_ok=True)
+    _ = network_settings.write_text(network_phantom_settings().model_dump_json())
     masks = root / settings.legacy_masks
     for name in LEGACY_SERIES:
         (masks / name).mkdir(parents=True)
@@ -180,6 +192,11 @@ def test_every_figure_step_runs_on_the_extracts(repo: "Path") -> None:
     assert "\\pbValueVesselDice" in values
     assert "\\pbValueMeshVesselGlbMB" in values
     assert "\\pbValueMeshErrorVoxelRatio" in values
+    assert "\\pbValueNetBranches" in values
+    assert "\\pbValueNetSegRadiusThick" in values
+    record = json.loads((ctx.data / NETWORK_JSON).read_text())
+    assert record[REAL_KEY]["branches"] > 0
+    assert (ctx.data / NETWORK_TABLE).read_text().count("\\\\") == len(SCORED_ROWS) + 1
     readme = (repo / settings.readme).read_text()
     assert "old table" not in readme
     assert "| Vessel |" in readme

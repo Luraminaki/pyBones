@@ -11,14 +11,25 @@ import numpy as np
 import pytest
 
 from pybones import __version__
-from pybones.api.job_status import JobState
+from pybones.api.job_status import QUANTIFICATION_JOB, JobState
 from pybones.meshing.formats import MeshFormat
 from pybones.meshing.gltf import read_glb
 from pybones.segmentation.stages import STAGES_2D, Stage
 from pybones.server.context import ServerContext
 from pybones.server.routes.jobs import SSE_MEDIA_TYPE
-from pybones.server.routes.segmentations import MESH_MEDIA_TYPES, PNG_MEDIA_TYPE
-from tests.helpers import N_SYNTHETIC_SLICES, SEGMENTATION, SLICE_SHAPE, STACK_DIR, STACK_ZIP
+from pybones.server.routes.segmentations import (
+    CENTRELINES_MEDIA_TYPE,
+    MESH_MEDIA_TYPES,
+    PNG_MEDIA_TYPE,
+)
+from tests.helpers import (
+    N_SYNTHETIC_SLICES,
+    SEGMENTATION,
+    SLICE_SHAPE,
+    STACK_DIR,
+    STACK_ZIP,
+    small_config,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -35,6 +46,11 @@ WAIT_S = 30.0
 #: Binary STL: 80-byte header, uint32 triangle count, then 50 bytes per triangle.
 STL_HEADER_BYTES, STL_COUNT_FORMAT, STL_TRIANGLE_BYTES = 80, "<I", 50
 WEIGHTS = dict.fromkeys(Stage, 1.0)
+FILES = small_config().quantification.files
+VOXEL_ZYX = small_config().acquisition.voxel_size_um
+#: Array of the centreline voxels in the centreline file, and the served point type.
+POINTS_KEY = "points"
+POINT_DTYPE = "<f4"
 
 
 def follow(client: "TestClient", job_id: str) -> list[dict[str, Any]]:
@@ -300,3 +316,59 @@ def test_meshes_are_revalidated_and_a_rebuild_is_seen(client: "TestClient") -> N
     assert rebuilt.status_code == HTTPStatus.OK
     assert rebuilt.headers["etag"] != etag
     assert rebuilt.content
+
+
+def test_quantification_is_measured_by_a_job_then_read(
+    client: "TestClient", folders: "Folders"
+) -> None:
+    """Nothing until a job measures the network; then its summary and its centrelines."""
+    base = f"/api/segmentations/{SEGMENTATION}"
+    assert client.get(f"{base}/quantification").status_code == HTTPStatus.NOT_FOUND
+    assert client.get(f"{base}/centrelines").status_code == HTTPStatus.NOT_FOUND
+    assert client.get(base.removesuffix(f"/{SEGMENTATION}")).json()[0]["quantified"] is False
+    job = client.post(f"{base}/quantification")
+    assert job.status_code == HTTPStatus.ACCEPTED
+    assert (job.json()["kind"], job.json()["segmentation"]) == (QUANTIFICATION_JOB, SEGMENTATION)
+    assert follow(client, job.json()["job_id"])[-1]["state"] == JobState.SUCCEEDED
+
+    summary = client.get(f"{base}/quantification").json()
+    record = json.loads((folders.output / SEGMENTATION / FILES.network_file).read_text())
+    assert summary == record["summary"]
+    assert client.get(base.removesuffix(f"/{SEGMENTATION}")).json()[0]["quantified"] is True
+
+    response = client.get(f"{base}/centrelines")
+    assert response.headers["content-type"] == CENTRELINES_MEDIA_TYPE
+    with np.load(folders.output / SEGMENTATION / FILES.centrelines_file) as data:
+        expected = data[POINTS_KEY][:, ::-1] * np.asarray(VOXEL_ZYX)[::-1]
+    points = np.frombuffer(response.content, POINT_DTYPE).reshape(-1, len(VOXEL_ZYX))
+    np.testing.assert_allclose(points, expected, rtol=1e-6)
+    etag = response.headers["etag"]
+    assert client.get(f"{base}/centrelines", headers={"If-None-Match": etag}).status_code == (
+        HTTPStatus.NOT_MODIFIED
+    )
+
+
+def test_a_quantification_is_not_the_segmentation_job_of_the_same_name(
+    client: "TestClient",
+) -> None:
+    """Asking twice joins the running quantification; it never answers with another kind."""
+    release = occupy_worker(client)
+    url = f"/api/segmentations/{SEGMENTATION}/quantification"
+    first, second = client.post(url).json(), client.post(url).json()
+    assert first["job_id"] == second["job_id"]
+    assert first["kind"] == QUANTIFICATION_JOB
+    release.set()
+    assert follow(client, first["job_id"])[-1]["state"] == JobState.SUCCEEDED
+
+
+def test_a_damaged_network_file_asks_to_quantify_again(
+    client: "TestClient", folders: "Folders"
+) -> None:
+    """A network file that is not this version's JSON answers 409, never a server error."""
+    path = folders.output / SEGMENTATION / FILES.network_file
+    url = f"/api/segmentations/{SEGMENTATION}/quantification"
+    for content in ("{not json", "[]", '{"summary": {"branches": "many"}}'):
+        _ = path.write_text(content)
+        response = client.get(url)
+        assert response.status_code == HTTPStatus.CONFLICT
+        assert "quantify again" in response.json()["detail"]

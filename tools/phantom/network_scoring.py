@@ -10,10 +10,11 @@
   are split into *crossings* (where two different vessels of the phantom pass close to each
   other: a real junction of the mask, not a bifurcation) and *spurious* ones.
 * **Calibre**: at the measured voxels near a true centreline, the measured wall distance is
-  compared with the true radius there.
+  compared with the true radius there, overall and per band of true radius.
 * **Length**: measured total length against the true one.
 """
 
+import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -48,6 +49,8 @@ class NetworkScore:
         spurious_junctions: Other unmatched measured junctions.
         radius_offset_um: Median of (measured wall distance - true radius).
         radius_abs_error_um: Median absolute error of the radius after removing the offset.
+        radius_offset_by_band_um: Median of (measured - true radius) per true-radius band
+            (NaN for a band with no measured voxel).
         true_length_mm: True centreline length inside the volume (with contrast agent).
         measured_length_mm: Measured total length.
     """
@@ -60,6 +63,7 @@ class NetworkScore:
     spurious_junctions: int
     radius_offset_um: float
     radius_abs_error_um: float
+    radius_offset_by_band_um: tuple[float, ...]
     true_length_mm: float
     measured_length_mm: float
 
@@ -179,6 +183,7 @@ def score_network(
     voxel_um: tuple[float, float, float],
     tolerance_um: float,
     junction_tolerance_um: float,
+    radius_bins_um: tuple[float, ...],
 ) -> NetworkScore:
     """Score a measured network against the phantom's true network.
 
@@ -190,6 +195,7 @@ def score_network(
         voxel_um: Voxel size ``(z, y, x)`` in µm.
         tolerance_um: Distance under which a centreline voxel and a true centreline agree.
         junction_tolerance_um: Distance under which a measured junction matches a true one.
+        radius_bins_um: Edges of the true-radius bands of the calibre error (increasing).
 
     Returns:
         The scores.
@@ -230,9 +236,15 @@ def score_network(
 
     # Calibre at the measured voxels near a true centreline.
     near = to_truth <= tolerance_um
-    error = distances_um[kept][near].astype(np.float64) - truth.radius_um[nearest[near]]
+    true_radius = truth.radius_um[nearest[near]].astype(np.float64)
+    error = distances_um[kept][near].astype(np.float64) - true_radius
     offset = float(np.median(error)) if len(error) else 0.0
     abs_error = float(np.median(np.abs(error - offset))) if len(error) else 0.0
+    band = np.digitize(true_radius, radius_bins_um) - 1  # -1 and len(bins) - 1: outside
+    by_band = tuple(
+        float(np.median(error[band == k])) if (band == k).any() else math.nan
+        for k in range(len(radius_bins_um) - 1)
+    )
 
     # Junctions: greedy nearest matching, then classify the leftovers.
     true_j, reach = _visible_junctions(truth, extent, inside_length=_visible_length(truth, extent))
@@ -262,6 +274,7 @@ def score_network(
         spurious_junctions=len(leftovers) - crossings,
         radius_offset_um=offset,
         radius_abs_error_um=abs_error,
+        radius_offset_by_band_um=by_band,
         true_length_mm=true_length / UM_PER_MM,
         measured_length_mm=float(measured.branch_length_um.sum() + measured.node_length_um.sum())
         / UM_PER_MM,

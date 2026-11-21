@@ -9,14 +9,22 @@ tools, and building the report.
 
 - [INSTALL](#install)
   - [TABLE OF CONTENT](#table-of-content)
+  - [FROM SCRATCH](#from-scratch)
   - [PREREQUISITES](#prerequisites)
+    - [Git](#git)
     - [Python 3](#python-3)
     - [uv (recommended)](#uv-recommended)
+    - [Optional](#optional)
   - [INSTALL GUIDE](#install-guide)
   - [DATASET](#dataset)
   - [RUN](#run)
   - [WEB SERVER](#web-server)
   - [DEVELOPMENT](#development)
+    - [Checking a change](#checking-a-change)
+    - [Running the tests](#running-the-tests)
+    - [What the tests enforce](#what-the-tests-enforce)
+    - [Using pyBones from Python](#using-pybones-from-python)
+    - [VS Code and the web page](#vs-code-and-the-web-page)
   - [TOOLS](#tools)
   - [REPORT (LaTeX)](#report-latex)
     - [LaTeX](#latex)
@@ -24,7 +32,45 @@ tools, and building the report.
 
 <!-- /TOC -->
 
+## FROM SCRATCH
+
+From nothing to a segmented, meshed and measured stack in the browser, then the report. Each step
+links to its details.
+
+1. **Prerequisites**: [Git](#git), [Python 3.12+](#python-3) and [uv](#uv-recommended).
+2. **Get the code and its environment**:
+
+   ```sh
+   git clone https://github.com/Luraminaki/pyBones.git
+   cd pyBones
+   uv sync                      # creates .venv with the exact locked versions
+   uv run python -m tools.check # optional: every check, tests included, no dataset needed
+   ```
+
+3. **Get the dataset** into `data/data_set.zip` ([DATASET](#dataset)).
+4. **Use it**, from the command line ([RUN](#run)):
+
+   ```sh
+   uv run pybones segment data/data_set.zip -o output/run     # labels, ~25 s
+   uv run pybones mesh output/run --label vessel -o vessels.glb
+   uv run pybones quantify output/run                          # vessel network, ~20 s
+   ```
+
+   or from the browser ([WEB SERVER](#web-server)): `uv run pybones serve`, then open
+   <http://127.0.0.1:8000>, pick the stack, *Segment*, and explore the Slices, 3D and Network tabs.
+5. **Rebuild the report** (optional; the PDF is versioned): install [LaTeX](#latex), then follow
+   [Generating the report](#generating-the-report): render the phantom, `history`, `figures`,
+   `latexmk`.
+
 ## PREREQUISITES
+
+### Git
+
+Needed to clone the project, and by the report tool, which checks past versions out as git worktrees.
+
+- **Debian / Ubuntu**: `sudo apt-get install -y git`
+- **Arch Linux**: `sudo pacman -S git`
+- **Windows**: `winget install Git.Git`
 
 ### Python 3
 
@@ -73,6 +119,13 @@ sudo pacman -Syu uv
 ```powershell
 winget install astral-sh.uv
 ```
+
+### Optional
+
+- **A recent browser** (Firefox, Chrome, Edge, Safari) for the web page; WebGL 2 for its 3D view.
+- **[Node.js](https://nodejs.org/)**, any recent version, only to run the JavaScript checks of the
+  test suite ([DEVELOPMENT](#development)); they are skipped without it. No `npm install` needed.
+- **LaTeX**, only to rebuild the report ([LaTeX](#latex)).
 
 ## INSTALL GUIDE
 
@@ -123,6 +176,7 @@ pybones preview output/run -z 50 --scale 0.5 -o slice50.png
 pybones mesh output/run --label vessel -o vessels.stl             # µm, Taubin-smoothed
 pybones mesh output/run --label vessel -o vessels.glb             # same, glTF (16-bit positions)
 pybones export output/run --label vessel -o output/vessel_png     # ImageJ image sequence
+pybones quantify output/run                                       # vessel network (3 files in output/run)
 pybones config > my_config.json                                   # effective configuration
 pybones --config my_config.json --set pipeline.workers=1 segment data/data_set.zip -o output/run
 ```
@@ -182,6 +236,10 @@ Everything the page does goes through the HTTP API, documented and testable at
    `GET /api/segmentations/run1/meshes/vessel`: the vessel surface in µm, as GLB (for the browser);
    add `?format=stl` to both for an STL file. The mesh settings, precision included, are explained in
    the [README](README.md#how-it-works).
+6. `POST /api/segmentations/run1/quantification`, then once its job succeeded,
+   `GET /api/segmentations/run1/quantification`: the vessel network's summary (branches, junctions,
+   ends, length, length density, medians); `GET /api/segmentations/run1/centrelines`: its centreline
+   points as raw float32 `(x, y, z)` µm triples, as drawn in the 3D tab.
 
 Other folders or port:
 
@@ -198,12 +256,37 @@ local** (see the limitations in the [README](README.md#known-limitations)).
 
 ## DEVELOPMENT
 
+### Checking a change
+
+One command runs every check, in order, and lists the ones that failed at the end (exit status 1):
+
 ```sh
-uv run ruff check src tests tools
-uv run ruff format src tests tools
-uv run basedpyright
-uv run pytest                                                          # also runs the JavaScript checks
-node --test tests/js/                                                  # the JavaScript tests alone
+uv run python -m tools.check          # formatting, lint, types, tests (~30 s)
+uv run python -m tools.check --fix    # reformat and apply Ruff's safe fixes first, then the same
+```
+
+| Step | Tool | What it checks |
+|---|---|---|
+| format | [Ruff](https://docs.astral.sh/ruff/) | the code is formatted (`ruff format`) |
+| lint | Ruff | its rules, the project's among them: no magic values, Google docstrings, type-only imports under `if TYPE_CHECKING:`, no imports inside functions |
+| types | [basedpyright](https://docs.basedpyright.com/) | the types, with the settings of `pyproject.toml` (the VS Code extension reads the same ones) |
+| tests | [pytest](https://docs.pytest.org/) | the whole suite, below |
+
+Each step can be run alone: `uv run ruff format --check src tests tools`, `uv run ruff check src tests
+tools`, `uv run basedpyright`, `uv run pytest`.
+
+### Running the tests
+
+The suite in `tests/` needs no dataset: synthetic stacks, a small phantom and brute-force references
+stand in for the real data. It takes about 20 s.
+
+```sh
+uv run pytest                                   # everything (~900 tests)
+uv run pytest -q tests/quantification           # one folder
+uv run pytest tests/server/test_app.py          # one file
+uv run pytest -k "mesh and not glb"             # tests whose name matches
+uv run pytest -x --lf                           # stop at the first failure; rerun the last failures
+node --test tests/js/                           # the JavaScript tests alone (Node.js)
 uv run pytest --cov=src/pybones --cov=tools --cov-report=term-missing   # coverage
 PYBONES_UPDATE_GOLDEN=1 uv run pytest tests/regression                 # record a new baseline
 ```
@@ -212,6 +295,31 @@ PYBONES_UPDATE_GOLDEN=1 uv run pytest tests/regression                 # record 
 `tests/regression/golden_phantom.json`: any score moving by more than the tolerance (up or down) fails,
 so that a change of results is always deliberate. After an intended change, record the new baseline
 with the command above and commit it with the change.
+
+The JavaScript checks run inside pytest when [Node.js](https://nodejs.org/) is installed (any recent
+version; no `npm install`), and are skipped otherwise. The pages themselves are checked by hand in a
+browser.
+
+### What the tests enforce
+
+Besides the behaviour of the code, the suite checks the project's rules, so that a review does not
+have to:
+
+| Rule | Test |
+|---|---|
+| Every function, private ones included, has a complete Google docstring | `tests/test_conventions.py` |
+| Names are imported from the module that defines them, never through another | `tests/test_conventions.py` |
+| No module, Python or JavaScript, is longer than 500 lines | `tests/test_conventions.py` |
+| No function only forwards its parameters to another; no two functions share a body; no run of logic (3 statements) or of JavaScript (4 lines) is repeated, variable names aside | `tests/test_duplication.py` |
+| Every JavaScript function of both pages has a JSDoc comment; no `var`, loose equality, `innerHTML` or `eval`; every module parses | `tests/server/test_page_js.py` |
+| The labels, job states and job kinds the page knows match Python's | `tests/server/test_page_js.py` |
+| The vendored three.js matches its manifest; every import of the page resolves | `tests/server/test_page.py` |
+| The phantom's scores do not move unnoticed | `tests/regression/test_golden.py` |
+
+When one of them fails, fix the code rather than the rule: split the module, share the logic, write
+the docstring.
+
+### Using pyBones from Python
 
 The operations are also available from Python (`pybones.api`), e.g. for a web front end:
 
@@ -232,8 +340,10 @@ meta = jobs.result(job_id)                     # or jobs.cancel(job_id) from ano
 `data: <json>\n\n`. Progress events are throttled (`jobs.event_interval_s`); state changes always go
 through; a slow client loses its oldest snapshots, never the newest.
 
+### VS Code and the web page
+
 VS Code settings (basedpyright, Ruff, pytest), launch configurations (segment, serve, preview, mesh,
-the annotation tool, the current test file) and recommended extensions are versioned in `.vscode/`,
+quantify, the annotation tool, the current test file) and recommended extensions are versioned in `.vscode/`,
 and work the same on Linux, macOS and Windows: no interpreter path is written there. After
 `uv sync`, VS Code selects the project's `.venv` by itself (check the interpreter shown in the status
 bar; *Python: Select Interpreter* picks it otherwise), and basedpyright finds it through
@@ -247,30 +357,19 @@ that every import of every module resolves to a served file. To update three.js:
 package from the npm registry, check its integrity against the registry's, copy the same files, and
 rewrite the manifest; the test then confirms the set is complete.
 
-The page's JavaScript is documented like the Python: a JSDoc comment on every function, checked by
-`tests/server/test_page_js.py`. With [Node.js](https://nodejs.org/) installed (any recent version;
-not needed to use pyBones, and no `npm install`), the same test file also:
+The `node:test` suites in `tests/js/` cover the page's pure code: formatting helpers, the HTTP client
+against a stubbed `fetch` and `EventSource`, the "segment again" settings difference, and the 3D
+view's memory helpers.
 
-- checks that every module parses;
-- runs the `node:test` suites in `tests/js/`: formatting helpers, the HTTP client against a stubbed
-  `fetch` and `EventSource`, the "segment again" settings difference;
-- checks that the labels and finished job states the page knows match Python's.
-
-Without Node those checks are skipped. The page itself is checked by hand in a browser.
-
-[Ruff](https://docs.astral.sh/ruff/) also enforces the project conventions: no magic values, Google
-docstrings, type-only imports under `if TYPE_CHECKING:` (quoted annotations), no imports outside the
-module top level. [basedpyright](https://docs.basedpyright.com/) checks the types with the settings of
-`pyproject.toml` (the VS Code extension reads the same ones). [pytest](https://docs.pytest.org/) runs
-the suite in `tests/` (synthetic data, brute-force references; no dataset needed); it includes
-`tests/test_conventions.py`, which checks that every function, private ones included, has a complete
-Google docstring and that names are imported from the module that defines them.
 
 ## TOOLS
 
 Run from the repository root (they are not part of the installed package):
 
 ```sh
+# Every check of the project: formatting, lint, types, tests (see DEVELOPMENT)
+python -m tools.check
+
 # Synthetic phantom with exact ground truth: the validation metric
 python -m tools.phantom generate -o output/phantom
 pybones segment output/phantom/slices -o output/phantom_seg
@@ -318,11 +417,11 @@ winget install MiKTeX.MiKTeX
 ### Generating the report
 
 Every figure, plot, table and measured value of the report is generated from the data and from the git
-history; nothing is typed by hand. From the repository root, with `data/data_set.zip` in place:
+history; nothing is typed by hand. It needs **uv** (each past version runs in its own environment) and
+**git**. From the repository root, with `data/data_set.zip` in place:
 
 ```sh
-# 1. Segment the stack and render the synthetic phantom
-uv run pybones segment data/data_set.zip -o output/latest
+# 1. Render the synthetic phantom (the stack itself is segmented by step 2, into its own folders)
 uv run python -m tools.phantom generate -o output/phantom
 
 # 2. Run every milestone version listed in tools/report/config.json (each in its own git worktree
@@ -331,7 +430,9 @@ uv run python -m tools.phantom generate -o output/phantom
 #    repository (the development history is not published) keep their archived scores and extracts.
 uv run python -m tools.report history
 
-# 3. Render the figures, plot data, history table, measured values (values.tex) and README screenshots
+# 3. Render the figures, plot data, history table, measured values (values.tex), the README's tables
+#    and screenshots 01-04; mesh today's run in every format; generate, segment and measure the
+#    branching phantom and measure the sample's vessel network (chapter 6). About two minutes.
 uv run python -m tools.report figures
 
 # 4. Build the PDF (settings in docs/report/latexmkrc; the PDF is copied to docs/report/report.pdf)
@@ -340,6 +441,15 @@ cd docs/report && latexmk report.tex
 
 The figures read the extracts, never the full runs of past versions, so the report can be rebuilt
 and updated from a fresh clone: only the current code is re-run. Step 2 takes a few minutes the first
-time (one environment per version, then cached); later runs
-reuse the stored outputs unless `--force` is given. Old worktrees can be removed with
+time (one environment per version, then cached); later runs reuse the stored outputs unless `--force`
+is given, or unless a run's stored stats are outdated. Old worktrees can be removed with
 `rm -rf output/report/worktrees && git worktree prune`.
+
+- **Timings** are only comparable when every version runs on the same machine, in the same power
+  profile, with nothing else running: each run records its machine and power profile, and the report
+  prints them. To time every version again, delete their stats
+  (`rm output/report/runs/*/*/stats.json`) and run step 2 alone.
+- **After a change of the current code** (new version, new configuration key), its stored run is
+  refused: `rm -rf output/report/runs/current` before step 2 re-runs it, past versions untouched.
+- **Screenshots 05 to 07** of the README (annotation page, web page, Network tab) are taken by hand
+  in a browser; the report includes them as they are.

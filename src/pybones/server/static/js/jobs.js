@@ -1,7 +1,7 @@
 // Jobs panel: every job the server remembers, followed live with Server-Sent Events.
 // Other modules listen to JOB_UPDATED / JOB_FINISHED on `document` (detail: the job status).
 
-import { api, followJob, FINISHED_STATES } from './api.js';
+import { api, followJob, FINISHED_STATES, JOB_KINDS } from './api.js';
 import { announce, duration, el, percent, toast } from './ui.js';
 
 /** Event sent on `document` with each new status of a job (detail: the JobStatus). */
@@ -23,9 +23,10 @@ let empty;
  * @returns {string} E.g. `Mesh: vessel of run (glb)`.
  */
 function title(status) {
-  if (status.kind === 'mesh') {
+  if (status.kind === JOB_KINDS.MESH) {
     return `Mesh: ${status.label} of ${status.segmentation} (${status.mesh_format})`;
   }
+  if (status.kind === JOB_KINDS.QUANTIFICATION) return `Quantify: ${status.segmentation}`;
   return `Segment: ${status.segmentation}`;
 }
 
@@ -170,19 +171,34 @@ async function follow(status) {
 
 /**
  * Find the unfinished job of a target, if any.
+ * @param {string} kind What the job does (one of JOB_KINDS).
  * @param {string} segmentation Segmentation id.
- * @param {?string} label Label key (`null` for a segmentation job).
- * @param {?string} format Mesh format (`null` for a segmentation job).
+ * @param {?string} [label] Label key (mesh jobs only).
+ * @param {?string} [format] Mesh format (mesh jobs only).
  * @returns {?import('./api.js').JobStatus} Its status, or `null`.
  */
-export function activeJob(segmentation, label, format) {
+export function activeJob(kind, segmentation, label = null, format = null) {
   for (const { status } of jobs.values()) {
     if (
-      status.segmentation === segmentation && status.label === label &&
+      status.kind === kind && status.segmentation === segmentation && status.label === label &&
       status.mesh_format === format && !FINISHED_STATES.has(status.state)
     ) return status;
   }
   return null;
+}
+
+/**
+ * Follow the unfinished job of a target, or start one; either way, track it until it ends.
+ * @param {function(): Promise<import('./api.js').JobStatus>} start Starts the job (an API call).
+ * @param {string} kind What the job does (one of JOB_KINDS).
+ * @param {string} segmentation Segmentation id.
+ * @param {?string} [label] Label key (mesh jobs only).
+ * @param {?string} [format] Mesh format (mesh jobs only).
+ * @throws {import('./api.js').ApiError} If the job cannot be started.
+ */
+export async function startOrJoin(start, kind, segmentation, label = null, format = null) {
+  const job = activeJob(kind, segmentation, label, format) ?? (await start());
+  void track(job);
 }
 
 /**

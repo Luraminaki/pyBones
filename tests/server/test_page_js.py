@@ -1,4 +1,4 @@
-"""Checks of the page's JavaScript run with Node (skipped where Node is not installed).
+"""Checks of the front-end JavaScript (web page, annotation page), partly run with Node.
 
 * every module of the page parses (``node --check``);
 * the JavaScript unit tests of ``tests/js`` pass (``node --test``, no dependency);
@@ -15,7 +15,12 @@ from pathlib import Path
 
 import pytest
 
-from pybones.api.job_status import FINISHED_STATES
+from pybones.api.job_status import (
+    FINISHED_STATES,
+    MESH_JOB,
+    QUANTIFICATION_JOB,
+    SEGMENTATION_JOB,
+)
 from pybones.segmentation.labels import FINAL_LABELS, Label
 from pybones.server.app import STATIC_DIR
 
@@ -23,6 +28,8 @@ NODE = shutil.which("node")
 needs_node = pytest.mark.skipif(NODE is None, reason="Node.js is not installed")
 JS_DIR = STATIC_DIR / "js"
 JS_TESTS = Path(__file__).parents[1] / "js"
+#: Front-end modules of the annotation tool (served by its own server).
+ANNOTATION_JS_DIR = Path(__file__).parents[2] / "tools" / "annotation" / "static"
 NODE_TIMEOUT_S = 60
 #: A function declaration (``function f(``, ``async function f(``, ``export ...``) or a
 #: top-level arrow function (``const f = (...) =>``), with what precedes it.
@@ -36,12 +43,14 @@ JSDOC_END = re.compile(r"\*/\s*$")
 
 
 def own_modules() -> list[Path]:
-    """List the page's own modules (the vendored three.js is not ours to document).
+    """List the project's front-end modules: the web page's and the annotation page's.
+
+    The vendored three.js is not ours to document.
 
     Returns:
-        The ``js/*.js`` files.
+        The ``.js`` files of both pages.
     """
-    return sorted(JS_DIR.glob("*.js"))
+    return sorted([*JS_DIR.glob("*.js"), *ANNOTATION_JS_DIR.glob("*.js")])
 
 
 def node(*args: str) -> subprocess.CompletedProcess[str]:
@@ -107,6 +116,18 @@ def test_the_page_knows_when_a_job_is_over() -> None:
     states = js_value(JS_DIR / "api.js", "FINISHED_STATES")
     assert isinstance(states, list)
     assert set(states) == {str(state) for state in FINISHED_STATES}
+
+
+@needs_node
+def test_the_page_names_the_job_kinds_like_python() -> None:
+    """The page's job kinds are the job manager's, one for one."""
+    kinds = js_value(JS_DIR / "api.js", "JOB_KINDS")
+    assert isinstance(kinds, dict)
+    assert kinds == {
+        "SEGMENTATION": SEGMENTATION_JOB,
+        "MESH": MESH_JOB,
+        "QUANTIFICATION": QUANTIFICATION_JOB,
+    }
 
 
 def undocumented(module: Path) -> list[str]:

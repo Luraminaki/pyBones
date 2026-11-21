@@ -1,6 +1,7 @@
 """Tests of network scoring against the phantom (:mod:`tools.phantom.network_scoring`)."""
 
 import itertools
+import math
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -22,6 +23,8 @@ VOXEL = (2.0, 2.0, 2.0)
 RADIUS = 4.0
 TOLERANCE = 4.0
 JUNCTION_TOLERANCE = 6.0
+#: Radius bands of the calibre error: the true radius (4 µm) falls in the first.
+RADIUS_BINS = (0.0, 6.0, 30.0)
 
 
 def true_network(paths: list[list[tuple[int, int, int]]], parents: list[int]) -> VesselNetwork:
@@ -76,13 +79,22 @@ def test_a_network_laid_on_the_truth_scores_perfectly() -> None:
     paths = [[(10, 30, 2), (10, 30, 57)], [(10, 30, 30), (10, 55, 30)]]
     net, distances = measured(paths)
     score = score_network(
-        net, distances, true_network(paths, [-1, 0]), SHAPE, VOXEL, TOLERANCE, JUNCTION_TOLERANCE
+        net,
+        distances,
+        true_network(paths, [-1, 0]),
+        SHAPE,
+        VOXEL,
+        TOLERANCE,
+        JUNCTION_TOLERANCE,
+        RADIUS_BINS,
     )
     assert score.centreline_recall == pytest.approx(1.0)
     assert score.centreline_precision == pytest.approx(1.0)
     assert (score.true_junctions, score.matched_junctions) == (1, 1)
     assert (score.crossing_junctions, score.spurious_junctions) == (0, 0)
     assert (score.radius_offset_um, score.radius_abs_error_um) == (0.0, 0.0)
+    assert score.radius_offset_by_band_um[0] == 0.0
+    assert math.isnan(score.radius_offset_by_band_um[1])  # no vessel that thick
     assert score.measured_length_mm == pytest.approx(score.true_length_mm, rel=0.05)
 
 
@@ -91,7 +103,14 @@ def test_a_crossing_of_two_vessels_is_not_a_spurious_fork() -> None:
     paths = [[(10, 30, 2), (10, 30, 57)], [(10, 2, 30), (10, 57, 30)]]
     net, distances = measured(paths)
     score = score_network(
-        net, distances, true_network(paths, [-1, -1]), SHAPE, VOXEL, TOLERANCE, JUNCTION_TOLERANCE
+        net,
+        distances,
+        true_network(paths, [-1, -1]),
+        SHAPE,
+        VOXEL,
+        TOLERANCE,
+        JUNCTION_TOLERANCE,
+        RADIUS_BINS,
     )
     assert score.true_junctions == 0
     assert (score.crossing_junctions, score.spurious_junctions) == (1, 0)
@@ -101,6 +120,8 @@ def test_missing_and_extra_centrelines_lower_recall_and_precision() -> None:
     """A true vessel never measured lowers recall; a measured one not in the truth, precision."""
     truth = true_network([[(10, 30, 2), (10, 30, 57)], [(10, 10, 2), (10, 10, 57)]], [-1, -1])
     net, distances = measured([[(10, 30, 2), (10, 30, 57)], [(10, 50, 2), (10, 50, 57)]])
-    score = score_network(net, distances, truth, SHAPE, VOXEL, TOLERANCE, JUNCTION_TOLERANCE)
+    score = score_network(
+        net, distances, truth, SHAPE, VOXEL, TOLERANCE, JUNCTION_TOLERANCE, RADIUS_BINS
+    )
     assert score.centreline_recall == pytest.approx(0.5, abs=0.05)
     assert score.centreline_precision == pytest.approx(0.5, abs=0.05)

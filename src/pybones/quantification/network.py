@@ -143,6 +143,33 @@ def node_geometry(
     return NodeGeometry(position=position, radius=radius)
 
 
+def _group(
+    selected: "NDArray[np.bool_]",
+    joined: "NDArray[np.bool_]",
+    pairs: "NDArray[np.int64]",
+    missing: int,
+) -> "tuple[NDArray[np.int64], int]":
+    """Number the groups of selected voxels that the given links join.
+
+    Args:
+        selected: ``(N,)`` voxels to group.
+        joined: ``(M,)`` links joining two selected voxels into one group.
+        pairs: ``(M, 2)`` links.
+        missing: Group of the voxels not selected.
+
+    Returns:
+        Group per voxel, and the number of groups.
+    """
+    n = len(selected)
+    voxels = np.flatnonzero(selected)
+    compact = np.full(n, -1, np.int64)
+    compact[voxels] = np.arange(len(voxels))
+    group = connected_roots(len(voxels), compact[pairs[joined]])
+    per_voxel = np.full(n, missing, np.int64)
+    per_voxel[voxels] = group
+    return per_voxel, int(group.max()) + 1 if len(voxels) else 0
+
+
 def initial_graph(
     points: "NDArray[np.int32]", links: "Links", end_kind: "NDArray[np.uint8]"
 ) -> GraphState:
@@ -165,14 +192,9 @@ def initial_graph(
     a, b = pairs[:, 0], pairs[:, 1]
 
     # Nodes: each end alone; touching junction voxels together.
-    node_voxels = np.flatnonzero(is_junction | is_end)
-    compact = np.full(n, -1, np.int64)
-    compact[node_voxels] = np.arange(len(node_voxels))
-    both_junction = is_junction[a] & is_junction[b]
-    node_of_compact = connected_roots(len(node_voxels), compact[pairs[both_junction]])
-    point_node = np.full(n, NO_NODE, np.int64)
-    point_node[node_voxels] = node_of_compact
-    n_nodes = int(node_of_compact.max()) + 1 if len(node_voxels) else 0
+    point_node, n_nodes = _group(
+        is_junction | is_end, is_junction[a] & is_junction[b], pairs, NO_NODE
+    )
     kind = np.full(n_nodes, NodeKind.JUNCTION, np.uint8)
     ends = np.flatnonzero(is_end)
     kind[point_node[ends]] = np.where(
@@ -182,14 +204,8 @@ def initial_graph(
     )
 
     # Runs of path voxels: the branches' interiors.
-    path_voxels = np.flatnonzero(is_path)
-    run_compact = np.full(n, -1, np.int64)
-    run_compact[path_voxels] = np.arange(len(path_voxels))
     both_path = is_path[a] & is_path[b]
-    run_of_compact = connected_roots(len(path_voxels), run_compact[pairs[both_path]])
-    n_runs = int(run_of_compact.max()) + 1 if len(path_voxels) else 0
-    point_branch = np.full(n, NO_BRANCH, np.int64)
-    point_branch[path_voxels] = run_of_compact
+    point_branch, n_runs = _group(is_path, both_path, pairs, NO_BRANCH)
     run_length = np.bincount(point_branch[a[both_path]], lengths[both_path], n_runs)
 
     # Where runs meet nodes: two attachments per open run, none for a closed loop.

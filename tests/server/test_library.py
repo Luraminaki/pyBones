@@ -33,6 +33,7 @@ def library(folders: "Folders") -> Library:
         data_dir=folders.data,
         output_dir=folders.output,
         io=load_config().io,
+        network_files=load_config().quantification.files,
         mesh_file_template="mesh_{label}.{format}",
     )
 

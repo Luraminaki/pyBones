@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, Response
 
 from pybones.api.operations import preview
 from pybones.meshing.formats import MeshFormat
+from pybones.quantification.measures import NetworkSummary
 from pybones.segmentation.labels import (
     FOREGROUND_LABELS,
     Label,
@@ -21,6 +22,8 @@ from pybones.server.library import NotFoundError
 from pybones.server.schemas import JobView, SegmentationRequest, SegmentationSummary
 
 if TYPE_CHECKING:
+    import pathlib
+
     import numpy as np
 
 PNG_EXTENSION = ".png"
@@ -28,17 +31,49 @@ PNG_MEDIA_TYPE = "image/png"
 #: Slices are rendered on demand and can weigh megabytes: browsers must not keep them (a
 #: page scrolling through a stack would otherwise fill its cache with every slice seen).
 SLICE_HEADERS = {"Cache-Control": "no-store"}
-#: Meshes may be kept, but checked on every use: a rebuilt mesh replaces the file at the
-#: same address, and without this the browser could keep showing the old one.
-MESH_CACHE_CONTROL = "no-cache"
+#: Meshes and centrelines may be kept, but checked on every use: a rebuilt file replaces the
+#: old one at the same address, and without this the browser could keep showing the old one.
+REVALIDATE_CACHE_CONTROL = "no-cache"
 ETAG_HEADER = "ETag"
 IF_NONE_MATCH_HEADER = "if-none-match"
+#: Centreline points: raw little-endian float32 ``(x, y, z)`` triples in µm.
+CENTRELINES_MEDIA_TYPE = "application/octet-stream"
 #: Media type of each mesh format.
 MESH_MEDIA_TYPES = {MeshFormat.STL: "model/stl", MeshFormat.GLB: "model/gltf-binary"}
 #: Query parameter choosing the mesh format.
 FORMAT_PARAMETER = "format"
 
 router = APIRouter(prefix="/segmentations", tags=["segmentations"])
+
+
+def cache_headers(path: "pathlib.Path") -> dict[str, str]:
+    """Build the headers letting a browser keep a file but check it on every use.
+
+    Args:
+        path: Served file (its modification time and size make the ETag).
+
+    Returns:
+        ``Cache-Control`` and ``ETag`` headers.
+    """
+    stat = path.stat()
+    return {
+        "Cache-Control": REVALIDATE_CACHE_CONTROL,
+        ETAG_HEADER: f'"{stat.st_mtime_ns:x}-{stat.st_size:x}"',
+    }
+
+
+def unchanged(headers: dict[str, str], request: Request) -> bool:
+    """Tell whether the browser already holds this version of the file.
+
+    Args:
+        headers: From :func:`cache_headers`.
+        request: The request (a browser echoes the ETag in ``If-None-Match``).
+
+    Returns:
+        Whether to answer ``304 Not Modified``.
+    """
+    # The substring test also covers a list of ETags.
+    return headers[ETAG_HEADER] in request.headers.get(IF_NONE_MATCH_HEADER, "")
 
 
 def foreground_label(label: str) -> Label:
@@ -230,12 +265,71 @@ def get_mesh(
     path = context.library.mesh_path(segmentation_id, label, fmt)
     if not path.is_file():
         raise NotFoundError(f"no {label.key} {fmt.value} mesh for {segmentation_id!r} yet")
-    stat = path.stat()
-    headers = {
-        "Cache-Control": MESH_CACHE_CONTROL,
-        ETAG_HEADER: f'"{stat.st_mtime_ns:x}-{stat.st_size:x}"',
-    }
-    # A browser echoes the ETag back; the substring test also covers a list of ETags.
-    if headers[ETAG_HEADER] in request.headers.get(IF_NONE_MATCH_HEADER, ""):
+    headers = cache_headers(path)
+    if unchanged(headers, request):
         return Response(status_code=HTTPStatus.NOT_MODIFIED, headers=headers)
     return FileResponse(path, media_type=MESH_MEDIA_TYPES[fmt], filename=path.name, headers=headers)
+
+
+@router.post("/{segmentation_id}/quantification", status_code=HTTPStatus.ACCEPTED)
+def create_quantification(context: Context, segmentation_id: str) -> JobView:
+    """Start measuring the vessel network (or return the job doing it); follow the returned job.
+
+    Asking again measures it again, e.g. after changing the server's quantification settings.
+
+    Args:
+        context: Server state.
+        segmentation_id: Segmentation id.
+
+    Returns:
+        The quantification job.
+    """
+    return context.start_quantification(segmentation_id)
+
+
+@router.get("/{segmentation_id}/quantification")
+def get_quantification(context: Context, segmentation_id: str) -> NetworkSummary:
+    """Return the summary of the vessel network, once measured.
+
+    Args:
+        context: Server state.
+        segmentation_id: Segmentation id.
+
+    Returns:
+        Branches, junctions, ends, lengths and medians for the whole stack.
+
+    Raises:
+        NotFoundError: If it was not quantified yet (``POST`` the same path first).
+    """
+    return context.library.network(segmentation_id)
+
+
+@router.get(
+    "/{segmentation_id}/centrelines",
+    response_class=Response,
+    responses={HTTPStatus.OK: {"content": {CENTRELINES_MEDIA_TYPE: {}}}},
+)
+def get_centrelines(context: Context, segmentation_id: str, request: Request) -> Response:
+    """Download the centreline voxels as points in µm, for drawing next to the meshes.
+
+    The body is ``N`` little-endian float32 ``(x, y, z)`` triples (``12 N`` bytes). Cached
+    like the meshes: an unchanged file is answered ``304 Not Modified``.
+
+    Args:
+        context: Server state.
+        segmentation_id: Segmentation id.
+        request: The request (its ``If-None-Match`` header).
+
+    Returns:
+        The points, or an empty 304 if the browser's copy is current.
+
+    Raises:
+        NotFoundError: If it was not quantified yet.
+    """
+    headers = cache_headers(context.library.centreline_path(segmentation_id))
+    if unchanged(headers, request):
+        return Response(status_code=HTTPStatus.NOT_MODIFIED, headers=headers)
+    points = context.library.centreline_points_um(segmentation_id)
+    return Response(
+        points.astype("<f4").tobytes(), media_type=CENTRELINES_MEDIA_TYPE, headers=headers
+    )

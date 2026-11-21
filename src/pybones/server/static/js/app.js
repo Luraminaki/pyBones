@@ -1,14 +1,17 @@
 // Entry point: loads the server description and configuration, wires the panels together.
 
-import { api } from './api.js';
+import { api, JOB_KINDS } from './api.js';
 import { initJobs, JOB_FINISHED } from './jobs.js';
 import { initLibrary, prefill, reloadLists, renderSegmentations, settingsDiff } from './library.js';
+import { initNetwork, showSegmentation as showNetwork } from './network.js';
 import { initSlices, showSegmentation as showSlices } from './slices.js';
 import { initTheme } from './theme.js';
 import { baseName, LABELS, percent, recall, remember, toast } from './ui.js';
 
 // Remembered per browser: the last segmentation looked at.
 const SELECTION_KEY = 'pybones.selection';
+// The viewer's tabs, as named in the ids of their buttons and panels.
+const TABS = ['slices', '3d', 'network'];
 
 let summaries = [];
 let selected = null;
@@ -45,6 +48,7 @@ function select(id) {
   document.getElementById('viewer-title').textContent = summary.id;
   document.getElementById('viewer-meta').textContent = describe(summary);
   showSlices(summary);
+  showNetwork(summary);
   if (viewer) viewer.showSegmentation(summary);
 }
 
@@ -83,10 +87,10 @@ async function segmentAgain() {
 
 /**
  * Switch between the slice and 3D views; the 3D module is loaded the first time.
- * @param {string} name `slices` or `3d`.
+ * @param {string} name One of TABS.
  */
 async function openTab(name) {
-  for (const tab of ['slices', '3d']) {
+  for (const tab of TABS) {
     const active = tab === name;
     document.getElementById(`tab-${tab}`).setAttribute('aria-selected', String(active));
     document.getElementById(`panel-${tab}`).hidden = !active;
@@ -122,16 +126,18 @@ async function main() {
   document.getElementById('version').textContent = `v${server.version}`;
   initLibrary(server, colors);
   initSlices(server, colors);
+  initNetwork();
   document.getElementById('refresh').addEventListener('click', refresh);
   document.getElementById('segment-again').addEventListener('click', segmentAgain);
-  document.getElementById('tab-slices').addEventListener('click', () => openTab('slices'));
-  document.getElementById('tab-3d').addEventListener('click', () => openTab('3d'));
+  for (const tab of TABS) {
+    document.getElementById(`tab-${tab}`).addEventListener('click', () => openTab(tab));
+  }
 
   document.addEventListener(JOB_FINISHED, async (event) => {
     const status = event.detail;
     if (status.state !== 'succeeded') return;
     await refresh();
-    if (status.kind === 'segmentation') {
+    if (status.kind === JOB_KINDS.SEGMENTATION) {
       toast(`${status.segmentation} is ready`);
       select(status.segmentation);
     }

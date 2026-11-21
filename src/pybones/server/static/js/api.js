@@ -36,6 +36,26 @@
  * @property {number[]} voxel_size_um Voxel size, (z, y, x) µm.
  * @property {Object<string, number>} label_fractions Share of the volume per label.
  * @property {Object<string, string[]>} meshes Built mesh formats per label.
+ * @property {boolean} quantified Whether its vessel network was measured.
+ */
+
+/**
+ * Measures of a vessel network for the whole stack (Python:
+ * `pybones.quantification.measures.NetworkSummary`).
+ * @typedef {object} NetworkSummary
+ * @property {number} branches Branches between nodes.
+ * @property {number} truncated_branches Branches cut by a face of the stack.
+ * @property {number} loops Branches closed on themselves.
+ * @property {number} junctions Forks.
+ * @property {number} free_ends Ends inside the stack.
+ * @property {number} face_ends Ends at a face of the stack.
+ * @property {number} burst_ends Ends at a burst.
+ * @property {number} total_length_mm Vessel length.
+ * @property {number} stack_volume_mm3 Volume of the stack.
+ * @property {number} length_density_mm_per_mm3 Vessel length per volume.
+ * @property {number} median_branch_length_um Median branch length.
+ * @property {number} median_radius_um Median vessel radius.
+ * @property {number} median_tortuosity Median length / chord of the open branches.
  */
 
 const BASE = '/api';
@@ -47,6 +67,16 @@ const REQUEST_TIMEOUT_MS = 30000;
  * @type {Set<string>}
  */
 export const FINISHED_STATES = new Set(['succeeded', 'failed', 'cancelled']);
+/**
+ * What a job does (Python: the `*_JOB` names of `pybones.api.job_status`, checked by
+ * tests/server/test_page_js.py).
+ * @type {{SEGMENTATION: string, MESH: string, QUANTIFICATION: string}}
+ */
+export const JOB_KINDS = Object.freeze({
+  SEGMENTATION: 'segmentation',
+  MESH: 'mesh',
+  QUANTIFICATION: 'quantification',
+});
 
 /** A request that failed: its message is readable as is, `status` is 0 without an answer. */
 export class ApiError extends Error {
@@ -166,9 +196,22 @@ export const api = {
   createSegmentation: (dataset, name, overrides) =>
     request('POST', '/segmentations', { dataset, name, overrides }),
   buildMesh: (segmentation, label, format) => request('POST', meshPath(segmentation, label, format)),
+  network: (segmentation) => request('GET', `/segmentations/${id(segmentation)}/quantification`),
+  quantify: (segmentation) => request('POST', `/segmentations/${id(segmentation)}/quantification`),
   jobs: () => request('GET', '/jobs'),
   cancelJob: (jobId) => request('DELETE', `/jobs/${id(jobId)}`),
 };
+
+/**
+ * Fetch the centreline points of a segmentation (the browser revalidates its copy).
+ * @param {string} segmentation Segmentation id.
+ * @returns {Promise<Float32Array>} `(x, y, z)` µm triples.
+ * @throws {ApiError} If the request fails (404 if not quantified).
+ */
+export async function fetchCentrelines(segmentation) {
+  const path = `/segmentations/${id(segmentation)}/centrelines`;
+  return new Float32Array(await (await send(path, {}, 'centrelines')).arrayBuffer());
+}
 
 /**
  * Address of the mesh of a label, for a loader that fetches it itself.

@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
 import numpy as np
-from pydantic import ValidationError
 
+from pybones.cli.arguments import parse_invocation
 from pybones.config.loader import load_config
 from pybones.io.volume_store import open_volume
 from pybones.segmentation.labels import FINAL_LABELS
@@ -122,11 +122,7 @@ def main(argv: "Sequence[str] | None" = None) -> None:
         argv: Command-line arguments (default: ``sys.argv[1:]``).
     """
     parser = build_parser()
-    namespace = parser.parse_args(argv)
-    try:
-        invocation = PhantomInvocation.from_namespace(vars(namespace))
-    except ValidationError as exc:
-        parser.error(f"invalid arguments:\n{exc}")
+    invocation = parse_invocation(parser, PhantomInvocation.from_namespace, argv)
     settings, config = load_settings(invocation.settings), load_config(invocation.config)
     _ = configure_logging(config.logging, PROGRAM_NAME)
     match invocation.args:

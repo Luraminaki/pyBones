@@ -59,5 +59,11 @@
     "histogram_max_intensity": 45000,
     "histogram_bins": 300,
     "histogram_stride": 5
+  },
+  "network": {
+    "phantom_settings": "tools/phantom/network.json",
+    "work_dir": "output/report/network",
+    "tolerance_um": 6.0,
+    "junction_tolerance_um": 20.0
   }
 }

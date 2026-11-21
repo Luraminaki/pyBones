@@ -1,0 +1,117 @@
+\chapter{The vascular network}
+\label{chap:network}
+
+The 2018 brief asked for a quantified network: nodes, branches, calibre and branch lengths. With a
+validated segmentation, this goal is now within reach. pyBones~\pbValueVersion{} measures the vessel
+network of a segmentation (\code{pybones quantify}, or the page's \emph{Network} tab) and writes
+three files next to its labels: a summary with the nodes (\code{network.json}), one row per branch
+(\code{branches.csv}) and the centreline voxels (\code{centrelines.npz}).
+
+\section{From a mask to a network}
+
+\paragraph{Centrelines} The vessel mask is first closed: cavities (background enclosed by vessel, a
+hollow lumen of a vessel imaged as a ring) are filled, otherwise a thick vessel thins into a sheet
+instead of a line. It is then thinned to one-voxel centrelines (scikit-image's 3D skeletonisation),
+and each centreline voxel gets its distance to the vessel wall: the local radius.
+
+\paragraph{Graph} Touching centreline voxels (26-neighbourhood) are linked. Where three voxels touch
+each other, the longest link of the triangle is dropped, unless that would disconnect them: a
+diagonal step of the centreline is not a fork. A voxel with one link is an end, with three or more a
+junction (touching junction voxels form one node); runs of two-link voxels between nodes are the
+branches.
+
+\paragraph{Pruning} Skeletons of real masks are hairy. Three operations repeat until none applies, all
+in micrometres: a branch from a junction to a free end shorter than \pbValueNetSpurFactor{} times the widest radius at its
+junction is a bump of the surface and goes, as do isolated specks and rings shorter than the
+circumference around them; two junctions joined by a branch shorter than their radii together are
+one fork, merged (the branch's length is kept); a node left with two branches joins them.
+
+\paragraph{Ends} An end within its radius (plus \pbValueNetAnchorMargin\um) of a face of the stack or of a
+burst is not a free end: the vessel goes on beyond it. Such ends are never pruned, and the branches
+reaching them are flagged \emph{truncated}.
+
+\paragraph{Measures} Each branch gets its length along the centreline, its chord, their ratio (the
+tortuosity) and the radius along it (mean, median, minimum, maximum). For the whole stack: the counts
+of branches, junctions and ends by kind, the total length, the length per volume (length density) and
+the medians.
+
+The three 3D steps (cavities, centrelines, distances) are interchangeable implementations behind
+small interfaces, chosen in the configuration: pyBones' streaming connectivity and per-slice distance
+maps, or SciPy's. Both give identical results on the sample; pyBones' are faster and use less memory,
+SciPy's handle non-square pixels.
+
+\section{Validation on a branching phantom}
+
+The phantom of Chapter~\ref{chap:validation} draws separate vessels. For the network, its vessels can
+branch: a walk may start a thinner child at its current point, and the phantom records every true
+centreline segment, its radius and every bifurcation. A dedicated phantom (\pbValueNetPhantomVessels{} vessels branching up to
+\pbValueNetPhantomDepth{} levels deep, same calibration) is generated afresh for this report, segmented, and its network
+measured twice: on its \emph{true} mask, to test the quantification alone, and on its segmentation,
+to test the whole chain (Table~\ref{tab:network-scores}). A centreline is found when it lies within
+\pbValueNetTolerance\um{} of the truth; a fork is found within \pbValueNetJunctionTolerance\um{} plus the radius of
+its parent vessel.
+
+\begin{table}[ht]
+  \centering
+  \small
+  \input{data/network_scores.tex}
+  \caption{The network of the branching phantom, measured on its true mask and on its segmentation.
+    Recall: share of the true centrelines found; precision: share of the measured centrelines that are
+    true. \emph{Forks}: true bifurcations found; \emph{not forks}: other measured junctions;
+    \emph{crossings}: junctions where two separate vessels touch (real junctions of the mask, not
+    bifurcations). Length: measured / true; radius: median offset from the true radius.}
+  \label{tab:network-scores}
+\end{table}
+
+\paragraph{Lengths are reliable} On the segmentation, the total length is within
+\pbValueNetSegLengthErrorPct\,\% of the truth: missed thin vessels and extra spurs nearly cancel.
+
+\paragraph{Junctions are not} Even on the true mask, \pbValueNetTrueMaskMissed{} of the \pbValueNetTrueForks{} forks are not
+found (two close forks merge into one, a short side branch is pruned as a spur), and
+\pbValueNetTrueMaskSpurious{} junctions are not forks. On the segmentation, only \pbValueNetSegForks{}
+forks are found, and \pbValueNetSegSpurious{} junctions are not forks. I looked at them: most sit
+where a vessel touches the bone, and the segmentation lets the vessel mask bulge into the contact. The
+centreline forks into each bulge. This is a limit of the segmentation (vessels and bone are hard to
+tell apart where they touch), and pruning cannot remove it without removing real side branches too.
+The counts of junctions and branches are therefore upper bounds.
+
+\paragraph{The radius bias depends on the calibre} Table~\ref{tab:network-bands} gives the median
+error of the measured radius by band of true radius. Thin vessels come out wider than they are
+(\pbValueNetSegRadiusThin\um{} below 6\um: the scanner blur widens them, and the
+segmentation keeps their rim), thick ones narrower (\pbValueNetSegRadiusThick\um). Most of the thick vessels' shortfall is
+the measure's own: it already reads \pbValueNetTrueRadiusThick\um{} on the exact mask, where the
+segmentation plays no part. No single correction fits both, so none is applied. Radii also come in steps of the voxel grid: distances between voxel
+centres are $\sqrt{k}$ times the voxel size.
+
+\begin{table}[ht]
+  \centering
+  \small
+  \input{data/network_bands.tex}
+  \caption{Median error of the measured radius (measured minus true) by band of true radius, in
+    micrometres. On the true mask, the error is the voxel grid's alone.}
+  \label{tab:network-bands}
+\end{table}
+
+\section{The sample}
+
+On the real stack, the quantification takes \pbValueNetSeconds\,s and finds
+\pbValueNetLengthMm\,mm of vessels in \pbValueNetBranches{} branches (\pbValueNetTruncated{} cut by a
+face of the stack, \pbValueNetLoops{} loops), that is \pbValueNetDensity\,mm of vessel per mm$^3$ of
+tissue. Branches are short (median \pbValueNetMedianBranchUm\um) and nearly straight (median tortuosity
+\pbValueNetMedianTortuosity); the median radius is \pbValueNetMedianRadiusUm\um. The ends are
+\pbValueNetFreeEnds{} free, \pbValueNetFaceEnds{} at a face and \pbValueNetBurstEnds{} at a burst; the
+\pbValueNetJunctions{} junctions include the bulges described above.
+
+These are the first measures of this network, and they inherit the limits of the segmentation: the
+thinnest vessels are partly missed (Chapter~\ref{chap:validation}), clotted segments leave gaps that
+cut vessels into separate branches, and the stack is only \pbValueNetStackDepthUm\um{} thick, so many branches are
+truncated. They are best compared between samples processed the same way, not read as absolute
+values.
+
+\begin{figure}[ht]
+  \centering
+  \includegraphics[width=0.95\linewidth]{../../screenshots/07-network.png}
+  \caption{The page's Network tab after measuring the sample, and its centrelines drawn over the
+    vessel mesh in the 3D view (zoomed in).}
+  \label{fig:network-page}
+\end{figure}

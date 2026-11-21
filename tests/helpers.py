@@ -1,5 +1,6 @@
 """Synthetic data and reference implementations shared by the tests."""
 
+import json
 from collections import deque
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -11,6 +12,8 @@ from pybones.config.loader import load_config
 from pybones.config.quantification import PruningConfig
 from pybones.segmentation.scales import resolve_pixel_params
 from pybones.utils.constants import UINT16_MAX
+from tools.phantom.settings import PhantomSettings
+from tools.phantom.settings import load_settings as load_phantom_settings
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -202,3 +205,37 @@ def cancel_in(tracker: "ProgressTracker", stage: "Stage") -> "Callable[[Progress
             tracker.cancel()
 
     return listener
+
+
+def small_phantom_settings(shape: tuple[int, int, int], **updates: object) -> "PhantomSettings":
+    """Shrink the default phantom so that it renders in a fraction of a second.
+
+    Args:
+        shape: Volume shape ``(z, y, x)``.
+        **updates: Top-level settings to replace.
+
+    Returns:
+        The validated settings.
+    """
+    data = json.loads(load_phantom_settings().model_dump_json())
+    data["shape_zyx"] = list(shape)
+    data["trabeculae"].update(plates=3, rods=4)
+    data["vessels"].update(count=6)
+    data["bursts"].update(count=1, radius_um=[40, 50])
+    data.update(updates)
+    return PhantomSettings.model_validate(data)
+
+
+def truncated_window(z: int, window: int, depth: int) -> tuple[int, int]:
+    """Bounds of a z window centred on a slice, truncated at the ends of the stack.
+
+    Args:
+        z: Centre slice.
+        window: Window length (odd).
+        depth: Number of slices.
+
+    Returns:
+        ``(lo, hi)``: the window is ``slices[lo:hi]``.
+    """
+    half = window // 2
+    return max(0, z - half), min(depth, z + half + 1)

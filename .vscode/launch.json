@@ -62,6 +62,16 @@
             "justMyCode": false
         },
         {
+            "name": "pybones: quantify",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pybones.cli.main",
+            "args": ["quantify", "output/debug"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "pybones: print config",
             "type": "debugpy",
             "request": "launch",

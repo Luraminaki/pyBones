@@ -20,7 +20,7 @@ export function triangles(object) {
 }
 
 /**
- * Keep a mesh in GPU memory only. three.js keeps a CPU copy of every array after uploading
+ * Keep a mesh (or point cloud) in GPU memory only. three.js keeps a CPU copy of every array after uploading
  * it (for picking, bounds, re-uploads), which doubles the browser's memory: 175 MB more for
  * the bone and vessels of the sample. Bounds are computed first (fitting the view uses
  * them); then each array is dropped as soon as it is on the GPU. Nothing here picks
@@ -29,7 +29,7 @@ export function triangles(object) {
  */
 export function releaseAfterUpload(object) {
   object.traverse((child) => {
-    if (!child.isMesh) return;
+    if (!child.geometry) return; // meshes and points alike
     const geometry = child.geometry;
     geometry.computeBoundingBox();
     geometry.computeBoundingSphere();
@@ -43,14 +43,24 @@ export function releaseAfterUpload(object) {
 }
 
 /**
- * Free the GPU memory of a mesh (geometry and materials).
+ * Free the GPU memory of a mesh or point cloud (geometry and materials).
  * @param {THREE.Object3D} object The mesh's scene.
  */
 export function dispose(object) {
   object.traverse((child) => {
-    if (child.isMesh) {
+    if (child.geometry) { // meshes and points alike
       child.geometry.dispose();
       child.material.dispose();
     }
   });
+}
+
+/**
+ * Take a mesh or point cloud out of the scene and free its GPU memory.
+ * @param {THREE.Scene} scene The scene holding it.
+ * @param {THREE.Object3D} object The object.
+ */
+export function discard(scene, object) {
+  scene.remove(object);
+  dispose(object);
 }

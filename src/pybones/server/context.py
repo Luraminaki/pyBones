@@ -14,7 +14,13 @@ from typing import TYPE_CHECKING, Annotated, cast
 # FastAPI reads the annotations of dependencies at runtime (`get_context` below).
 from fastapi import Depends, Request  # noqa: TC002
 
-from pybones.api.job_status import FINISHED_STATES, UnknownJobError
+from pybones.api.job_status import (
+    FINISHED_STATES,
+    MESH_JOB,
+    QUANTIFICATION_JOB,
+    SEGMENTATION_JOB,
+    UnknownJobError,
+)
 from pybones.config.loader import apply_overrides
 from pybones.server.library import ConflictError
 from pybones.server.schemas import JobView
@@ -35,11 +41,13 @@ class JobTarget:
     """What a job works on.
 
     Attributes:
+        kind: What the job does (a segmentation and its quantification share the id).
         segmentation: Segmentation id.
         label: Label being meshed (``None`` for a segmentation job).
         mesh_format: Format of the mesh (``None`` for a segmentation job).
     """
 
+    kind: str
     segmentation: str
     label: "Label | None"
     mesh_format: "MeshFormat | None"
@@ -161,7 +169,7 @@ class ServerContext:
         """
         config = apply_overrides(self.config, request.overrides)
         source = self.library.dataset_path(request.dataset)
-        target = JobTarget(request.name, None, None)
+        target = JobTarget(SEGMENTATION_JOB, request.name, None, None)
         with self.submit_lock:
             # Both checks under the lock: a job finishing in between cannot slip through.
             if self.active_job(target) is not None:
@@ -192,11 +200,32 @@ class ServerContext:
         stored = self.library.meta(segmentation_id).config
         config = stored.model_copy(update={"mesh": self.config.mesh})
         segmentation = self.library.segmentation_path(segmentation_id)
-        target = JobTarget(segmentation_id, label, mesh_format)
+        target = JobTarget(MESH_JOB, segmentation_id, label, mesh_format)
         with self.submit_lock:
             if (current := self.active_job(target)) is not None:
                 return current
             job_id = self.jobs.submit_mesh(segmentation, label, path, config)
+            self._record(job_id, target)
+        return self.job(job_id)
+
+    def start_quantification(self, segmentation_id: str) -> JobView:
+        """Queue the quantification of a segmentation, or return the job already doing it.
+
+        The voxel size is the one the segmentation was made with; the quantification
+        settings are the server's. Asking again replaces the network files.
+
+        Args:
+            segmentation_id: Segmentation id.
+
+        Returns:
+            The queued (or already running) job.
+        """
+        segmentation = self.library.segmentation_path(segmentation_id)
+        target = JobTarget(QUANTIFICATION_JOB, segmentation_id, None, None)
+        with self.submit_lock:
+            if (current := self.active_job(target)) is not None:
+                return current
+            job_id = self.jobs.submit_quantification(segmentation, self.config)
             self._record(job_id, target)
         return self.job(job_id)
 

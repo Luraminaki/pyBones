@@ -36,14 +36,21 @@ from typing import TYPE_CHECKING
 from pybones.api.job_status import (
     FINISHED_STATES,
     MESH_JOB,
+    QUANTIFICATION_JOB,
     SEGMENTATION_JOB,
     JobState,
     JobStatus,
     UnknownJobError,
 )
 from pybones.api.operations import write_mesh_file
+from pybones.quantification.pipeline import run_quantification
 from pybones.segmentation.pipeline import planned_stages, run_segmentation
-from pybones.segmentation.stages import MESH_STAGES, CancelledError, ProgressTracker
+from pybones.segmentation.stages import (
+    MESH_STAGES,
+    QUANTIFY_STAGES,
+    CancelledError,
+    ProgressTracker,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping
@@ -207,6 +214,24 @@ class JobManager:
             functools.partial(write_mesh_file, segmentation, label, path, config),
             MESH_STAGES,
             config.mesh.stage_weights,
+        )
+
+    def submit_quantification(self, segmentation: "Path", config: "PyBonesConfig") -> str:
+        """Queue the quantification of a segmentation's vessel network.
+
+        Args:
+            segmentation: Segmentation output directory (the files are written into it).
+            config: Configuration (quantification settings).
+
+        Returns:
+            The job id; its result is the
+            :class:`~pybones.quantification.measures.NetworkSummary`.
+        """
+        return self.submit(
+            QUANTIFICATION_JOB,
+            functools.partial(run_quantification, segmentation, config),
+            QUANTIFY_STAGES,
+            config.quantification.stage_weights,
         )
 
     def _run(self, job: _Job, work: "Callable[[ProgressTracker], object]") -> object:

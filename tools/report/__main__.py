@@ -5,8 +5,7 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
-from pydantic import ValidationError
-
+from pybones.cli.arguments import parse_invocation
 from pybones.config.loader import load_config
 from pybones.utils.logs import configure_logging
 from tools.phantom.settings import load_settings as load_phantom_settings
@@ -23,6 +22,7 @@ from tools.report.figures import (
 from tools.report.history import history_rows, write_csv
 from tools.report.latex import history_table, plot_data, readme_scores, values
 from tools.report.meshes import mesh_files, readme_meshes
+from tools.report.network import network_files
 from tools.report.settings import DEFAULT_SETTINGS_PATH, load_settings
 
 if TYPE_CHECKING:
@@ -44,6 +44,7 @@ FIGURE_STEPS: "tuple[Callable[[Context], None], ...]" = (
     plot_data,
     history_table,
     mesh_files,
+    network_files,
     values,
     readme_scores,
     readme_meshes,
@@ -112,11 +113,7 @@ def main(argv: "Sequence[str] | None" = None) -> None:
         argv: Command-line arguments (default: ``sys.argv[1:]``).
     """
     parser = build_parser()
-    namespace = parser.parse_args(argv)
-    try:
-        invocation = ReportInvocation.from_namespace(vars(namespace))
-    except ValidationError as exc:
-        parser.error(f"invalid arguments:\n{exc}")
+    invocation = parse_invocation(parser, ReportInvocation.from_namespace, argv)
     settings = load_settings(invocation.settings)
     _ = configure_logging(load_config().logging, PROGRAM_NAME)
     repo = Path.cwd()

@@ -77,7 +77,11 @@ would quadruple it. Nothing is compressed: on
 the local machine, compressing would take longer than sending. The page needs a recent browser
 (JavaScript modules, WebGL~2).
 
-\section{The original goal}
+\section{The vascular network}
 
-The brief asked for a quantified network: nodes, branches, calibre, branch lengths. pyBones delivers a
-validated segmentation and meshes, the prerequisite, but not the quantification yet.
+The brief asked for a quantified network: nodes, branches, calibre, branch lengths. pyBones now
+measures it (Chapter~\ref{chap:network}), within the limits measured there: lengths are reliable,
+but junction counts are inflated where vessels touch the bone (most junctions of the segmented phantom
+are not forks), the radius is biased in opposite directions for thin and thick vessels, and many
+branches are truncated by the thin stack. The measures cover the whole stack: no region (cortex,
+marrow) is told apart yet.

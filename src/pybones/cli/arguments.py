@@ -6,12 +6,16 @@ a typed, immutable object instead of a loose ``argparse.Namespace``.
 """
 
 from pathlib import Path
-from typing import Annotated, Any, ClassVar, Literal
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from pybones.meshing.formats import MeshFormat
 from pybones.segmentation.labels import FOREGROUND_LABELS, Label, label_keys
+
+if TYPE_CHECKING:
+    import argparse
+    from collections.abc import Callable, Sequence
 
 #: Bounds of ``preview --scale`` (output scale factor).
 MAX_PREVIEW_SCALE = 16.0
@@ -47,6 +51,32 @@ def nest_command(namespace: dict[str, Any], global_options: tuple[str, ...]) -> 
     nested: dict[str, Any] = {name: values.pop(name) for name in global_options}
     nested[COMMAND_FIELD] = values
     return nested
+
+
+def parse_invocation[I](
+    parser: "argparse.ArgumentParser",
+    validate: "Callable[[dict[str, Any]], I]",
+    argv: "Sequence[str] | None",
+) -> I:
+    """Parse a command line and validate it into its invocation model.
+
+    Shared by ``pybones`` and the tools. Invalid values exit with argparse's usage message
+    (status 2), like a syntax error.
+
+    Args:
+        parser: The program's argument parser.
+        validate: Builds the invocation from ``vars()`` of the parsed namespace (its
+            ``from_namespace``).
+        argv: Command-line arguments (``None``: ``sys.argv[1:]``).
+
+    Returns:
+        The validated invocation.
+    """
+    namespace = parser.parse_args(argv)
+    try:  # outside input: the command line
+        return validate(vars(namespace))
+    except ValidationError as exc:
+        parser.error(f"invalid arguments:\n{exc}")
 
 
 def _foreground_label(value: Any) -> Label:
@@ -147,6 +177,13 @@ class CompareArgs(_LabelArgs):
     reference: Path
 
 
+class QuantifyArgs(ArgsModel):
+    """``pybones quantify SEGMENTATION``: measure its vessel network, files written next to it."""
+
+    command: Literal["quantify"]
+    segmentation: Path
+
+
 class ServeArgs(ArgsModel):
     """``pybones serve``: run the local web server.
 
@@ -162,7 +199,14 @@ class ServeArgs(ArgsModel):
 
 
 CommandArgs = Annotated[
-    ConfigArgs | SegmentArgs | PreviewArgs | MeshArgs | ExportArgs | CompareArgs | ServeArgs,
+    ConfigArgs
+    | SegmentArgs
+    | PreviewArgs
+    | MeshArgs
+    | ExportArgs
+    | CompareArgs
+    | QuantifyArgs
+    | ServeArgs,
     Field(discriminator="command"),
 ]
 

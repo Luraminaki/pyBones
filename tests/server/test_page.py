@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from pybones.server.app import DOCS_PATH, STATIC_DIR
+from pybones.server.app import DOCS_PATH, PAGE_CACHE_CONTROL, STATIC_DIR
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -138,3 +138,13 @@ def test_named_imports_exist_in_their_module(module: "Path") -> None:
             assert name in exported, (
                 f"{module.name} imports {name!r}, not exported by {target.name}"
             )
+
+
+def test_the_page_files_are_checked_on_every_load(client: "TestClient") -> None:
+    """A browser may keep a module but asks again each time: an update is never missed."""
+    first = client.get("/js/api.js")
+    assert first.status_code == HTTPStatus.OK
+    assert first.headers["cache-control"] == PAGE_CACHE_CONTROL
+    again = client.get("/js/api.js", headers={"If-None-Match": first.headers["etag"]})
+    assert again.status_code == HTTPStatus.NOT_MODIFIED
+    assert client.get("/").headers["cache-control"] == PAGE_CACHE_CONTROL

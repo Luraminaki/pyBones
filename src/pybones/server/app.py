@@ -29,7 +29,7 @@ invalid input.
 from contextlib import asynccontextmanager
 from http import HTTPStatus
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, override
 
 from fastapi import FastAPI
 from fastapi.concurrency import run_in_threadpool
@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from fastapi import Request
+    from fastapi.responses import Response
 
     from pybones.config.schema import PyBonesConfig
     from pybones.config.server import ServerConfig
@@ -62,6 +63,9 @@ LOCALHOST = "localhost"
 STATIC_DIR = Path(__file__).with_name("static")
 PAGE_MOUNT = "/"
 PAGE_NAME = "page"
+#: The page's files are kept by the browser but checked on every load (see :class:`PageFiles`).
+CACHE_CONTROL_HEADER = "Cache-Control"
+PAGE_CACHE_CONTROL = "no-cache"
 TITLE = "pyBones"
 DESCRIPTION = "Segmentation and 3D modelling of the intra-osseous vascular network (µCT)."
 
@@ -77,6 +81,30 @@ def _error(status: HTTPStatus, exc: Exception) -> JSONResponse:
         ``{"detail": message}`` with ``status``.
     """
     return JSONResponse({"detail": str(exc)}, status_code=status)
+
+
+class PageFiles(StaticFiles):
+    """The page's files, which a browser may keep but must check on every load.
+
+    Without this, a browser reuses its copy of a module on its own guess: after an update,
+    new modules would import names that its old ones lack, and the page would break. An
+    unchanged file costs a ``304 Not Modified`` (the ETag ``StaticFiles`` already sends).
+    """
+
+    @override
+    def file_response(self, *args: Any, **kwargs: Any) -> "Response":
+        """Serve a file with ``Cache-Control: no-cache``.
+
+        Args:
+            args: Arguments of :meth:`StaticFiles.file_response`.
+            kwargs: Its keyword arguments.
+
+        Returns:
+            The response, revalidated by the browser on every use.
+        """
+        response = super().file_response(*args, **kwargs)
+        response.headers[CACHE_CONTROL_HEADER] = PAGE_CACHE_CONTROL
+        return response
 
 
 async def not_found(_request: "Request", exc: Exception) -> JSONResponse:
@@ -134,7 +162,7 @@ def create_app(config: "PyBonesConfig", server: "ServerConfig") -> FastAPI:
         The application, ready for uvicorn or a test client.
     """
     manager = JobManager(config.jobs)
-    library = Library.from_config(server.library, config.io)
+    library = Library.from_config(server.library, config.io, config.quantification.files)
     context = ServerContext(config=config, server=server, library=library, jobs=manager)
 
     @asynccontextmanager
@@ -167,5 +195,5 @@ def create_app(config: "PyBonesConfig", server: "ServerConfig") -> FastAPI:
     for module in (system, datasets, segmentations, jobs):
         app.include_router(module.router, prefix=API_PREFIX)
     # Last: the mount answers every path the routes above did not claim.
-    app.mount(PAGE_MOUNT, StaticFiles(directory=STATIC_DIR, html=True), name=PAGE_NAME)
+    app.mount(PAGE_MOUNT, PageFiles(directory=STATIC_DIR, html=True), name=PAGE_NAME)
     return app

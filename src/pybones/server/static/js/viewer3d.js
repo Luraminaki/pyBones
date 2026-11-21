@@ -6,10 +6,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-import { api, meshUrl } from './api.js';
-import { activeJob, JOB_FINISHED, JOB_UPDATED, track } from './jobs.js';
+import { api, JOB_KINDS, meshUrl } from './api.js';
+import { JOB_FINISHED, JOB_UPDATED, startOrJoin } from './jobs.js';
 import { THEME_CHANGED } from './theme.js';
-import { dispose, releaseAfterUpload, triangles } from './mesh_memory.js';
+import { centrelinesShown, centrelineToggle, clearCentrelines, initCentrelines, refreshCentrelines } from './centrelines3d.js';
+import { discard, dispose, releaseAfterUpload, triangles } from './mesh_memory.js';
 import { cssColor, duration, el, LABELS, megabytes, percent, toast } from './ui.js';
 
 const FORMAT = 'glb';
@@ -160,7 +161,7 @@ function viewActions() {
 
 /** Show the hint over the scene while nothing is drawn (or "Loading…"). */
 function updateMessage() {
-  const shown = [...(current?.labels.values() ?? [])].some((e) => e.object?.visible);
+  const shown = centrelinesShown() || [...(current?.labels.values() ?? [])].some((e) => e.object?.visible);
   const busy = [...(current?.labels.values() ?? [])].some((e) => e.loading);
   message.hidden = shown;
   message.textContent = busy ? 'Loading…' : 'Choose the labels to show.';
@@ -223,19 +224,14 @@ async function build(label) {
   entry.loading = true;
   entry.status.textContent = 'Building the mesh…';
   updateMessage();
-  let job = activeJob(id, label, FORMAT);
-  if (!job) {
-    try {
-      job = await api.buildMesh(id, label, FORMAT);
-    } catch (err) {
-      entry.loading = false;
-      entry.status.textContent = 'Could not build';
-      toast(`The ${label} mesh could not be built: ${err.message}`, { error: true });
-      updateMessage();
-      return;
-    }
+  try {
+    await startOrJoin(() => api.buildMesh(id, label, FORMAT), JOB_KINDS.MESH, id, label, FORMAT);
+  } catch (err) {
+    entry.loading = false;
+    entry.status.textContent = 'Could not build';
+    toast(`The ${label} mesh could not be built: ${err.message}`, { error: true });
+    updateMessage();
   }
-  void track(job);
 }
 
 /**
@@ -263,7 +259,7 @@ function show(label, visible) {
  */
 function onJob(event, finished) {
   const status = event.detail;
-  if (status.kind !== 'mesh' || status.mesh_format !== FORMAT || current?.summary.id !== status.segmentation) return;
+  if (status.kind !== JOB_KINDS.MESH || status.mesh_format !== FORMAT || current?.summary.id !== status.segmentation) return;
   const entry = current.labels.get(status.label);
   if (!entry) return;
   if (!finished) {
@@ -275,8 +271,7 @@ function onJob(event, finished) {
   if (status.state === 'succeeded') {
     current.summary.meshes[status.label] = [...new Set([...(current.summary.meshes[status.label] ?? []), FORMAT])];
     if (entry.object) {
-      scene.remove(entry.object);
-      dispose(entry.object);
+      discard(scene, entry.object);
       entry.object = null;
     }
     if (entry.checkbox.checked) load(status.label);
@@ -290,11 +285,9 @@ function onJob(event, finished) {
 /** Remove every mesh of the shown segmentation from the scene and the GPU. */
 function clear() {
   for (const entry of current?.labels.values() ?? []) {
-    if (entry.object) {
-      scene.remove(entry.object);
-      dispose(entry.object);
-    }
+    if (entry.object) discard(scene, entry.object);
   }
+  clearCentrelines();
   fitted = false;
 }
 
@@ -305,6 +298,7 @@ function clear() {
 export function showSegmentation(summary) {
   if (current?.summary.id === summary.id) {
     current.summary = summary;
+    refreshCentrelines(summary);
     return;
   }
   clear();
@@ -320,7 +314,7 @@ export function showSegmentation(summary) {
     const swatch = el('span', { class: 'swatch', style: `background: ${cssColor(colors[label])}` });
     return el('div', { class: 'mesh-toggle' }, el('label', { for: `show-${label}` }, checkbox, swatch, label), status);
   });
-  controlsNode.replaceChildren(...toggles, viewActions());
+  controlsNode.replaceChildren(...toggles, centrelineToggle(summary), viewActions());
   current = { summary, labels };
   for (const label of LABELS) {
     if (labels.get(label).checkbox.checked) show(label, true);
@@ -365,6 +359,7 @@ export function initViewer(configColors) {
   renderer.domElement.setAttribute('aria-label', '3D view: drag, wheel or arrow keys to explore');
   controls.listenToKeyEvents(renderer.domElement);
   controls.addEventListener('change', render);
+  initCentrelines(scene, () => { updateMessage(); render(); });
   sceneBackground();
   new ResizeObserver(resize).observe(container);
   document.addEventListener(THEME_CHANGED, () => { sceneBackground(); render(); });

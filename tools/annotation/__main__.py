@@ -6,9 +6,8 @@ import webbrowser
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
-from pydantic import ValidationError
-
 from pybones import __version__
+from pybones.cli.arguments import parse_invocation
 from pybones.config.loader import load_config
 from pybones.segmentation.results import load_labels, load_meta
 from pybones.utils.logs import configure_logging
@@ -224,11 +223,7 @@ def main(argv: "Sequence[str] | None" = None) -> None:
         argv: Command-line arguments (default: ``sys.argv[1:]``).
     """
     parser = build_parser()
-    namespace = parser.parse_args(argv)
-    try:
-        invocation = AnnotationInvocation.from_namespace(vars(namespace))
-    except ValidationError as exc:
-        parser.error(f"invalid arguments:\n{exc}")
+    invocation = parse_invocation(parser, AnnotationInvocation.from_namespace, argv)
     settings, config = load_settings(invocation.settings), load_config(invocation.config)
     _ = configure_logging(config.logging, PROGRAM_NAME)
     args = invocation.args

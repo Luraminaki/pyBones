@@ -9,8 +9,66 @@ The current version lives in [pyproject.toml](pyproject.toml) and is read
 from package metadata at runtime; every segmentation records it in its
 `meta.json`. The [report](docs/report/) measures what each step below changed.
 
-## Unreleased
+## 0.6.0-alpha
 
+Vascular quantification, the original goal of the project: a segmentation's vessel network is
+measured from the command line, the API or the page. Outputs of 0.5.0 must be segmented again.
+
+- Report: chapter 6, *The vascular network* (method, branching phantom scores, radius error per
+  band, the sample's measures, limits); every number is written by `python -m tools.report figures`
+  (new `network` section of its settings: the phantom is generated and segmented afresh each time).
+  Limitations and conclusion updated; chapters 7-9 renumbered.
+- `measure_network` measures any label volume without writing anything; `run_quantification`
+  reads, measures and writes. Phantom network scores give the radius offset per band of true radius.
+- README: the quantification step, its backends' pros and cons, its limits, and a screenshot of the
+  Network tab and the centrelines.
+- Annotation page (`tools/annotation/static/`): split from one 658-line script into ES modules
+  (`state`, `view`, `paint`, `session`, `controls`, `app`), every function documented (JSDoc).
+  Elements are built without `innerHTML`; failed requests are reported instead of being read as
+  data or lost (opening a crop from a click or an arrow key, saving, the note). The same checks as
+  the web page now cover it.
+- Report timings: every version re-timed in one session, under one power profile, which every
+  timed run now records (`Machine.power_profile`, from `/sys/firmware/acpi/platform_profile` or
+  `powerprofilesctl`) and the report prints. The archived timings were 5-10 % slower than today's
+  re-run (a slower power mode, most likely); the comparison between versions is unchanged.
+- INSTALL: a FROM SCRATCH walkthrough (clone, `uv sync`, dataset, command line or browser, report),
+  Git and the optional tools (browser, Node.js, LaTeX) in the prerequisites, and the report steps
+  corrected: `history` segments the stack itself, `figures` measures the network, timings need one
+  power profile, screenshots 05-07 are taken by hand.
+- VS Code: a `pybones: quantify` launch configuration; the report's reproduction appendix matches
+  INSTALL (no needless segmentation step, the network step, timings under one power profile).
+- `python -m tools.check` runs every check in order (formatting, lint, types, tests) and lists the
+  failed ones (`--fix` reformats and applies Ruff's safe fixes first). INSTALL's DEVELOPMENT section
+  explains how to check a change, run all or part of the tests, and which rule each test enforces.
+- `tests/test_duplication.py`: no pure forwarders, no two functions with the same body, no run of
+  logic (3 statements) or of JavaScript (4 lines) repeated in two places, variable names aside;
+  plain call sequences (entry-point wiring) are allowed. Each rule was checked against planted
+  violations. Its first run removed the duplications it found: starting or joining a job
+  (`startOrJoin`), freeing a 3D object (`discard`), locating a quantification file, writing a
+  README section (`tools/report/readme.py`), validating the command line (`parse_invocation`,
+  shared by `pybones` and the three tools), grouping voxels in the network graph, and several test
+  setups (`start_blocked`, `small_phantom_settings`, `truncated_window`).
+- `tests/test_conventions.py` keeps every module, Python or JavaScript (vendored code aside), under
+  500 lines.
+- Fixed: on the 3D or Network tab, every finished job reloaded the slice the hidden Slices tab
+  showed, and Firefox refused to decode it there ("Slice 50 could not be shown" after each mesh
+  build). A segmentation shown again keeps its slice, and slices wait for their load event, which
+  fires in a hidden tab too.
+- README screenshots: the web page (three tabs, 0.6.0) retaken, the Network tab added.
+- Corrected: wall distances read *short* of the true radius on an exact mask (up to a third of a
+  voxel, more for thick vessels), not long as the docstring said.
+- Vascular network, ready to use:
+  - `pybones quantify SEGMENTATION`, with a progress line;
+  - API: `POST /api/segmentations/{id}/quantification` (a job; asking again joins it, or measures
+    again once done), `GET` the same path for the summary (404 before, 409 for a damaged or older
+    file), `GET /api/segmentations/{id}/centrelines` for the points (revalidated like the meshes);
+    segmentation summaries say whether they are `quantified`;
+  - the page: a Network tab (Quantify / Quantify again, progress, the measures, what they mean
+    and their limits) and a centrelines toggle in the 3D view (points over the meshes);
+  - job targets carry the job's kind, so a quantification never answers for the segmentation of the
+    same name; the page's job kinds (`JOB_KINDS`) are checked against Python's.
+- The page's own files are served with `Cache-Control: no-cache`: a browser checks them on every load,
+  so new modules never meet old cached ones (which had broken the 3D tab during development).
 - Modules split by responsibility, none over ~460 lines:
   - `quantification.graph` becomes `links` (touching voxels, staircase corners), `network` (types,
     nodes and branches), `pruning` and `graph` (`build_network`);
@@ -108,8 +166,8 @@ from package metadata at runtime; every segmentation records it in its
   each stage). On the sample: 17.6 s, 1.2 GB peak; 680 mm of vessels in 12,072 branches.
 - Phantom network scoring (`tools/phantom/network_scoring.py`): centreline recall and precision,
   junctions matched / crossings / spurious, radius offset and error, total length. On the network
-  phantom, segmented: length within 2 % of the truth, 24 of 54 visible bifurcations found, but
-  82 spurious junctions (mostly vessel/bone contact bulges), radius offset −0.8 µm (not constant:
+  phantom, segmented: length within 1 % of the truth, 26 of 54 visible bifurcations found, but
+  90 spurious junctions (mostly vessel/bone contact bulges), radius offset −0.8 µm (not constant:
   thin vessels read thicker, thick ones thinner, so it is not corrected).
 - Code audit (duplication, needless wrappers, reliability):
   - Jobs count their time from their start, not their submission: a mesh waiting behind another one

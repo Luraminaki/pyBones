@@ -25,6 +25,8 @@ from tools.report.history import (
     radius_column,
 )
 from tools.report.meshes import mesh_values
+from tools.report.network import network_values
+from tools.report.readme import replace_section
 from tools.report.runs import META_FILE, STATS_FILE, WORKING_TREE_REVISION, read_stats
 
 if TYPE_CHECKING:
@@ -219,6 +221,7 @@ def values(ctx: "Context") -> None:
         "MemoryGB": f"{machine.memory_gib:.0f}",
         "System": latex_text(machine.system),
         "Python": machine.python,
+        "PowerProfile": latex_text(machine.power_profile),
         "Workers": f"{min(workers, machine.logical_cores)}",
         "Version": meta["pybones_version"],
         "ProfileCore": f"{profile_core:,.0f}",
@@ -237,6 +240,7 @@ def values(ctx: "Context") -> None:
         entries[f"VesselRecall{name}"] = f"{float(current[radius_column(low, high)]):.2f}"
     entries["ClottedRecall"] = f"{float(current[CLOTTED_RECALL_COLUMN]):.2f}"
     entries.update(mesh_values(ctx))
+    entries.update(network_values(ctx))
     numbers = {  # unformatted twins, for pgfplots coordinates
         "ThrBone": th["bone"],
         "ThrVessel": th["vessel"],
@@ -259,13 +263,6 @@ def readme_scores(ctx: "Context") -> None:
     Raises:
         ValueError: If the README lacks the markers.
     """
-    path = ctx.repo / ctx.settings.readme
-    text = path.read_text()
-    start, end = text.find(README_SCORES_START), text.find(README_SCORES_END)
-    if start < 0 or end < start:
-        raise ValueError(
-            f"{path} lacks the {README_SCORES_START!r} ... {README_SCORES_END!r} markers"
-        )
     current = ctx.history()[ctx.settings.figures.reference_key]
     lines = [
         f"| Phantom ({ctx.version}) | Dice | Precision | Recall |",
@@ -277,5 +274,4 @@ def readme_scores(ctx: "Context") -> None:
             for label in FOREGROUND_LABELS
         ),
     ]
-    table = "\n".join([README_SCORES_START, *lines, README_SCORES_END])
-    _ = path.write_text(text[:start] + table + text[end + len(README_SCORES_END) :])
+    replace_section(ctx.repo / ctx.settings.readme, README_SCORES_START, README_SCORES_END, lines)

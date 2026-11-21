@@ -10,6 +10,7 @@ from pybones.segmentation.stages import Progress
 
 SEGMENTATION_JOB = "segmentation"
 MESH_JOB = "mesh"
+QUANTIFICATION_JOB = "quantification"
 
 
 class UnknownJobError(LookupError):

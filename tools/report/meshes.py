@@ -20,6 +20,7 @@ from pybones.meshing.gltf import FLOAT_POSITION_BITS, QUANTIZED_POSITION_BITS, r
 from pybones.meshing.marching import extract_surface
 from pybones.meshing.stl import write_stl
 from pybones.segmentation.labels import FOREGROUND_LABELS, Label
+from tools.report.readme import replace_section
 
 if TYPE_CHECKING:
     from pybones.meshing.mesh import Mesh
@@ -181,13 +182,6 @@ def readme_meshes(ctx: "Context") -> None:
     Raises:
         ValueError: If the README lacks the markers.
     """
-    path = ctx.repo / ctx.settings.readme
-    text = path.read_text()
-    start, end = text.find(README_MESHES_START), text.find(README_MESHES_END)
-    if start < 0 or end < start:
-        raise ValueError(
-            f"{path} lacks the {README_MESHES_START!r} ... {README_MESHES_END!r} markers"
-        )
     rows = _rows(ctx)
     compared = COMPARED_LABEL.key
     first = rows[(compared, Variant.GLB_QUANTIZED.value)]
@@ -205,5 +199,4 @@ def readme_meshes(ctx: "Context") -> None:
         lines.append(
             f"| {variant.heading} | {int(row['bytes']) / _MEGA:.1f} MB | {shown} | {variant.use} |"
         )
-    table = "\n".join([README_MESHES_START, *lines, README_MESHES_END])
-    _ = path.write_text(text[:start] + table + text[end + len(README_MESHES_END) :])
+    replace_section(ctx.repo / ctx.settings.readme, README_MESHES_START, README_MESHES_END, lines)

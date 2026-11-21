@@ -38,10 +38,14 @@ A local annotation page, ready for whoever can provide expert labels:
 
 ![Annotation tool](screenshots/05-annotation-tool.png)
 
-The web page (`pybones serve`): segmentations, a segmentation run with its live progress, and the
-meshes of the whole stack in 3D (bone see-through, vessels in red, bursts in blue):
+The web page (`pybones serve`): segmentations, the jobs that built the meshes, and the meshes of the
+whole stack in 3D (bone see-through, vessels in red, bursts in blue):
 
 ![Web page](screenshots/06-web-page.png)
+
+The Network tab after measuring the sample, and its centrelines (yellow) drawn over the vessels in 3D:
+
+![Vascular network](screenshots/07-network.png)
 
 ## VERSION
 
@@ -78,6 +82,7 @@ uv sync
 uv run pybones segment data/data_set.zip -o output/run
 uv run pybones preview output/run -z 50 --scale 0.5 -o slice50.png
 uv run pybones mesh output/run --label vessel -o vessels.stl   # or vessels.glb
+uv run pybones quantify output/run                              # vessel network, files in output/run
 ```
 
 `pybones` (or `python -m pybones`) is the single entry point; see `pybones --help`.
@@ -89,14 +94,15 @@ uv run pybones serve
 ```
 
 Then open **<http://127.0.0.1:8000>** in a browser (Ctrl+C in the terminal stops the server): segment a
-stack and follow its progress, scroll through its slices with the labels overlaid, and turn its meshes
-around in 3D. The HTTP API behind the page is documented, and can be tried request by request, at
+stack and follow its progress, scroll through its slices with the labels overlaid, turn its meshes
+around in 3D, and measure its vessel network (Network tab; centrelines drawn in 3D). The HTTP API behind the page is documented, and can be tried request by request, at
 **<http://127.0.0.1:8000/docs>** (FastAPI's Swagger UI). Details: [INSTALL.md](INSTALL.md#web-server).
 
 ## INSTALLATION
 
 Prerequisites per OS (Debian/Ubuntu, Arch Linux, Windows), installation with uv or pip, the dataset,
-every command, the tools and how to build the report: [INSTALL.md](INSTALL.md).
+every command, the tools and how to build the report: [INSTALL.md](INSTALL.md), which starts with a
+[from-scratch walkthrough](INSTALL.md#from-scratch).
 
 ## HOW IT WORKS
 
@@ -109,6 +115,25 @@ every command, the tools and how to build the report: [INSTALL.md](INSTALL.md).
 4. **3D refinement**: ambiguous blobs are decided by what they touch in 3D (vessel, bone, nothing) and
    by their shape (a plate is never a vessel); 3D specks are removed.
 5. **Meshing**: marching cubes, Taubin smoothing, STL or GLB files in µm.
+6. **Vascular network** (`pybones quantify`, or the page's Network tab): the vessel mask, its cavities
+   filled, is thinned to one-voxel centrelines (scikit-image); touching centreline voxels become a
+   graph of branches between junctions and ends. Spurs shorter than the vessel's width, specks and
+   rings are pruned, and forks closer than their radii merge, in µm. Each branch gets its length,
+   chord, tortuosity and radius (distance from the centreline to the wall); ends against a face of
+   the stack or a burst are flagged, their branches truncated. Three files land next to the labels:
+   `network.json` (summary and nodes), `branches.csv` (one row per branch) and `centrelines.npz`.
+   On the sample: 17 s, 1.2 GB; 680 mm of vessels in 12,072 branches, median radius 6.7 µm.
+
+   Its three 3D steps are interchangeable (`quantification.backends`; both give the same result,
+   tested against each other and against brute force):
+
+   | Step | Backend | Pros / cons (sample stack) |
+   |---|---|---|
+   | Cavities | `pybones` (default) | no extra dependency, one slice at a time; 6 s |
+   | Cavities | `scipy` | one library call, 6 s here, but iterative and several full-size temporaries |
+   | Centrelines | `scikit-image` | topology-preserving thinning; 9 s, ~1.1 GB (whole volume in memory) |
+   | Distances | `pybones` (default) | exact, 0.4 s, one slice at a time; square pixels only |
+   | Distances | `scipy` | exact for any voxel shape, an independent cross-check; ~100× slower (39 s) |
 
 Everything is physical (µm): change `acquisition.voxel_size_um` and every kernel follows. Every value
 lives in one JSON configuration, validated by pydantic.
@@ -128,7 +153,7 @@ lives in one JSON configuration, validated by pydantic.
     of a voxel on the sample (measured below); `32` stores exact floats.
 
 <!-- meshes:start (written by python -m tools.report figures) -->
-The vessel mesh of the sample (1.35 million points, 2.69 million triangles), with pyBones 0.5.0:
+The vessel mesh of the sample (1.35 million points, 2.69 million triangles), with pyBones 0.6.0:
 
 | Format | Size | Largest position error | Use |
 |---|---|---|---|
@@ -145,7 +170,7 @@ No expert ground truth exists for this scan, so [tools/phantom](tools/phantom/) 
 noisy like the real scan.
 
 <!-- scores:start (written by python -m tools.report figures) -->
-| Phantom (0.5.0) | Dice | Precision | Recall |
+| Phantom (0.6.0) | Dice | Precision | Recall |
 |---|---|---|---|
 | Bone | 0.989 | 0.994 | 0.984 |
 | Vessel | 0.851 | 0.821 | 0.884 |
@@ -171,7 +196,7 @@ src/pybones/
   api/            operations as functions, background jobs (progress, cancellation, events)
   server/         local web server (FastAPI): HTTP API over api/, and the web page (static/:
                   HTML, CSS, JavaScript modules, three.js 0.187 vendored)
-tools/            annotation page, synthetic phantom, report benchmark & figures
+tools/            annotation page, synthetic phantom, report benchmark & figures, check runner
 tests/            mirrors src/ and tools/ (pytest, synthetic data)
 docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it compares against
 ```
@@ -190,6 +215,23 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
 - **No expert validation**: the phantom is realistic but synthetic. The annotation tool is ready for
   anyone who can label real crops.
 - **One sample**: pyBones has only ever seen this one scan.
+
+**Vascular network**
+
+- **Junctions where vessels touch bone**: the vessel mask bulges there, and the centreline forks into
+  the bulge. On the network phantom, most of the measured junctions of the segmentation are not
+  real forks (26 of 54 true forks found, 90 others; chapter 6 of the report). Counts of junctions and
+  branches are therefore upper bounds; lengths are reliable (within 1 % of the truth on the phantom).
+- **Radius bias depends on the calibre**: thin vessels read about 0.8 µm wide of the truth, thick ones
+  about 1.6 µm narrow, so no single correction applies and none is made. Radii also come in steps of
+  the voxel grid (√k × 3 µm).
+- **Crossings look like forks**: two vessels touching in the mask are joined in the network.
+- **Branches cut by the stack** are counted but truncated (flagged in `branches.csv`): on a 300 µm
+  thick stack, many are.
+- **Spurs are judged at their fork**: a branch shorter than about twice the widest radius at its
+  junction is taken for a bump of the surface. Short real side branches of thick vessels are lost;
+  forks are not invented.
+- **Whole stack only**: no regions (cortex, marrow) yet.
 
 **Other scans**
 
@@ -235,14 +277,18 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
   ones (their results stay on disk). The page remembers the last segmentation viewed in this browser
   only.
 - **One job at a time** by default (`jobs.max_concurrent`): a segmentation takes ~1.7 GB of RAM.
+- **Browser caches**: the page's files are checked on every load, so an update is never missed; a
+  browser that kept them before this rule (pyBones 0.5) may need one hard refresh (Ctrl+Shift+R).
+- **Centrelines in 3D** are drawn as points over the meshes, one pixel each: zoomed out, the whole
+  stack's centrelines (about 220,000 points on the sample) cover much of the view.
 - **Cached meshes are not rebuilt by themselves**: a mesh is built once per label and format and kept
   next to its segmentation; after changing the mesh settings (grid, smoothing, precision), build it
   again (`POST` its address) to refresh it.
 
 ## POSSIBLE FUTURE UPDATES
 
-- Vascular quantification (the original goal): centrelines, network graph, node / branch counts,
-  calibre and branch lengths.
+- Vascular network: measures per region (cortex, marrow), and junctions cleaned where vessels touch
+  bone.
 - Bridging small vessel gaps (clots) along the vessel direction.
 - Web page: the raw slice without overlay, measurements in 3D (distances, a picked vessel's calibre),
   and the configuration of a run as a form built from its schema (`GET /api/config/schema`).

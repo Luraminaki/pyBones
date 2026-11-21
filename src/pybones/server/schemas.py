@@ -101,6 +101,7 @@ class SegmentationSummary(Body):
         voxel_size_um: Voxel size it was made with, ``(z, y, x)`` in µm.
         label_fractions: Fraction of the volume per label key.
         meshes: Formats ready to download, by label key (labels without a mesh omitted).
+        quantified: Whether its vessel network was measured (summary and centrelines ready).
     """
 
     id: str
@@ -110,6 +111,7 @@ class SegmentationSummary(Body):
     voxel_size_um: tuple[float, float, float]
     label_fractions: dict[str, float]
     meshes: dict[str, list[str]]
+    quantified: bool
 
 
 class SegmentationRequest(Body):

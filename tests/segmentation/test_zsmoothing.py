@@ -7,6 +7,7 @@ import pytest
 
 from pybones.segmentation.labels import Label
 from pybones.segmentation.zsmoothing import majority_vote, z_majority
+from tests.helpers import truncated_window
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -51,7 +52,6 @@ def test_z_majority_streaming_matches_offline(window: int) -> None:
     slices = [rng.integers(0, len(Label), (8, 8), dtype=np.uint8) for _ in range(9)]
     out = list(z_majority(iter(slices), window))
     assert len(out) == len(slices)
-    half = window // 2
     for z, got in enumerate(out):
-        lo, hi = max(0, z - half), min(len(slices), z + half + 1)
+        lo, hi = truncated_window(z, window, len(slices))
         np.testing.assert_array_equal(got, reference_vote(slices[lo:hi], z - lo))

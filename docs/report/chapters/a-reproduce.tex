@@ -2,12 +2,12 @@
 \label{chap:reproduce}
 
 Everything below runs from the repository root, with the dataset saved as
-\code{data/data\_set.zip} (see \code{INSTALL.md}).
+\code{data/data\_set.zip}, and needs uv and git (see \code{INSTALL.md}, which also explains how to
+install the project from scratch).
 
 \begin{enumerate}
-  \item Segment the stack and generate the phantom:
+  \item Generate the phantom (the stack itself is segmented by the next step):
 \begin{verbatim}
-uv run pybones segment data/data_set.zip -o output/latest
 uv run python -m tools.phantom generate -o output/phantom
 \end{verbatim}
   \item Run every version listed in \code{tools/report/config.json} on the phantom (and on the real
@@ -17,10 +17,14 @@ uv run python -m tools.report history
 \end{verbatim}
         This writes \code{docs/report/data/history.csv} and, for each version, a small extract of its
         segmentation (\code{docs/report/data/runs/}). Versions whose commit is not in the repository
-        are not run again: their archived scores and extracts are kept.
+        are not run again: their archived scores and extracts are kept. Each run records the machine
+        and the power profile it ran on; timings are only comparable when every version ran in one
+        session, under one profile, with nothing else running (Chapter~\ref{chap:performance}).
   \item Render the figures, the plot data, the history table, the mesh measurements (each label
-        meshed and written in every format, about two minutes) and the measured values
-        (\code{values.tex}), and the README screenshots and tables:
+        meshed and written in every format), the vascular network of Chapter~\ref{chap:network} (the
+        sample measured, the branching phantom generated, segmented and scored afresh) and the
+        measured values (\code{values.tex}), and the README's tables and first screenshots; about
+        two minutes:
 \begin{verbatim}
 uv run python -m tools.report figures
 \end{verbatim}
@@ -32,5 +36,5 @@ cd docs/report && latexmk -xelatex report.tex
 
 The 2018 images of Chapter~\ref{chap:legacy} and the 2018 masks used for the comparisons are stored
 in \code{docs/report/2018/}.
-The screenshots of the annotation page and of the web page were captured from the running pages in
-a headless browser (Firefox).
+The screenshots of the annotation page, of the web page and of its Network tab were captured from
+the running pages in a headless browser (Firefox).

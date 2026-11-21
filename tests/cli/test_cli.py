@@ -9,7 +9,7 @@ import pytest
 from pybones.cli import main as cli_main
 from pybones.cli.main import INTERRUPTED_EXIT_STATUS, main
 from pybones.utils.constants import BGR_CHANNELS
-from tests.helpers import N_SYNTHETIC_SLICES, SLICE_SHAPE, cli_overrides
+from tests.helpers import N_SYNTHETIC_SLICES, SLICE_SHAPE, cli_overrides, small_config
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -42,7 +42,7 @@ def test_invalid_config_exits_with_usage_error() -> None:
 
 
 def test_full_cli_workflow(slice_dir: "Path", tmp_path: "Path") -> None:
-    """Segment, preview, mesh, export and compare, end to end."""
+    """Segment, preview, mesh, export, compare and quantify, end to end."""
     seg = tmp_path / "seg"
     preview = tmp_path / "p.png"
     run("segment", str(slice_dir), "-o", str(seg))
@@ -55,6 +55,10 @@ def test_full_cli_workflow(slice_dir: "Path", tmp_path: "Path") -> None:
     run("export", str(seg), "--label", "vessel", "-o", str(tmp_path / "png"))
     assert len(list((tmp_path / "png").iterdir())) == N_SYNTHETIC_SLICES
     run("compare", str(seg), "--label", "vessel", "--reference", str(tmp_path / "png"))
+    run("quantify", str(seg))
+    files = small_config().quantification.files
+    for name in (files.network_file, files.branches_file, files.centrelines_file):
+        assert (seg / name).is_file()
 
 
 def test_background_is_not_a_valid_label(tmp_path: "Path") -> None:

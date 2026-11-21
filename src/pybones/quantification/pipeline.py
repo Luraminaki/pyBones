@@ -15,6 +15,7 @@ import csv
 import json
 import logging
 import math
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -110,10 +111,7 @@ def _write_branches(path: "Path", network: "Network", measures: "BranchMeasures"
 def _write_files(
     segmentation: "Path",
     config: "QuantificationConfig",
-    network: "Network",
-    distances_um: "NDArray[np.float32]",
-    measures: "BranchMeasures",
-    summary: "NetworkSummary",
+    measured: "MeasuredNetwork",
     progress: "ProgressCallback",
 ) -> None:
     """Write the three result files under temporary names, then rename them together.
@@ -121,12 +119,11 @@ def _write_files(
     Args:
         segmentation: Segmentation folder.
         config: Quantification settings (file names, recorded with the summary).
-        network: The network.
-        distances_um: Wall distance per centreline voxel.
-        measures: Branch measures.
-        summary: Summary.
+        measured: The network and its measures.
         progress: Progress callback (the last cancellation point is before the renames).
     """
+    network, distances_um = measured.network, measured.distances_um
+    measures, summary = measured.measures, measured.summary
     files = config.files
     finals = (
         segmentation / name
@@ -157,6 +154,69 @@ def _write_files(
         progress(Stage.NETWORK, 1, 1)  # the last moment a cancellation leaves nothing behind
 
 
+@dataclass(frozen=True, slots=True)
+class MeasuredNetwork:
+    """A vessel network and its measures.
+
+    Attributes:
+        network: Nodes and branches.
+        distances_um: Wall distance of each centreline voxel.
+        measures: Per-branch measures.
+        summary: Whole-stack measures.
+    """
+
+    network: "Network"
+    distances_um: "NDArray[np.float32]"
+    measures: "BranchMeasures"
+    summary: "NetworkSummary"
+
+
+def measure_network(
+    labels: "NDArray[np.uint8]",
+    voxel_um: tuple[float, float, float],
+    config: "QuantificationConfig",
+    progress: "ProgressCallback" = no_progress,
+) -> MeasuredNetwork:
+    """Measure the vessel network of a label volume (nothing is written).
+
+    Args:
+        labels: ``(z, y, x)`` label volume (a memory map is read, never copied whole).
+        voxel_um: Voxel size ``(z, y, x)`` in µm.
+        config: Quantification settings.
+        progress: Progress callback (quantification stages; cancels between them).
+
+    Returns:
+        The network and its measures.
+    """
+    shape = (int(labels.shape[0]), int(labels.shape[1]), int(labels.shape[2]))
+
+    progress(Stage.CAVITIES, 0, 1)
+    vessels = CAVITY_FILLERS[config.backends.cavities](config).fill(
+        np.asarray(labels) == Label.VESSEL
+    )
+    progress(Stage.CAVITIES, 1, 1)
+
+    progress(Stage.SKELETON, 0, 1)
+    skeleton = SKELETONIZERS[config.backends.skeleton](config).skeletonize(vessels)
+    points = np.argwhere(skeleton).astype(np.int32)
+    del skeleton
+    progress(Stage.SKELETON, 1, 1)
+
+    progress(Stage.CALIBRE, 0, 1)
+    probe = DISTANCE_PROBES[config.backends.distances](config)
+    distances = probe.distances(vessels, points, voxel_um)
+    del vessels
+    burst_distances = probe.distances(np.asarray(labels) != Label.BURST, points, voxel_um)
+    progress(Stage.CALIBRE, 1, 1)
+
+    progress(Stage.NETWORK, 0, 1)
+    kinds = end_kinds(points, distances, burst_distances, shape, voxel_um, config.anchor_margin_um)
+    network = build_network(points, distances, kinds, shape, voxel_um, config.pruning)
+    measures = branch_measures(network, distances)
+    summary = summarize(network, measures, distances, shape, voxel_um)
+    return MeasuredNetwork(network, distances, measures, summary)
+
+
 def run_quantification(
     segmentation: "Path", config: "PyBonesConfig", progress: "ProgressCallback" = no_progress
 ) -> "NetworkSummary":
@@ -171,39 +231,20 @@ def run_quantification(
     Returns:
         The network summary.
     """
-    q = config.quantification
     voxel = load_meta(segmentation, config.io).config.acquisition.voxel_size_um
     labels = load_labels(segmentation, config.io)
-    shape = (int(labels.shape[0]), int(labels.shape[1]), int(labels.shape[2]))
-
-    progress(Stage.CAVITIES, 0, 1)
-    vessels = CAVITY_FILLERS[q.backends.cavities](q).fill(np.asarray(labels) == Label.VESSEL)
-    progress(Stage.CAVITIES, 1, 1)
-
-    progress(Stage.SKELETON, 0, 1)
-    points = np.argwhere(SKELETONIZERS[q.backends.skeleton](q).skeletonize(vessels)).astype(
-        np.int32
-    )
-    progress(Stage.SKELETON, 1, 1)
-
-    progress(Stage.CALIBRE, 0, 1)
-    probe = DISTANCE_PROBES[q.backends.distances](q)
-    distances = probe.distances(vessels, points, voxel)
-    del vessels
-    burst_distances = probe.distances(np.asarray(labels) != Label.BURST, points, voxel)
-    progress(Stage.CALIBRE, 1, 1)
-
-    progress(Stage.NETWORK, 0, 1)
-    kinds = end_kinds(points, distances, burst_distances, shape, voxel, q.anchor_margin_um)
-    network = build_network(points, distances, kinds, shape, voxel, q.pruning)
-    measures = branch_measures(network, distances)
-    summary = summarize(network, measures, distances, shape, voxel)
-    _write_files(segmentation, q, network, distances, measures, summary, progress)
+    measured = measure_network(labels, voxel, config.quantification, progress)
+    _write_files(segmentation, config.quantification, measured, progress)
+    summary = measured.summary
     logger.info(
-        "Quantified %s: %d branches, %d junctions, %.1f mm of vessels",
+        "Quantified %s: %d branches (%d truncated), %d junctions, %.1f mm of vessels "
+        + "(%.2f mm/mm³), median radius %.1f µm",
         segmentation,
         summary.branches,
+        summary.truncated_branches,
         summary.junctions,
         summary.total_length_mm,
+        summary.length_density_mm_per_mm3,
+        summary.median_radius_um,
     )
     return summary

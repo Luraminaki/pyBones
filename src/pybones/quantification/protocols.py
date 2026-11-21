@@ -36,8 +36,10 @@ Limits shared by every backend:
   the stack stays open there, and can still thin into a small surface near that face;
 * the skeleton of a 26-connected mask has staircase corners (false junctions of a few voxels)
   and short spurs from surface bumps: the network step must merge and prune them;
-* distances run between voxel centres, so they exceed a true radius by up to about half a
-  voxel, and are capped at ``max_radius_um``; the faces of the stack are not walls.
+* distances run between voxel centres: they come in steps of the voxel grid and, measured on
+  the branching phantom's exact mask, read up to about a third of a voxel short of the true
+  radius, more for thicker vessels (the report gives the error per band); they are capped at
+  ``max_radius_um``, and the faces of the stack are not walls.
 """
 
 from enum import StrEnum

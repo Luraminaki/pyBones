@@ -25,6 +25,7 @@ EXAMPLE_ARGV = {
     "mesh": ("mesh", "seg", "--label", "vessel", "-o", "v.stl"),
     "export": ("export", "seg", "--label", "vessel", "-o", "out"),
     "compare": ("compare", "seg", "--label", "vessel", "--reference", "ref"),
+    "quantify": ("quantify", "seg"),
     "serve": ("serve",),
 }
 

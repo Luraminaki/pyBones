@@ -17,8 +17,9 @@ from pybones.api.operations import (
     write_mesh_file,
 )
 from pybones.config.loader import load_server_config
+from pybones.quantification.pipeline import run_quantification
 from pybones.segmentation.pipeline import planned_stages, run_segmentation
-from pybones.segmentation.stages import MESH_STAGES, ProgressTracker
+from pybones.segmentation.stages import MESH_STAGES, QUANTIFY_STAGES, ProgressTracker
 from pybones.server.app import DOCS_PATH, create_app, server_url
 from pybones.utils.constants import JSON_INDENT
 
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
         ExportArgs,
         MeshArgs,
         PreviewArgs,
+        QuantifyArgs,
         SegmentArgs,
         ServeArgs,
     )
@@ -154,6 +156,18 @@ def cmd_compare(args: "CompareArgs", config: "PyBonesConfig") -> None:
         result.precision,
         result.recall,
     )
+
+
+def cmd_quantify(args: "QuantifyArgs", config: "PyBonesConfig") -> None:
+    """Measure the vessel network of a segmentation, with progress (the run logs its summary).
+
+    Args:
+        args: Segmentation output directory (the files are written into it).
+        config: Effective configuration (quantification settings).
+    """
+    tracker = ProgressTracker(QUANTIFY_STAGES, config.quantification.stage_weights)
+    tracker.add_listener(_print_progress)
+    _ = run_quantification(args.segmentation, config, tracker)
 
 
 def server_overrides(args: "ServeArgs") -> list[str]:

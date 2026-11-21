@@ -120,14 +120,32 @@ def test_a_fork_is_one_junction_with_three_branches() -> None:
     )
 
 
-def test_a_cross_is_one_node_of_degree_four() -> None:
-    """Two lines crossing: their touching junction voxels make a single node."""
-    voxels = line((5, 20, 5), (5, 20, 35)) + line((5, 5, 20), (5, 35, 20))
-    net = network(voxels)
+def assert_one_fork_of_four(net: "Network") -> None:
+    """Check that a network is a single junction with four branches.
+
+    Args:
+        net: The network.
+    """
     junctions = np.flatnonzero(net.node_kind == NodeKind.JUNCTION)
     assert len(junctions) == 1
     assert net.node_degree[junctions[0]] == 4
     assert len(net.branch_length_um) == 4
+
+
+def assert_one_open_branch(net: "Network") -> None:
+    """Check that a network is a single branch between two free ends.
+
+    Args:
+        net: The network.
+    """
+    assert len(net.branch_length_um) == 1
+    assert kinds_of(net) == [NodeKind.END, NodeKind.END]
+
+
+def test_a_cross_is_one_node_of_degree_four() -> None:
+    """Two lines crossing: their touching junction voxels make a single node."""
+    voxels = line((5, 20, 5), (5, 20, 35)) + line((5, 5, 20), (5, 35, 20))
+    assert_one_fork_of_four(network(voxels))
 
 
 def test_a_ring_is_a_closed_branch_without_nodes() -> None:
@@ -146,8 +164,7 @@ def test_a_short_spur_is_pruned_and_its_vessel_rejoined() -> None:
     main = line((5, 20, 5), (5, 20, 35))
     bump = [(5, 21, 20), (5, 22, 20)]
     net = network(main + bump, RULES)
-    assert len(net.branch_length_um) == 1
-    assert kinds_of(net) == [NodeKind.END, NodeKind.END]
+    assert_one_open_branch(net)
     assert net.branch_length_um[0] == pytest.approx(30.0)
     removed = [
         tuple(p)
@@ -205,10 +222,7 @@ def test_two_close_forks_become_one_node() -> None:
     main = line((5, 20, 2), (5, 20, 38))
     up, down = line((5, 21, 18), (5, 32, 18)), line((5, 19, 21), (5, 8, 21))
     net = network(main + up + down, RULES)
-    junctions = np.flatnonzero(net.node_kind == NodeKind.JUNCTION)
-    assert len(junctions) == 1
-    assert net.node_degree[junctions[0]] == 4
-    assert len(net.branch_length_um) == 4
+    assert_one_fork_of_four(net)
     kept = network(main + up + down, KEEP_ALL)
     assert (kept.node_kind == NodeKind.JUNCTION).sum() == 2  # without the rule: two forks
     total = net.branch_length_um.sum() + net.node_length_um.sum()
@@ -220,5 +234,4 @@ def test_a_small_ring_at_a_fork_is_removed() -> None:
     main = line((5, 20, 2), (5, 20, 38))
     loop = [(5, 21, 19), (5, 22, 20), (5, 21, 21)]  # leaves the line at x=19, back at x=21
     net = network(main + loop, RULES)
-    assert len(net.branch_length_um) == 1
-    assert kinds_of(net) == [NodeKind.END, NodeKind.END]
+    assert_one_open_branch(net)

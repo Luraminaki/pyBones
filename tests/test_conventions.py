@@ -7,6 +7,8 @@
   fixtures, documented where they are defined).
 * Names are imported from the module that defines them, never through another
   module that happens to import them.
+* No module, Python or JavaScript, grows past :data:`MAX_LINES`: a longer one is split by
+  responsibility.
 """
 
 import ast
@@ -26,6 +28,11 @@ PROPERTY_DECORATORS = {"property", "cached_property"}
 #: Decorators of pydantic validators (raising is how they report errors).
 VALIDATOR_DECORATORS = {"field_validator", "model_validator"}
 TEST_PREFIX = "test_"
+#: Longest module allowed (owner's rule): split by responsibility beyond it.
+MAX_LINES = 500
+#: JavaScript of the project (the vendored three.js is not ours).
+SCRIPT_SUFFIXES = (".js", ".mjs")
+VENDOR_DIR = "vendor"
 _SECTION_ENTRY = re.compile(r"^\s{4}(\*{0,2}\w+)(?: \(.*?\))?:", re.MULTILINE)
 
 Function = ast.FunctionDef | ast.AsyncFunctionDef
@@ -237,3 +244,26 @@ def test_names_are_imported_from_their_defining_module(path: Path) -> None:
             if alias.name not in names and module_path(f"{node.module}.{alias.name}") is None
         ]
     assert not problems, "\n".join(problems)
+
+
+def project_files() -> list[Path]:
+    """List the project's own modules, Python and JavaScript.
+
+    Returns:
+        Every ``.py``, ``.js`` and ``.mjs`` file of :data:`SOURCE_DIRS` outside vendored code.
+    """
+    scripts = (
+        p
+        for d in SOURCE_DIRS
+        for suffix in SCRIPT_SUFFIXES
+        for p in (ROOT / d).rglob(f"*{suffix}")
+        if VENDOR_DIR not in p.relative_to(ROOT).parts
+    )
+    return sorted([*python_files(), *scripts])
+
+
+@pytest.mark.parametrize("path", project_files(), ids=relative)
+def test_modules_stay_short(path: Path) -> None:
+    """No module grows past :data:`MAX_LINES` lines."""
+    lines = len(path.read_text().splitlines())
+    assert lines <= MAX_LINES, f"{lines} lines: split it by responsibility"

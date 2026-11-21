@@ -107,6 +107,7 @@
           <div class="tabs" role="tablist" aria-label="View">
             <button type="button" role="tab" id="tab-slices" aria-controls="panel-slices" aria-selected="true">Slices</button>
             <button type="button" role="tab" id="tab-3d" aria-controls="panel-3d" aria-selected="false">3D</button>
+            <button type="button" role="tab" id="tab-network" aria-controls="panel-network" aria-selected="false">Network</button>
           </div>
         </div>
 
@@ -135,6 +136,23 @@
             always moves it; the wheel, a two-finger swipe or + / − zoom; the arrow keys move it once the
             view has the focus. On a touch screen: one finger turns or moves, two fingers move and pinch
             to zoom. Coordinates in µm.
+          </p>
+        </div>
+
+        <div id="panel-network" role="tabpanel" aria-labelledby="tab-network" class="tab-panel" hidden>
+          <div class="network-head">
+            <button id="quantify" type="button">Quantify</button>
+            <span id="network-status" class="job-detail" role="status"></span>
+          </div>
+          <dl id="network-stats" class="stats" hidden></dl>
+          <p class="hint">
+            The vessels are thinned to their centrelines, which become a network of branches between
+            junctions and ends; short spurs and specks are pruned. A branch cut by a face of the stack
+            is counted but truncated. Radii are the distance from the centreline to the wall: within
+            half a voxel, thin vessels slightly wide and thick ones slightly narrow. Where a vessel
+            touches the bone, the mask bulges and adds junctions that are not forks. The files
+            (network.json, branches.csv, centrelines.npz) are in the segmentation folder; the 3D tab
+            draws the centrelines.
           </p>
         </div>
       </div>

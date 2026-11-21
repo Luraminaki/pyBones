@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { dispose, releaseAfterUpload, triangles } from '../../src/pybones/server/static/js/mesh_memory.js';
+import { discard, dispose, releaseAfterUpload, triangles } from '../../src/pybones/server/static/js/mesh_memory.js';
 
 // A buffer attribute that records its upload callback, like three.js' BufferAttribute.
 function attribute(count) {
@@ -60,4 +60,12 @@ test('dispose frees the geometry and the material of every mesh', () => {
   const items = [mesh({ attributes: {} }), mesh({ attributes: {} })];
   dispose(scene(...items, { isMesh: false }));
   for (const item of items) assert.deepEqual(item.disposed, ['geometry', 'material']);
+});
+
+test('discard takes the object out of the scene and frees it', () => {
+  const item = mesh({ attributes: {} });
+  const removed = [];
+  discard({ remove(object) { removed.push(object); } }, scene(item));
+  assert.equal(removed.length, 1);
+  assert.deepEqual(item.disposed, ['geometry', 'material']);
 });

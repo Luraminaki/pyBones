@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from pybones.cli.main import main as pybones_main
 from pybones.segmentation.labels import FINAL_LABELS, Label
-from tests.helpers import cli_overrides
+from tests.helpers import cli_overrides, small_phantom_settings
 from tools.phantom.__main__ import main as phantom_main
 from tools.phantom.generator import render_phantom
 from tools.phantom.scoring import score_phantom
@@ -31,7 +31,7 @@ SHAPE = (24, 96, 96)
 
 
 def small_settings(**updates: object) -> PhantomSettings:
-    """Shrink the default phantom so that it renders in a fraction of a second.
+    """Shrink the default phantom to this module's shape.
 
     Args:
         **updates: Top-level settings to replace.
@@ -39,13 +39,7 @@ def small_settings(**updates: object) -> PhantomSettings:
     Returns:
         The validated settings.
     """
-    data = json.loads(load_settings().model_dump_json())
-    data["shape_zyx"] = list(SHAPE)
-    data["trabeculae"].update(plates=3, rods=4)
-    data["vessels"].update(count=6)
-    data["bursts"].update(count=1, radius_um=[40, 50])
-    data.update(updates)
-    return PhantomSettings.model_validate(data)
+    return small_phantom_settings(SHAPE, **updates)
 
 
 @pytest.fixture(scope="module")

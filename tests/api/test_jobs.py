@@ -8,14 +8,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from pybones.api.job_status import MESH_JOB, JobState, UnknownJobError
+from pybones.api.job_status import MESH_JOB, QUANTIFICATION_JOB, JobState, UnknownJobError
 from pybones.api.jobs import JobManager, put_latest
 from pybones.api.operations import MeshFile
 from pybones.config.loader import load_config
+from pybones.quantification.measures import NetworkSummary
 from pybones.segmentation.labels import Label
 from pybones.segmentation.pipeline import run_segmentation
 from pybones.segmentation.results import SegmentationMeta
-from pybones.segmentation.stages import STAGES_2D, CancelledError, Stage
+from pybones.segmentation.stages import QUANTIFY_STAGES, STAGES_2D, CancelledError, Stage
 from tests.helpers import small_config
 
 if TYPE_CHECKING:
@@ -78,6 +79,21 @@ def blocked_job(
     return work
 
 
+def start_blocked(manager: JobManager) -> tuple[str, threading.Event]:
+    """Submit a blocked job and wait until it runs.
+
+    Args:
+        manager: Job manager.
+
+    Returns:
+        The job id, and the event that lets it finish.
+    """
+    release, started = threading.Event(), threading.Event()
+    job_id = manager.submit("test", blocked_job(release, started), STAGES_2D, WEIGHTS)
+    assert started.wait(WAIT_S)
+    return job_id, release
+
+
 def test_segmentation_job_runs_to_completion(
     manager: JobManager, slice_dir: "Path", tmp_path: "Path"
 ) -> None:
@@ -96,9 +112,7 @@ def test_segmentation_job_runs_to_completion(
 
 def test_queued_job_can_be_cancelled_before_it_starts(manager: JobManager) -> None:
     """With one worker busy, a queued job is cancelled without ever running."""
-    release, started = threading.Event(), threading.Event()
-    first = manager.submit("test", blocked_job(release, started), STAGES_2D, WEIGHTS)
-    assert started.wait(WAIT_S)
+    first, release = start_blocked(manager)
     second = manager.submit(
         "test", blocked_job(threading.Event(), threading.Event()), STAGES_2D, WEIGHTS
     )
@@ -121,9 +135,7 @@ def test_queued_job_can_be_cancelled_before_it_starts(manager: JobManager) -> No
 
 def test_a_queued_job_counts_its_time_from_its_start(manager: JobManager) -> None:
     """The wait for a worker is not part of a job's elapsed time (nor of its time left)."""
-    release, started = threading.Event(), threading.Event()
-    first = manager.submit("test", blocked_job(release, started), STAGES_2D, WEIGHTS)
-    assert started.wait(WAIT_S)
+    first, release = start_blocked(manager)
     second_release, second_started = threading.Event(), threading.Event()
     second = manager.submit("test", blocked_job(second_release, second_started), STAGES_2D, WEIGHTS)
     submitted = time.monotonic()
@@ -141,9 +153,7 @@ def test_a_queued_job_counts_its_time_from_its_start(manager: JobManager) -> Non
 
 def test_running_job_stops_at_its_next_update(manager: JobManager) -> None:
     """A running job is cancelled at its next progress update."""
-    release, started = threading.Event(), threading.Event()
-    job_id = manager.submit("test", blocked_job(release, started), STAGES_2D, WEIGHTS)
-    assert started.wait(WAIT_S)
+    job_id, release = start_blocked(manager)
     status = manager.status(job_id)
     assert status.state == JobState.RUNNING
     assert status.progress is not None
@@ -233,9 +243,7 @@ def test_progress_events_are_throttled(slice_dir: "Path", tmp_path: "Path") -> N
 
 def test_events_of_a_cancelled_job_end_with_cancelled(manager: JobManager) -> None:
     """A follower learns that the job was cancelled, then the stream ends."""
-    release, started = threading.Event(), threading.Event()
-    job_id = manager.submit("test", blocked_job(release, started), STAGES_2D, WEIGHTS)
-    assert started.wait(WAIT_S)
+    job_id, release = start_blocked(manager)
     stream = manager.events(job_id)
     assert next(stream).state == JobState.RUNNING
     manager.cancel(job_id)
@@ -245,9 +253,7 @@ def test_events_of_a_cancelled_job_end_with_cancelled(manager: JobManager) -> No
 
 def test_slow_subscribers_lose_the_oldest_snapshots(manager: JobManager) -> None:
     """A full queue drops its oldest status to keep the newest."""
-    release, started = threading.Event(), threading.Event()
-    job_id = manager.submit("test", blocked_job(release, started), STAGES_2D, WEIGHTS)
-    assert started.wait(WAIT_S)
+    job_id, release = start_blocked(manager)
     statuses = [manager.status(job_id).model_copy(update={"error": str(i)}) for i in range(3)]
     events: queue.Queue[JobStatus] = queue.Queue(maxsize=2)
     for status in statuses:
@@ -276,9 +282,7 @@ def test_mesh_job_writes_the_stl_file(
 
 def test_events_repeat_the_status_when_idle(manager: JobManager) -> None:
     """With a heartbeat, a quiet job's status is repeated instead of blocking forever."""
-    release, started = threading.Event(), threading.Event()
-    job_id = manager.submit("test", blocked_job(release, started), STAGES_2D, WEIGHTS)
-    assert started.wait(WAIT_S)
+    job_id, release = start_blocked(manager)
     stream = manager.events(job_id, heartbeat_s=0.01)
     first, repeated = next(stream), next(stream)
     assert first.state == repeated.state == JobState.RUNNING
@@ -310,3 +314,20 @@ def test_a_finished_job_keeps_its_duration(manager: JobManager) -> None:
     assert later is not None
     assert later.elapsed_s == first.elapsed_s
     assert later.remaining_s == 0.0
+
+
+def test_quantification_job_writes_the_network(
+    manager: JobManager, slice_dir: "Path", tmp_path: "Path"
+) -> None:
+    """A quantification job reports its four stages and returns the network summary."""
+    config = small_config()
+    seg = tmp_path / "seg"
+    _ = run_segmentation(slice_dir, seg, config)
+    job_id = manager.submit_quantification(seg, config)
+    summary = manager.result(job_id, WAIT_S)
+    status = manager.status(job_id)
+    assert isinstance(summary, NetworkSummary)
+    assert (status.kind, status.state) == (QUANTIFICATION_JOB, JobState.SUCCEEDED)
+    assert status.progress is not None
+    assert status.progress.stage_count == len(QUANTIFY_STAGES)
+    assert (seg / config.quantification.files.network_file).is_file()

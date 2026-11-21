@@ -14,7 +14,7 @@ from pybones.segmentation.classifier import (
     upsample_grid,
 )
 from pybones.segmentation.labels import Label
-from tests.helpers import small_params
+from tests.helpers import small_params, truncated_window
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -77,19 +77,28 @@ def test_3d_core_is_the_mean_density_over_the_window(window_z: int) -> None:
     dens = rng.random((9, *grid_shape(params)))
     out = list(iter_burst_cores(features_from_densities(dens), params))
     assert len(out) == len(dens)
-    half = window_z // 2
     for z, (_, core) in enumerate(out):
-        lo, hi = max(0, z - half), min(len(dens), z + half + 1)
+        lo, hi = truncated_window(z, window_z, len(dens))
         core_3d = dens[lo:hi].mean(axis=0) >= params.burst_density
         core_2d = dens[z] >= params.burst_density
         np.testing.assert_array_equal(core, upsample_grid(core_3d | core_2d, params, SHAPE))
 
 
-def test_sparse_end_of_cluster_is_caught_in_3d_only() -> None:
-    """A sparse slice at the tip of a dense cluster is a burst thanks to the 3D box."""
+def dense_cluster_below_slice_2() -> "tuple[PixelParams, NDArray[np.float64]]":
+    """A dense burst cluster on slices 0 and 1 of a three-slice stack, 3D window of 3 slices.
+
+    Returns:
+        The parameters, and the burst density per grid cell (slice 2 left empty).
+    """
     params = small_params(f"segmentation.burst.window_z_um={3 * SLICE_UM}")
     dens = np.zeros((3, *grid_shape(params)))
     dens[0:2, 2:6, 2:6] = 0.9
+    return params, dens
+
+
+def test_sparse_end_of_cluster_is_caught_in_3d_only() -> None:
+    """A sparse slice at the tip of a dense cluster is a burst thanks to the 3D box."""
+    params, dens = dense_cluster_below_slice_2()
     dens[2, 2:6, 2:6] = 0.2  # the cluster's tip: sparse cross-section
     cores = [core for _, core in iter_burst_cores(features_from_densities(dens), params)]
     gy, gx = params.burst_grid
@@ -100,9 +109,7 @@ def test_sparse_end_of_cluster_is_caught_in_3d_only() -> None:
 
 def test_3d_core_needs_contrast_agent_in_the_slice() -> None:
     """The 3D core does not paint a slice that holds no contrast agent (the guard)."""
-    params = small_params(f"segmentation.burst.window_z_um={3 * SLICE_UM}")
-    dens = np.zeros((3, *grid_shape(params)))
-    dens[0:2, 2:6, 2:6] = 0.9  # dense below; slice 2 has no bright pixel at all
+    params, dens = dense_cluster_below_slice_2()  # slice 2 has no bright pixel at all
     feats = features_from_densities(dens)
     feats[2] = SliceFeatures(masks(np.zeros(SHAPE, bool)), dens[2].astype(np.float32))
     cores = [core for _, core in iter_burst_cores(feats, params)]

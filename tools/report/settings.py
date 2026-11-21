@@ -176,6 +176,23 @@ class FigureSettings(_Section):
         return self
 
 
+class NetworkReport(_Section):
+    """The vascular network measured for the report: real sample and branching phantom.
+
+    Attributes:
+        phantom_settings: Settings of the branching phantom (``tools/phantom`` format).
+        work_dir: Where that phantom and its segmentation are generated, afresh each time.
+        tolerance_um: Distance under which a centreline voxel and a true centreline agree.
+        junction_tolerance_um: Distance under which a measured fork matches a true one (plus
+            the parent vessel's radius).
+    """
+
+    phantom_settings: NonEmpty
+    work_dir: NonEmpty
+    tolerance_um: float = Field(gt=0.0, le=1000.0)
+    junction_tolerance_um: float = Field(gt=0.0, le=1000.0)
+
+
 class ReportSettings(_Section):
     """Root of ``tools/report/config.json`` (paths relative to the repository root).
 
@@ -196,6 +213,7 @@ class ReportSettings(_Section):
         history_csv: Score table, in ``data_dir``.
         versions: Versions to benchmark, oldest first.
         figures: Figure settings.
+        network: The vascular network section of the report.
     """
 
     uv_executable: NonEmpty
@@ -213,6 +231,7 @@ class ReportSettings(_Section):
     history_csv: Annotated[str, Field(pattern=r"\.csv$")]
     versions: tuple[Version, ...] = Field(min_length=1)
     figures: FigureSettings
+    network: NetworkReport
 
     @model_validator(mode="after")
     def _consistent_keys(self) -> Self:

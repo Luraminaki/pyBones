@@ -6,6 +6,8 @@ them, so every timed run records the machine it ran on.
 
 import os
 import platform
+import shutil
+import subprocess
 from pathlib import Path
 from typing import ClassVar
 
@@ -19,6 +21,11 @@ _BYTES_PER_GIB = 1 << 30
 #: Key of the distribution's display name in ``/etc/os-release``.
 _PRETTY_NAME = "PRETTY_NAME"
 _UNKNOWN = "unknown"
+#: Where the power profile is read (timings depend on it: power-saver mode made a run look
+#: 40 % slower): the firmware's platform profile, else the power-profiles daemon.
+PLATFORM_PROFILE = Path("/sys/firmware/acpi/platform_profile")
+POWER_PROFILES_COMMAND = ("powerprofilesctl", "get")
+_COMMAND_TIMEOUT_S = 5
 
 
 class Machine(BaseModel):
@@ -30,6 +37,7 @@ class Machine(BaseModel):
         memory_gib: Physical memory, in GiB (0 if unknown).
         system: Operating system.
         python: Python version that ran the benchmark tool.
+        power_profile: Power profile while it ran (``unknown`` where the system cannot tell).
     """
 
     model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
@@ -39,6 +47,7 @@ class Machine(BaseModel):
     memory_gib: float
     system: str
     python: str
+    power_profile: str
 
 
 def cpu_model() -> str:
@@ -84,6 +93,30 @@ def system_name() -> str:
     return f"{distribution} (Linux {platform.release()})"
 
 
+def power_profile() -> str:
+    """Name the power profile in use (balanced, performance, power-saver...).
+
+    Returns:
+        The firmware's platform profile, else the power-profiles daemon's, else ``unknown``.
+    """
+    if PLATFORM_PROFILE.is_file():
+        return PLATFORM_PROFILE.read_text().strip() or _UNKNOWN
+    executable = shutil.which(POWER_PROFILES_COMMAND[0])
+    if executable is None:
+        return _UNKNOWN
+    try:  # another program: it may fail or hang
+        result = subprocess.run(
+            [executable, *POWER_PROFILES_COMMAND[1:]],
+            capture_output=True,
+            text=True,
+            timeout=_COMMAND_TIMEOUT_S,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return _UNKNOWN
+    return result.stdout.strip() or _UNKNOWN
+
+
 def current_machine() -> Machine:
     """Describe the machine running this process.
 
@@ -96,4 +129,5 @@ def current_machine() -> Machine:
         memory_gib=memory_gib(),
         system=system_name(),
         python=platform.python_version(),
+        power_profile=power_profile(),
     )

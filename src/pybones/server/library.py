@@ -5,6 +5,7 @@ the data or output folder (:data:`~pybones.server.schemas.ID_PATTERN`), and ever
 id is resolved here, inside its folder.
 """
 
+import json
 import logging
 import re
 import zipfile
@@ -12,8 +13,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import numpy as np
+from pydantic import ValidationError
+
 from pybones.io.slices import SliceStack
 from pybones.meshing.formats import MeshFormat
+from pybones.quantification.measures import NetworkSummary
 from pybones.segmentation.labels import FOREGROUND_LABELS
 from pybones.segmentation.results import IncompatibleOutputError, load_meta
 from pybones.server.schemas import (
@@ -25,12 +30,18 @@ from pybones.server.schemas import (
 )
 
 if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
+    from pybones.config.quantification import QuantificationFiles
     from pybones.config.schema import IOConfig
     from pybones.config.server import LibraryConfig
     from pybones.segmentation.labels import Label
     from pybones.segmentation.results import SegmentationMeta
 
 _ID_RE = re.compile(ID_PATTERN)
+#: Keys of the quantification files read here (see :mod:`pybones.quantification.pipeline`).
+_SUMMARY_KEY = "summary"
+_POINTS_KEY = "points"
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +74,7 @@ class Library:
         data_dir: Absolute data folder.
         output_dir: Absolute output folder.
         io: File names of the segmentation outputs and slice discovery rules.
+        network_files: File names of the quantification outputs.
         mesh_file_template: Name of a cached mesh inside its segmentation (``{label}``,
             ``{format}``).
         shapes: Shape of each stack already read, with the modification time and size it
@@ -72,18 +84,22 @@ class Library:
     data_dir: Path
     output_dir: Path
     io: "IOConfig"
+    network_files: "QuantificationFiles"
     mesh_file_template: str
     shapes: "dict[Path, tuple[int, int, tuple[int, int, int] | None]]" = field(
         default_factory=dict, compare=False
     )
 
     @classmethod
-    def from_config(cls, config: "LibraryConfig", io: "IOConfig") -> "Library":
+    def from_config(
+        cls, config: "LibraryConfig", io: "IOConfig", network_files: "QuantificationFiles"
+    ) -> "Library":
         """Build the library, resolving relative folders against the working directory.
 
         Args:
             config: Folders and mesh file name.
             io: File names of the segmentation outputs.
+            network_files: File names of the quantification outputs.
 
         Returns:
             The library.
@@ -92,6 +108,7 @@ class Library:
             data_dir=Path(config.data_dir).resolve(),
             output_dir=Path(config.output_dir).resolve(),
             io=io,
+            network_files=network_files,
             mesh_file_template=config.mesh_file_template,
         )
 
@@ -247,6 +264,7 @@ class Library:
             for label in FOREGROUND_LABELS
         }
         meshes = {key: formats for key, formats in meshes.items() if formats}
+        folder = self.segmentation_path(segmentation_id)
         return SegmentationSummary(
             id=segmentation_id,
             source=meta.source,
@@ -255,7 +273,78 @@ class Library:
             voxel_size_um=meta.config.acquisition.voxel_size_um,
             label_fractions=meta.label_fractions,
             meshes=meshes,
+            quantified=(folder / self.network_files.network_file).is_file(),
         )
+
+    def _quantification_file(self, segmentation_id: str, name: str) -> Path:
+        """Locate a file of a segmentation's quantification.
+
+        Args:
+            segmentation_id: Segmentation id.
+            name: File name (see :attr:`network_files`).
+
+        Returns:
+            Its path.
+
+        Raises:
+            NotFoundError: If the segmentation was not quantified.
+        """
+        path = self.segmentation_path(segmentation_id) / name
+        if not path.is_file():
+            raise NotFoundError(f"{segmentation_id!r} is not quantified yet")
+        return path
+
+    def network(self, segmentation_id: str) -> NetworkSummary:
+        """Read the summary of a segmentation's vessel network.
+
+        Args:
+            segmentation_id: Segmentation id.
+
+        Returns:
+            The summary written by its last quantification.
+
+        Raises:
+            NotFoundError: If the segmentation was not quantified.
+            IncompatibleOutputError: If the file is damaged or in another format.
+        """
+        path = self._quantification_file(segmentation_id, self.network_files.network_file)
+        try:  # file content: damaged, or written by an older quantification
+            record = json.loads(path.read_text())
+            summary = record.get(_SUMMARY_KEY) if isinstance(record, dict) else None
+            return NetworkSummary.model_validate(summary)
+        except (json.JSONDecodeError, ValidationError) as exc:
+            raise IncompatibleOutputError(
+                f"the network of {segmentation_id!r} cannot be read: quantify again"
+            ) from exc
+
+    def centreline_path(self, segmentation_id: str) -> Path:
+        """Locate the centreline file of a segmentation.
+
+        Args:
+            segmentation_id: Segmentation id.
+
+        Returns:
+            Its path.
+
+        Raises:
+            NotFoundError: If the segmentation was not quantified.
+        """
+        return self._quantification_file(segmentation_id, self.network_files.centrelines_file)
+
+    def centreline_points_um(self, segmentation_id: str) -> "NDArray[np.float32]":
+        """Read the centreline voxels of a segmentation as points, for drawing.
+
+        Args:
+            segmentation_id: Segmentation id.
+
+        Returns:
+            ``(N, 3)`` voxel centres in µm, ``(x, y, z)`` order like the meshes.
+        """
+        path = self.centreline_path(segmentation_id)
+        voxel = np.asarray(self.meta(segmentation_id).config.acquisition.voxel_size_um)
+        with np.load(path) as data:
+            points = data[_POINTS_KEY]
+        return (points * voxel)[:, ::-1].astype(np.float32)
 
     def segmentations(self) -> list[SegmentationSummary]:
         """List the finished segmentations of the output folder.

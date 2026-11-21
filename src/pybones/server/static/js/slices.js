@@ -25,9 +25,25 @@ function showPosition() {
 }
 
 /**
+ * Point the image at a URL and wait until it has loaded. The load event fires whether the
+ * image is displayed or not (`decode()` refuses an image in a hidden tab).
+ * @param {HTMLImageElement} image The slice image.
+ * @param {string} url Its new address.
+ * @returns {Promise<void>} Resolved once loaded.
+ * @throws {Error} If the image cannot be read.
+ */
+function loaded(image, url) {
+  return new Promise((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error('the image could not be read'));
+    image.src = url;
+  });
+}
+
+/**
  * Show the slice at the slider's position, without letting the browser keep it: fetch it
  * ourselves (`no-store`), show it through a temporary blob: URL, and revoke that URL once
- * the image is decoded. The <img> keeps the picture on screen; nothing else holds the data,
+ * the image has loaded. The <img> keeps the picture on screen; nothing else holds the data,
  * so scrolling through a stack never accumulates slices in memory, however long the page
  * stays open.
  */
@@ -45,9 +61,8 @@ async function load() {
   let url = null;
   try {
     url = URL.createObjectURL(await fetchSlice(id, z, nodes.scale.value));
-    nodes.image.src = url;
     nodes.image.alt = `Slice ${z} of ${id} with its labels overlaid`;
-    await nodes.image.decode();
+    await loaded(nodes.image, url);
   } catch (err) {
     // A newer position is waiting: this one no longer matters.
     if (!pending) toast(`Slice ${z} could not be shown: ${err.message}`, { error: true });
@@ -64,16 +79,17 @@ async function load() {
 }
 
 /**
- * Show the slices of a segmentation (from the middle one, unless it is already shown).
+ * Show the slices of a segmentation, from the middle one. Shown again (the lists are refreshed
+ * after every job), it is left as it is: a segmentation's slices never change.
  * @param {import('./api.js').SegmentationSummary} summary The segmentation.
  */
 export function showSegmentation(summary) {
-  const sameStack = segmentation === summary.id;
+  if (segmentation === summary.id) return;
   segmentation = summary.id;
   const [depth] = summary.shape_zyx;
   [voxelZ] = summary.voxel_size_um; // (z, y, x) µm
   nodes.slider.max = String(depth - 1);
-  if (!sameStack) nodes.slider.value = String(Math.floor(depth / 2));
+  nodes.slider.value = String(Math.floor(depth / 2));
   void load();
 }
 

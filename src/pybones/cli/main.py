@@ -16,8 +16,10 @@ from pybones.cli.arguments import (
     Invocation,
     MeshArgs,
     PreviewArgs,
+    QuantifyArgs,
     SegmentArgs,
     ServeArgs,
+    parse_invocation,
 )
 from pybones.cli.commands import (
     cmd_compare,
@@ -25,6 +27,7 @@ from pybones.cli.commands import (
     cmd_export,
     cmd_mesh,
     cmd_preview,
+    cmd_quantify,
     cmd_segment,
     cmd_serve,
 )
@@ -115,6 +118,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_label(p)
 
+    p = sub.add_parser("quantify", help="measure the vessel network (files next to the labels)")
+    _ = p.add_argument("segmentation", type=Path, help="segmentation output directory")
+
     p = sub.add_parser("serve", help="run the local web server (HTTP API)")
     _ = p.add_argument(
         "--server-config", type=Path, help="JSON file merged over the packaged server.json"
@@ -148,6 +154,8 @@ def run_command(args: "CommandArgs", config: "PyBonesConfig") -> None:
             cmd_export(args, config)
         case CompareArgs():
             cmd_compare(args, config)
+        case QuantifyArgs():
+            cmd_quantify(args, config)
         case ServeArgs():
             cmd_serve(args, config)
         case _:
@@ -170,11 +178,7 @@ def main(argv: "Sequence[str] | None" = None) -> None:
         SystemExit: If the command fails (the error and its traceback are logged).
     """
     parser = build_parser()
-    namespace = parser.parse_args(argv)
-    try:
-        invocation = Invocation.from_namespace(vars(namespace))
-    except ValidationError as exc:
-        parser.error(f"invalid arguments:\n{exc}")
+    invocation = parse_invocation(parser, Invocation.from_namespace, argv)
     try:
         config = load_config(invocation.config, invocation.overrides)
     except (ValidationError, ValueError) as exc:

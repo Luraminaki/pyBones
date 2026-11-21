@@ -223,3 +223,9 @@ progress { width: 100%; height: 6px; accent-color: var(--accent); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .toast.error { color: #1b1310; } }
 
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+/* Network tab: the button and its status, then the measures as a two-column list. */
+.network-head { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.8rem; }
+.stats { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1.2rem; margin: 0 0 1rem; }
+.stats dt { color: var(--muted); }
+.stats dd { margin: 0; font-variant-numeric: tabular-nums; }
