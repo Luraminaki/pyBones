@@ -172,7 +172,9 @@ class StreamingComponents:
         Returns:
             Local labels (0 = background).
         """
-        _, local = morph.label(mask, self.connectivity)
+        # The same OpenCV call as add_slice: identical numbering by construction, not by
+        # two functions happening to number components alike.
+        local, _ = morph.label_with_areas(mask, self.connectivity)
         return local
 
     def add_slice(self, mask: "NDArray[np.bool_]") -> "NDArray[np.int32]":

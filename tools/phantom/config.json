@@ -29,7 +29,11 @@
     "turn_std_deg": 18,
     "clot_probability": 0.12,
     "clot_fill": [0.2, 0.5],
-    "gap_probability": 0.04
+    "gap_probability": 0.04,
+    "branch_probability": 0.0,
+    "branch_angle_deg": [30, 70],
+    "branch_radius_ratio": [0.6, 0.85],
+    "branch_depth": 3
   },
   "bursts": {
     "count": 2,

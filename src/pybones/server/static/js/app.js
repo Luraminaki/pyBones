@@ -5,7 +5,7 @@ import { initJobs, JOB_FINISHED } from './jobs.js';
 import { initLibrary, prefill, reloadLists, renderSegmentations, settingsDiff } from './library.js';
 import { initSlices, showSegmentation as showSlices } from './slices.js';
 import { initTheme } from './theme.js';
-import { percent, toast } from './ui.js';
+import { baseName, LABELS, percent, recall, remember, toast } from './ui.js';
 
 // Remembered per browser: the last segmentation looked at.
 const SELECTION_KEY = 'pybones.selection';
@@ -17,36 +17,28 @@ let colors = null;
 let baseConfig = null;
 let serverInfo = null;
 
-function remember(id) {
-  try {
-    localStorage.setItem(SELECTION_KEY, id);
-  } catch {
-    // not remembered: fine
-  }
-}
-
-function recalled() {
-  try {
-    return localStorage.getItem(SELECTION_KEY);
-  } catch {
-    return null;
-  }
-}
-
+/**
+ * Describe a segmentation in one line: stack, voxel size, label fractions.
+ * @param {import('./api.js').SegmentationSummary} summary The segmentation.
+ * @returns {string} The line under its title.
+ */
 function describe(summary) {
   const [z, y, x] = summary.voxel_size_um; // the configuration's order
-  const fractions = ['bone', 'vessel', 'burst']
+  const fractions = LABELS
     .map((label) => `${label} ${percent(summary.label_fractions[label] ?? 0, 1)}`)
     .join(' · ');
-  const source = summary.source.split(/[\\/]/).pop();
-  return `${source} · voxel ${x} × ${y} × ${z} µm · ${fractions}`;
+  return `${baseName(summary.source)} · voxel ${x} × ${y} × ${z} µm · ${fractions}`;
 }
 
+/**
+ * Show a segmentation in the viewers and mark its card.
+ * @param {string} id Segmentation id (ignored if unknown).
+ */
 function select(id) {
   const summary = summaries.find((s) => s.id === id);
   if (!summary) return;
   selected = id;
-  remember(id);
+  remember(SELECTION_KEY, id);
   renderSegmentations(summaries, selected, select);
   document.getElementById('viewer-empty').hidden = true;
   document.getElementById('viewer-content').hidden = false;
@@ -56,6 +48,7 @@ function select(id) {
   if (viewer) viewer.showSegmentation(summary);
 }
 
+/** Read the lists again and keep a segmentation shown (the current, the last seen, or the first). */
 async function refresh() {
   try {
     summaries = await reloadLists(selected, select);
@@ -63,14 +56,13 @@ async function refresh() {
     toast(`Could not list the stacks and segmentations: ${err.message}`, { error: true });
     return;
   }
-  // The current one, else the one looked at last time in this browser, else the first.
   const keep = summaries.find((s) => s.id === selected)
-    ?? summaries.find((s) => s.id === recalled())
+    ?? summaries.find((s) => s.id === recall(SELECTION_KEY))
     ?? summaries[0];
   if (keep) select(keep.id);
 }
 
-// Prepare another run of the shown segmentation: its stack and settings in the form.
+/** Prepare another run of the shown segmentation: its stack and settings in the form. */
 async function segmentAgain() {
   let meta;
   try {
@@ -80,7 +72,7 @@ async function segmentAgain() {
     return;
   }
   const overrides = settingsDiff(baseConfig, meta.config, serverInfo.overridable_sections);
-  const dataset = meta.source.split(/[\\/]/).pop();
+  const dataset = baseName(meta.source);
   if (!prefill(dataset, overrides)) {
     toast(`${dataset} is no longer in ${serverInfo.data_dir}: pick a stack`, { error: true });
   } else {
@@ -89,6 +81,10 @@ async function segmentAgain() {
   }
 }
 
+/**
+ * Switch between the slice and 3D views; the 3D module is loaded the first time.
+ * @param {string} name `slices` or `3d`.
+ */
 async function openTab(name) {
   for (const tab of ['slices', '3d']) {
     const active = tab === name;
@@ -96,17 +92,20 @@ async function openTab(name) {
     document.getElementById(`panel-${tab}`).hidden = !active;
   }
   if (name !== '3d' || viewer) return;
+  let module;
   try {
-    const module = await import('./viewer3d.js');
-    if (!module.initViewer(colors)) return;
-    viewer = module;
-    const summary = summaries.find((s) => s.id === selected);
-    if (summary) viewer.showSegmentation(summary);
+    module = await import('./viewer3d.js'); // three.js comes over the network
   } catch (err) {
-    toast(`The 3D viewer could not start: ${err.message}`, { error: true });
+    toast(`The 3D viewer could not be loaded: ${err.message}`, { error: true });
+    return;
   }
+  if (!module.initViewer(colors)) return;
+  viewer = module;
+  const summary = summaries.find((s) => s.id === selected);
+  if (summary) viewer.showSegmentation(summary);
 }
 
+/** Start the page: server description and configuration first, then every panel. */
 async function main() {
   initTheme(document.getElementById('theme-toggle'));
   let server;

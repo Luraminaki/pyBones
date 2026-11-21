@@ -21,9 +21,10 @@ from pybones.meshing.formats import MeshFormat
 from pybones.meshing.gltf import write_glb
 from pybones.meshing.marching import extract_surface
 from pybones.meshing.stl import write_stl
-from pybones.segmentation.pipeline import run_segmentation
 from pybones.segmentation.results import load_labels, load_meta
 from pybones.segmentation.stages import Stage, no_progress
+from pybones.utils.constants import UM_PER_MM
+from pybones.utils.files import complete_files
 from pybones.visualization.overlay import overlay
 
 if TYPE_CHECKING:
@@ -33,14 +34,10 @@ if TYPE_CHECKING:
     from pybones.config.schema import PyBonesConfig
     from pybones.meshing.mesh import Mesh
     from pybones.segmentation.labels import Label
-    from pybones.segmentation.results import SegmentationMeta
     from pybones.segmentation.stages import ProgressCallback
 
 #: Prefix of the 80-byte STL header (followed by the label key).
 STL_HEADER_PREFIX = "pybones"
-UM3_PER_MM3 = 1e9
-#: Suffix of a file being written; it is renamed to its final name once complete.
-PARTIAL_SUFFIX = ".partial"
 
 logger = logging.getLogger(__name__)
 
@@ -56,27 +53,6 @@ class MeshResult:
 
     mesh: "Mesh"
     volume_mm3: float
-
-
-def segment(
-    source: Path,
-    out_dir: Path,
-    config: "PyBonesConfig",
-    progress: "ProgressCallback" = no_progress,
-) -> "SegmentationMeta":
-    """Segment a stack into a label volume and its metadata.
-
-    Args:
-        source: Directory or zip archive of slices.
-        out_dir: Output directory (created if needed).
-        config: Configuration.
-        progress: Progress callback, e.g. a :class:`~pybones.segmentation.stages.ProgressTracker`
-            (which can also cancel the run).
-
-    Returns:
-        The metadata written next to the label volume.
-    """
-    return run_segmentation(source, out_dir, config, progress)
 
 
 def preview(
@@ -135,7 +111,7 @@ def mesh_label(
     """
     labels = load_labels(segmentation, config.io)
     mesh = extract_surface(labels, label, config.mesh, config.acquisition.voxel_size_um, progress)
-    volume_mm3 = mesh.volume(config.mesh.chunk_faces) / UM3_PER_MM3
+    volume_mm3 = mesh.volume(config.mesh.chunk_faces) / UM_PER_MM**3
     logger.info("Meshed %s: %d triangles, %.4f mm3", label.key, mesh.n_faces, volume_mm3)
     return MeshResult(mesh=mesh, volume_mm3=volume_mm3)
 
@@ -216,14 +192,10 @@ def write_mesh_file(
     mesh_format = MeshFormat.from_path(path)  # an unsupported extension fails before the work
     result = mesh_label(segmentation, label, config, progress)
     progress(Stage.WRITING, 0, 1)
-    partial = path.with_name(path.name + PARTIAL_SUFFIX)
-    try:
+    with complete_files(path) as (partial,):
         _ = save_mesh(result, label, partial, config, mesh_format)
         # Last cancellation point: once renamed, the file is there to stay.
         progress(Stage.WRITING, 1, 1)
-        _ = partial.replace(path)
-    finally:
-        partial.unlink(missing_ok=True)
     return MeshFile(path=path, n_faces=result.mesh.n_faces, volume_mm3=result.volume_mm3)
 
 

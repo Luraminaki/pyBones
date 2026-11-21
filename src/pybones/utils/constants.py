@@ -10,6 +10,11 @@ UINT16_LEVELS = UINT16_MAX + 1
 BGR_CHANNELS = 3
 #: Indentation of the JSON files written by pyBones and its tools.
 JSON_INDENT = 2
+#: Micrometres in a millimetre (lengths are µm inside, reported in mm).
+UM_PER_MM = 1000.0
 #: Binary units.
 KIB_PER_MIB = 1024
 MIB_PER_GIB = 1024
+#: Suffix of a file being written; it is renamed to its final name once complete, so that a
+#: reader never sees a partial file and an interrupted write leaves nothing behind.
+PARTIAL_SUFFIX = ".partial"

@@ -1,10 +1,12 @@
 // Jobs panel: every job the server remembers, followed live with Server-Sent Events.
-// Other modules listen to JOB_UPDATED / JOB_FINISHED (detail: the job status).
+// Other modules listen to JOB_UPDATED / JOB_FINISHED on `document` (detail: the job status).
 
 import { api, followJob, FINISHED_STATES } from './api.js';
 import { announce, duration, el, percent, toast } from './ui.js';
 
+/** Event sent on `document` with each new status of a job (detail: the JobStatus). */
 export const JOB_UPDATED = 'pybones:job-updated';
+/** Event sent on `document` once a followed job is over (detail: its final JobStatus). */
 export const JOB_FINISHED = 'pybones:job-finished';
 // Finished jobs kept in the panel (the running ones always are).
 const FINISHED_SHOWN = 6;
@@ -15,6 +17,11 @@ const following = new Map(); // job id -> promise of the final status
 let list;
 let empty;
 
+/**
+ * Name a job for people.
+ * @param {import('./api.js').JobStatus} status The job.
+ * @returns {string} E.g. `Mesh: vessel of run (glb)`.
+ */
 function title(status) {
   if (status.kind === 'mesh') {
     return `Mesh: ${status.label} of ${status.segmentation} (${status.mesh_format})`;
@@ -22,6 +29,11 @@ function title(status) {
   return `Segment: ${status.segmentation}`;
 }
 
+/**
+ * Describe where a job is: its stage, progress and time left, or how it ended.
+ * @param {import('./api.js').JobStatus} status The job.
+ * @returns {string} The line under its progress bar.
+ */
 function detail(status) {
   const p = status.progress;
   if (status.state === 'queued') return 'Waiting for a free worker';
@@ -35,8 +47,12 @@ function detail(status) {
   return `${stage} · ${percent(p.fraction)}${left}`;
 }
 
-// Build a job's row once; later statuses only patch it (patch()), so the Cancel button
-// under the mouse is never swapped for a new one between a press and a release.
+/**
+ * Build a job's row once; later statuses only patch it (see patch()), so the Cancel button
+ * under the mouse is never swapped for a new one between a press and a release.
+ * @param {import('./api.js').JobStatus} status The job.
+ * @returns {{node: HTMLElement, parts: Object<string, HTMLElement>}} The row and its parts.
+ */
 function row(status) {
   const parts = {
     title: el('span', { class: 'job-title' }, title(status)),
@@ -60,6 +76,11 @@ function row(status) {
   return { node, parts };
 }
 
+/**
+ * Show a new status in a job's row.
+ * @param {{node: HTMLElement, parts: Object<string, HTMLElement>}} job The row.
+ * @param {import('./api.js').JobStatus} status Its new status.
+ */
 function patch({ node, parts }, status) {
   const finished = FINISHED_STATES.has(status.state);
   node.dataset.state = status.state;
@@ -71,6 +92,7 @@ function patch({ node, parts }, status) {
   parts.error.textContent = status.error ?? '';
 }
 
+/** Remove the oldest finished jobs beyond the few the panel keeps. */
 function prune() {
   const finished = [...jobs.values()].filter((j) => FINISHED_STATES.has(j.status.state));
   for (const job of finished.slice(0, Math.max(0, finished.length - FINISHED_SHOWN))) {
@@ -79,6 +101,10 @@ function prune() {
   }
 }
 
+/**
+ * Show a job's status (adding its row if new) and tell the other modules.
+ * @param {import('./api.js').JobStatus} status The status.
+ */
 function update(status) {
   let job = jobs.get(status.job_id);
   if (!job) {
@@ -92,15 +118,26 @@ function update(status) {
   document.dispatchEvent(new CustomEvent(JOB_UPDATED, { detail: status }));
 }
 
+/**
+ * Ask the server to cancel a job.
+ * @param {string} jobId Job id.
+ */
 async function cancel(jobId) {
+  let status;
   try {
-    update(await api.cancelJob(jobId));
+    status = await api.cancelJob(jobId);
   } catch (err) {
     toast(`Could not cancel: ${err.message}`, { error: true });
+    return;
   }
+  update(status);
 }
 
-// Show a job and, unless it is over, follow it until it finishes (one stream per job).
+/**
+ * Show a job and, unless it is over, follow it until it finishes (one stream per job).
+ * @param {import('./api.js').JobStatus} status Its current status.
+ * @returns {Promise<?import('./api.js').JobStatus>} Its final status (`null` if lost).
+ */
 export function track(status) {
   update(status);
   if (FINISHED_STATES.has(status.state)) return Promise.resolve(status);
@@ -111,6 +148,11 @@ export function track(status) {
   return following.get(status.job_id);
 }
 
+/**
+ * Follow a job's events until it finishes, then announce how it ended.
+ * @param {import('./api.js').JobStatus} status Its current status.
+ * @returns {Promise<?import('./api.js').JobStatus>} Its final status (`null` if lost).
+ */
 async function follow(status) {
   let final;
   try {
@@ -126,7 +168,13 @@ async function follow(status) {
   return final;
 }
 
-// The job of a target (segmentation and label) still running, if any.
+/**
+ * Find the unfinished job of a target, if any.
+ * @param {string} segmentation Segmentation id.
+ * @param {?string} label Label key (`null` for a segmentation job).
+ * @param {?string} format Mesh format (`null` for a segmentation job).
+ * @returns {?import('./api.js').JobStatus} Its status, or `null`.
+ */
 export function activeJob(segmentation, label, format) {
   for (const { status } of jobs.values()) {
     if (
@@ -137,6 +185,11 @@ export function activeJob(segmentation, label, format) {
   return null;
 }
 
+/**
+ * Show the jobs the server remembers and follow the unfinished ones.
+ * @param {HTMLElement} listNode The list of job rows.
+ * @param {HTMLElement} emptyNode Shown while there is no job.
+ */
 export async function initJobs(listNode, emptyNode) {
   list = listNode;
   empty = emptyNode;

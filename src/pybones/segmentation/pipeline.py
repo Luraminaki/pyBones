@@ -11,6 +11,7 @@ Output directory layout (names from the ``io`` config section)::
         meta.json    # source, thresholds, statistics, timings, full config
 """
 
+import contextlib
 import logging
 import os
 import time
@@ -41,7 +42,13 @@ from pybones.segmentation.results import (
     scratch_path,
 )
 from pybones.segmentation.scales import resolve_pixel_params, resolve_tubularity
-from pybones.segmentation.stages import STAGES_2D, STAGES_3D, Stage, no_progress
+from pybones.segmentation.stages import (
+    STAGES_2D,
+    STAGES_3D,
+    CancelledError,
+    Stage,
+    no_progress,
+)
 from pybones.segmentation.tubularity import quantize_tubularity, slice_tubularity
 from pybones.segmentation.zsmoothing import z_majority
 from pybones.utils.parallel import ordered_map
@@ -308,7 +315,7 @@ def run_segmentation(
 
     Scratch volumes are removed whatever happens; on failure or cancellation
     (:class:`~pybones.segmentation.stages.CancelledError` raised by ``progress``),
-    no partial label volume is left behind either.
+    no partial label volume is left behind either, nor ``out_dir`` if this run created it.
 
     Args:
         source: Directory or zip archive of slices.
@@ -320,6 +327,7 @@ def run_segmentation(
     Returns:
         The metadata written next to the volume.
     """
+    created = not out_dir.exists()
     out_dir.mkdir(parents=True, exist_ok=True)
     io_cfg = config.io
     params = resolve_pixel_params(config)
@@ -334,6 +342,7 @@ def run_segmentation(
     t_start = time.perf_counter()
     logger.info("Segmenting %s into %s (refinement: %s)", source, out_dir, refine)
 
+    failed = False
     try:
         with SliceStack(source, io_cfg) as stack:
             shape = stack.shape
@@ -367,12 +376,19 @@ def run_segmentation(
             )
             timings[REFINEMENT_TIMING] = time.perf_counter() - t0
             logger.info("Refined in %.1f s: %s", timings[REFINEMENT_TIMING], stats)
-    except BaseException:
-        logger.exception("Segmentation of %s failed or was cancelled", source)
+    except BaseException as exc:
+        failed = True
+        if isinstance(exc, (CancelledError, KeyboardInterrupt)):
+            logger.info("Segmentation of %s cancelled", source)
+        else:
+            logger.exception("Segmentation of %s failed", source)
         _remove_files((final_path,))
         raise
     finally:
         _remove_files((classified_path if refine else None, resolved_path, tubularity_path))
+        if failed and created:  # last, once the scratch files inside it are gone
+            with contextlib.suppress(OSError):  # only if empty: never someone else's files
+                out_dir.rmdir()
 
     total = int(counts.sum())
     meta = SegmentationMeta(

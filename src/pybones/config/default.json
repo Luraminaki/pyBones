@@ -95,6 +95,34 @@
       "mu_factor": -0.53
     }
   },
+  "quantification": {
+    "backends": {
+      "cavities": "pybones",
+      "skeleton": "scikit-image",
+      "distances": "pybones"
+    },
+    "pruning": {
+      "spur_radius_factor": 2.0,
+      "min_spur_um": 6.0,
+      "min_fragment_um": 15.0,
+      "junction_merge_factor": 1.0
+    },
+    "anchor_margin_um": 3.0,
+    "files": {
+      "network_file": "network.json",
+      "branches_file": "branches.csv",
+      "centrelines_file": "centrelines.npz"
+    },
+    "stage_weights": {
+      "cavities": 0.38,
+      "skeleton": 0.55,
+      "calibre": 0.04,
+      "network": 0.03
+    },
+    "max_radius_um": 60,
+    "distance_tile_slices": 32,
+    "distance_tile_pixels": 256
+  },
   "render": {
     "alpha": 0.6,
     "low_percentile": 0.5,

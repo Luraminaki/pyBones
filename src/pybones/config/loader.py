@@ -30,15 +30,6 @@ def packaged_text(resource: str) -> str:
     return resources.files(__package__).joinpath(resource).read_text()
 
 
-def default_config_text() -> str:
-    """Read the configuration shipped with the package.
-
-    Returns:
-        Raw JSON text of ``default.json``.
-    """
-    return packaged_text(DEFAULT_CONFIG_RESOURCE)
-
-
 def _deep_merge(base: dict[str, Any], update: dict[str, Any]) -> None:
     """Recursively merge ``update`` into ``base`` in place (dicts merged, others replaced).
 

@@ -81,6 +81,18 @@ class VesselSettings(_Range):
     clot_probability: Unit = Field(description="Segments only partially filled (dim).")
     clot_fill: tuple[Unit, Unit] = Field(description="Contrast fraction of clotted segments.")
     gap_probability: Unit = Field(description="Segments with no contrast agent at all.")
+    branch_probability: Unit = Field(
+        description="Chance that a segment ends in a bifurcation (0: unbranched walks, the "
+        + "segmentation phantom; > 0: vessel trees, the network phantom)."
+    )
+    branch_angle_deg: tuple[Positive, Positive] = Field(
+        description="Angle between a branch and its parent's direction."
+    )
+    branch_radius_ratio: tuple[Unit, Unit] = Field(
+        description="Radius of a branch relative to its parent (branches thinner than the "
+        + "smallest vessel radius are not drawn)."
+    )
+    branch_depth: int = Field(ge=0, le=10, description="Generations of branches below a vessel.")
 
 
 class BurstSettings(_Range):

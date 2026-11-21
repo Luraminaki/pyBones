@@ -79,6 +79,70 @@ from package metadata at runtime; every segmentation records it in its
   - a rebuilt mesh is no longer hidden by the browser's cache: meshes are sent with
     `Cache-Control: no-cache` and an ETag following the file, an unchanged mesh is answered
     `304 Not Modified` (Starlette's `FileResponse` never does), a rebuilt one in full.
+- Vascular quantification, first layer: its three 3D steps (filling the cavities of the vessel
+  mask, skeletonisation, distance to the wall) are interchangeable backends behind small
+  interfaces (Strategy pattern), chosen by name in the new `quantification` section of the
+  configuration. Cavities: pyBones' streaming connectivity or SciPy (identical on the sample);
+  skeleton: scikit-image; distances: per-slice OpenCV maps combined along z (0.4 s on the sample)
+  or SciPy's exact 3D transform on tiles (39 s, for rectangular pixels and as a cross-check; both
+  agree to 4e-6 µm). Filling the cavities first matters: without it, thick vessel blobs thinned
+  into sheets (junction clusters up to 2,707 voxels; 72 with it).
+- Vascular network (`pybones.quantification.graph`, `measures`, `pipeline`): the skeleton becomes a
+  graph (26-neighbour links, staircase corners dropped without ever disconnecting, junction clusters
+  as single nodes), pruned in µm (`quantification.pruning`: spurs shorter than a multiple of the
+  junction's radius, isolated specks, short junction-to-junction branches contracted with their
+  length kept). Ends within their radius plus `anchor_margin_um` of a stack face or a burst are
+  anchored, their branches flagged truncated. Per branch: length, chord, tortuosity, radius
+  (median, mean, min, max); for the stack: branches, junctions, ends by kind, loops, total length,
+  length density, medians. `run_quantification` writes `network.json`, `branches.csv` and
+  `centrelines.npz` into the segmentation folder (temporary names until complete, cancellable at
+  each stage). On the sample: 17.6 s, 1.2 GB peak; 680 mm of vessels in 12,072 branches.
+- Phantom network scoring (`tools/phantom/network_scoring.py`): centreline recall and precision,
+  junctions matched / crossings / spurious, radius offset and error, total length. On the network
+  phantom, segmented: length within 2 % of the truth, 24 of 54 visible bifurcations found, but
+  82 spurious junctions (mostly vessel/bone contact bulges), radius offset −0.8 µm (not constant:
+  thin vessels read thicker, thick ones thinner, so it is not corrected).
+- Code audit (duplication, needless wrappers, reliability):
+  - Jobs count their time from their start, not their submission: a mesh waiting behind another one
+    no longer shows the wait as elapsed time nor an inflated time left. A job cancelled while queued
+    keeps a fixed duration instead of one growing forever.
+  - A failed or cancelled segmentation removes the output folder it created (any front end, the
+    command line included), never one that existed before; a cancellation is logged without a
+    traceback.
+  - `try` only where the code cannot check first (I/O, network, outside input, other threads):
+    - lookups check membership: `Label.from_key`, `MeshFormat.from_path`, the label parameter
+      of the server;
+    - the slice route checks `z` against the stack depth before rendering;
+    - the job queues check for room instead of catching `Full`;
+    - an unknown job raises `UnknownJobError` (a `LookupError`, no longer a `KeyError`), turned
+      into a 404 by one handler of the application instead of a `try` in each route;
+    - the page's `try` blocks wrap only their network call.
+  - One helper writes the files that appear only once complete (`pybones.utils.files.complete_files`),
+    for meshes and the quantification files alike.
+  - Removed:
+    - `api.operations.segment`: use `segmentation.pipeline.run_segmentation`;
+    - `loader.default_config_text`;
+    - the quantification registry's accessor functions: index `CAVITY_FILLERS` and the other
+      tables directly;
+    - `graph.PruningRules`: the graph takes `PruningConfig`;
+    - `JobProgress`: a job status carries the `Progress` itself;
+    - the µm/mm constants: now `UM_PER_MM` in `utils/constants.py`.
+  - Web page:
+    - a duration of 59.6 s or 119.6 s showed as "60 s" or "1 min 60 s";
+    - JSDoc on every function;
+    - helpers shared instead of copied: label list, storage access, request code, file names;
+    - mesh colours built from the same CSS colour as the swatches (identical values).
+  - JavaScript checks with Node.js (skipped without it, no npm): `node --check` on every module,
+    `node:test` suites in `tests/js/`, and checks that the page's labels and finished job states
+    match Python's. A test also rejects `var`, loose equality, and HTML or code built from strings
+    (`innerHTML`, `eval`); the page used none of them.
+- Phantom: vessels can branch (`vessels.branch_*`, off in the segmentation phantom, which is
+  unchanged pixel for pixel), and the phantom records its true network (centrelines, radii,
+  bifurcations) in `truth.npz`. `tools/phantom/network.json` describes a branching network phantom
+  for validating the quantification. An older phantom asks to be generated again.
+- New dependencies: SciPy (already required by scikit-image), `scipy-stubs` for the type checker.
+- The streaming 3D connectivity relabels a slice with the same OpenCV call as its first pass
+  (it used another function that happened to number components alike); results unchanged.
 - The page read the voxel size's axes in the wrong order (`(z, y, x)` in the configuration):
   invisible on cubic voxels, wrong on others. INSTALL's dependency list now names FastAPI and
   uvicorn.

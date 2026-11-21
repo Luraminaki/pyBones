@@ -16,6 +16,8 @@ CPUINFO = Path("/proc/cpuinfo")
 _CPU_MODEL_KEY = "model name"
 _KEY_SEPARATOR = ":"
 _BYTES_PER_GIB = 1 << 30
+#: Key of the distribution's display name in ``/etc/os-release``.
+_PRETTY_NAME = "PRETTY_NAME"
 _UNKNOWN = "unknown"
 
 
@@ -59,9 +61,11 @@ def memory_gib() -> float:
     Returns:
         Physical memory in GiB, or 0 where ``os.sysconf`` cannot tell (Windows).
     """
-    try:
+    if not hasattr(os, "sysconf"):
+        return 0.0
+    try:  # the system may not know these names
         return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / _BYTES_PER_GIB
-    except (AttributeError, OSError, ValueError):
+    except (OSError, ValueError):
         return 0.0
 
 
@@ -71,9 +75,11 @@ def system_name() -> str:
     Returns:
         The distribution name on Linux (with the kernel release), else the platform name.
     """
-    try:
-        distribution = platform.freedesktop_os_release()["PRETTY_NAME"]
-    except (OSError, KeyError):
+    try:  # reads /etc/os-release, absent outside Linux
+        distribution = platform.freedesktop_os_release().get(_PRETTY_NAME)
+    except OSError:
+        distribution = None
+    if distribution is None:
         return platform.platform(terse=True)
     return f"{distribution} (Linux {platform.release()})"
 

@@ -9,10 +9,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { api, meshUrl } from './api.js';
 import { activeJob, JOB_FINISHED, JOB_UPDATED, track } from './jobs.js';
 import { THEME_CHANGED } from './theme.js';
-import { duration, el, megabytes, percent, toast } from './ui.js';
+import { cssColor, duration, el, LABELS, megabytes, percent, toast } from './ui.js';
 
 const FORMAT = 'glb';
-const LABELS = ['bone', 'vessel', 'burst'];
 // Shown when a segmentation opens: the vessel network, the point of pyBones.
 const SHOWN_BY_DEFAULT = new Set(['vessel']);
 // Bone is context around the vessels: drawn see-through, after the opaque meshes.
@@ -26,8 +25,8 @@ const NEAR_RATIO = 1 / 200;
 const FAR_RATIO = 50;
 const SKY_LIGHT = 1.4;
 const KEY_LIGHT = 1.6;
-const CHANNEL_MAX = 255;
 const MEGA = 1e6;
+const VERTICES_PER_TRIANGLE = 3;
 // One click on + / − moves the camera this much closer / farther.
 const ZOOM_STEP = 1.3;
 // Image rows go down the screen, as in the slice viewer: "up" is -y.
@@ -48,18 +47,20 @@ let colors;
 let current = null; // {summary, labels: Map(label -> {checkbox, status, object, loading})}
 let fitted = false;
 
+/** Draw the scene once (there is no animation loop: only changes redraw). */
 function render() {
   renderer.render(scene, camera);
 }
 
-function rgb([b, g, r]) {
-  return new THREE.Color().setRGB(r / CHANNEL_MAX, g / CHANNEL_MAX, b / CHANNEL_MAX, THREE.SRGBColorSpace);
-}
-
+/**
+ * Build the material of a label: its configuration colour, see-through for the bone.
+ * @param {string} label Label key.
+ * @returns {THREE.MeshStandardMaterial} The material.
+ */
 function material(label) {
   const opacity = TRANSLUCENT[label];
   return new THREE.MeshStandardMaterial({
-    color: rgb(colors[label]),
+    color: new THREE.Color(cssColor(colors[label])), // CSS colours are read as sRGB
     roughness: ROUGHNESS,
     metalness: 0,
     transparent: opacity !== undefined,
@@ -68,11 +69,13 @@ function material(label) {
   });
 }
 
+/** Paint the scene's background with the theme's colour (`--scene-bg`). */
 function sceneBackground() {
   const value = getComputedStyle(document.documentElement).getPropertyValue('--scene-bg').trim();
   scene.background = new THREE.Color(value || '#000000');
 }
 
+/** Fit the drawing to its container and redraw. */
 function resize() {
   const { clientWidth: width, clientHeight: height } = renderer.domElement.parentElement;
   if (!width || !height) return;
@@ -82,7 +85,7 @@ function resize() {
   render();
 }
 
-// Look down the stack (+z) with image rows going down, as in the slice viewer.
+/** Frame the visible meshes, looking down the stack (+z) with image rows going down. */
 export function fitView() {
   const box = new THREE.Box3();
   for (const entry of current?.labels.values() ?? []) {
@@ -106,7 +109,10 @@ export function fitView() {
   render();
 }
 
-// Move the camera towards (factor < 1) or away from (factor > 1) the point it orbits.
+/**
+ * Move the camera towards or away from the point it orbits.
+ * @param {number} factor Below 1: closer; above 1: farther.
+ */
 function zoom(factor) {
   const offset = camera.position.clone().sub(controls.target).multiplyScalar(factor);
   camera.position.copy(controls.target).add(offset);
@@ -114,6 +120,11 @@ function zoom(factor) {
   render();
 }
 
+/**
+ * Choose what a plain left-drag (or one finger) does.
+ * @param {string} mode `rotate` or `move`.
+ * @param {Object<string, HTMLButtonElement>} buttons The mode buttons (the chosen one is pressed).
+ */
 function setDragMode(mode, buttons) {
   controls.mouseButtons.LEFT = DRAG_MODES[mode].mouse;
   controls.touches.ONE = DRAG_MODES[mode].touch;
@@ -122,6 +133,10 @@ function setDragMode(mode, buttons) {
   }
 }
 
+/**
+ * Build the view buttons: drag mode, zoom in / out, reset.
+ * @returns {HTMLElement} Their container.
+ */
 function viewActions() {
   const buttons = {};
   for (const [mode, { label }] of Object.entries(DRAG_MODES)) {
@@ -143,6 +158,7 @@ function viewActions() {
   );
 }
 
+/** Show the hint over the scene while nothing is drawn (or "Loading…"). */
 function updateMessage() {
   const shown = [...(current?.labels.values() ?? [])].some((e) => e.object?.visible);
   const busy = [...(current?.labels.values() ?? [])].some((e) => e.loading);
@@ -150,19 +166,30 @@ function updateMessage() {
   message.textContent = busy ? 'Loading…' : 'Choose the labels to show.';
 }
 
+/**
+ * Count the triangles of a loaded mesh.
+ * @param {THREE.Object3D} object The mesh's scene.
+ * @returns {number} Triangles.
+ */
 function triangles(object) {
   let count = 0;
   object.traverse((child) => {
-    if (child.isMesh) count += child.geometry.index ? child.geometry.index.count / 3 : child.geometry.attributes.position.count / 3;
+    if (child.isMesh) {
+      const { index, attributes } = child.geometry;
+      count += (index ?? attributes.position).count / VERTICES_PER_TRIANGLE;
+    }
   });
   return count;
 }
 
-// Keep a mesh in GPU memory only. three.js keeps a CPU copy of every array after uploading
-// it (for picking, bounds, re-uploads), which doubles the browser's memory: 175 MB more for
-// the bone and vessels of the sample. Bounds are computed first (fitting the view uses
-// them); then each array is dropped as soon as it is on the GPU. Nothing here picks
-// triangles, and the arrays never change, so nothing needs the copy again.
+/**
+ * Keep a mesh in GPU memory only. three.js keeps a CPU copy of every array after uploading
+ * it (for picking, bounds, re-uploads), which doubles the browser's memory: 175 MB more for
+ * the bone and vessels of the sample. Bounds are computed first (fitting the view uses
+ * them); then each array is dropped as soon as it is on the GPU. Nothing here picks
+ * triangles, and the arrays never change, so nothing needs the copy again.
+ * @param {THREE.Object3D} object The mesh's scene.
+ */
 function releaseAfterUpload(object) {
   object.traverse((child) => {
     if (!child.isMesh) return;
@@ -178,6 +205,10 @@ function releaseAfterUpload(object) {
   });
 }
 
+/**
+ * Free the GPU memory of a mesh (geometry and materials).
+ * @param {THREE.Object3D} object The mesh's scene.
+ */
 function dispose(object) {
   object.traverse((child) => {
     if (child.isMesh) {
@@ -187,6 +218,11 @@ function dispose(object) {
   });
 }
 
+/**
+ * Download a built mesh and add it to the scene (dropped if another segmentation is shown
+ * by the time it arrives).
+ * @param {string} label Label key.
+ */
 function load(label) {
   const entry = current.labels.get(label);
   const id = current.summary.id;
@@ -229,23 +265,36 @@ function load(label) {
   );
 }
 
+/**
+ * Have the server build a label's mesh (or join the job already doing it); onJob() loads it.
+ * @param {string} label Label key.
+ */
 async function build(label) {
   const entry = current.labels.get(label);
   const id = current.summary.id;
   entry.loading = true;
   entry.status.textContent = 'Building the mesh…';
   updateMessage();
-  try {
-    const running = activeJob(id, label, FORMAT);
-    void track(running ?? (await api.buildMesh(id, label, FORMAT)));
-  } catch (err) {
-    entry.loading = false;
-    entry.status.textContent = 'Could not build';
-    toast(`The ${label} mesh could not be built: ${err.message}`, { error: true });
-    updateMessage();
+  let job = activeJob(id, label, FORMAT);
+  if (!job) {
+    try {
+      job = await api.buildMesh(id, label, FORMAT);
+    } catch (err) {
+      entry.loading = false;
+      entry.status.textContent = 'Could not build';
+      toast(`The ${label} mesh could not be built: ${err.message}`, { error: true });
+      updateMessage();
+      return;
+    }
   }
+  void track(job);
 }
 
+/**
+ * Show or hide a label: hidden meshes stay loaded; a mesh not loaded yet is loaded, or built.
+ * @param {string} label Label key.
+ * @param {boolean} visible Whether to show it.
+ */
 function show(label, visible) {
   const entry = current.labels.get(label);
   if (entry.object) {
@@ -259,7 +308,11 @@ function show(label, visible) {
   }
 }
 
-// Follow the mesh jobs of the shown segmentation: progress next to the label, load on success.
+/**
+ * Follow the mesh jobs of the shown segmentation: progress next to the label, load on success.
+ * @param {CustomEvent} event A JOB_UPDATED or JOB_FINISHED event (detail: the job status).
+ * @param {boolean} finished Whether the job is over.
+ */
 function onJob(event, finished) {
   const status = event.detail;
   if (status.kind !== 'mesh' || status.mesh_format !== FORMAT || current?.summary.id !== status.segmentation) return;
@@ -286,6 +339,7 @@ function onJob(event, finished) {
   }
 }
 
+/** Remove every mesh of the shown segmentation from the scene and the GPU. */
 function clear() {
   for (const entry of current?.labels.values() ?? []) {
     if (entry.object) {
@@ -296,6 +350,10 @@ function clear() {
   fitted = false;
 }
 
+/**
+ * Show the meshes of a segmentation: one toggle per label, the default ones loaded.
+ * @param {import('./api.js').SegmentationSummary} summary The segmentation.
+ */
 export function showSegmentation(summary) {
   if (current?.summary.id === summary.id) {
     current.summary = summary;
@@ -311,7 +369,7 @@ export function showSegmentation(summary) {
     status.textContent = built ? 'Ready' : 'Not built yet';
     labels.set(label, { checkbox, status, object: null, loading: false });
     checkbox.addEventListener('change', () => show(label, checkbox.checked));
-    const swatch = el('span', { class: 'swatch', style: `background: #${rgb(colors[label]).getHexString(THREE.SRGBColorSpace)}` });
+    const swatch = el('span', { class: 'swatch', style: `background: ${cssColor(colors[label])}` });
     return el('div', { class: 'mesh-toggle' }, el('label', { for: `show-${label}` }, checkbox, swatch, label), status);
   });
   controlsNode.replaceChildren(...toggles, viewActions());
@@ -323,7 +381,11 @@ export function showSegmentation(summary) {
   render();
 }
 
-// Set up the scene once. Returns false if this browser cannot draw WebGL.
+/**
+ * Set up the scene once: renderer, camera, lights, controls and listeners.
+ * @param {Object<string, number[]>} configColors BGR colour per label.
+ * @returns {boolean} False if this browser cannot draw WebGL.
+ */
 export function initViewer(configColors) {
   colors = configColors;
   const container = document.getElementById('scene');

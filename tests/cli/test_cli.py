@@ -6,7 +6,8 @@ from typing import TYPE_CHECKING, cast
 import cv2
 import pytest
 
-from pybones.cli.main import main
+from pybones.cli import main as cli_main
+from pybones.cli.main import INTERRUPTED_EXIT_STATUS, main
 from pybones.utils.constants import BGR_CHANNELS
 from tests.helpers import N_SYNTHETIC_SLICES, SLICE_SHAPE, cli_overrides
 
@@ -60,3 +61,24 @@ def test_background_is_not_a_valid_label(tmp_path: "Path") -> None:
     """Only foreground labels can be meshed."""
     with pytest.raises(SystemExit):
         main(["mesh", str(tmp_path), "--label", "background", "-o", "x.stl"])
+
+
+def interrupt(*_args: object) -> None:
+    """Stand in for a command stopped by Ctrl+C.
+
+    Args:
+        _args: The command's arguments (ignored).
+
+    Raises:
+        KeyboardInterrupt: Always.
+    """
+    raise KeyboardInterrupt
+
+
+def test_ctrl_c_exits_quietly_with_status_130(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An interrupted command exits with the shell's status for Ctrl+C, not a traceback."""
+    monkeypatch.setattr(cli_main, "run_command", interrupt)
+    with pytest.raises(SystemExit) as exit_info:
+        main(["config"])
+    assert exit_info.value.code == INTERRUPTED_EXIT_STATUS
+    assert exit_info.value.__cause__ is None

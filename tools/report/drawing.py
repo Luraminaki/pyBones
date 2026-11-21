@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, cast
 import cv2
 import numpy as np
 
+from pybones.utils.constants import UM_PER_MM
+
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from pathlib import Path
@@ -19,7 +21,6 @@ _TEXT_THICKNESS = 2
 _TEXT_MARGIN = 10
 _SCALE_BAR_HEIGHT_PX = 8
 _FILLED = -1
-_UM_PER_MM = 1000
 
 
 def write_image(path: "Path", image: "NDArray[np.uint8]", jpeg_quality: int) -> None:
@@ -127,8 +128,8 @@ def add_scale_bar(image: "NDArray[np.uint8]", pixels_per_um: float, fig: "Figure
     top_left = (_TEXT_MARGIN, y - _SCALE_BAR_HEIGHT_PX)
     _ = cv2.rectangle(image, top_left, (_TEXT_MARGIN + length, y), _WHITE, _FILLED)
     label = (
-        f"{fig.scale_bar_um / _UM_PER_MM:g} mm"
-        if fig.scale_bar_um >= _UM_PER_MM
+        f"{fig.scale_bar_um / UM_PER_MM:g} mm"
+        if fig.scale_bar_um >= UM_PER_MM
         else f"{fig.scale_bar_um:g} um"
     )
     origin = (_TEXT_MARGIN, y - _SCALE_BAR_HEIGHT_PX - _TEXT_MARGIN)

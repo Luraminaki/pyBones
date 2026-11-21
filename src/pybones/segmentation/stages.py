@@ -34,6 +34,12 @@ class Stage(StrEnum):
     SURFACE = "surface"
     SMOOTHING = "smoothing"
     WRITING = "writing"
+    #: Quantifying the vessels of a segmentation (a job of its own): cavity filling,
+    #: skeletonisation, wall distances, network.
+    CAVITIES = "cavities"
+    SKELETON = "skeleton"
+    CALIBRE = "calibre"
+    NETWORK = "network"
 
 
 #: Stages of a run without / with the 3D refinement.
@@ -41,6 +47,8 @@ STAGES_2D = (Stage.THRESHOLDS, Stage.CLASSIFY)
 STAGES_3D = (*STAGES_2D, Stage.ANALYSE, Stage.RESOLVE, Stage.CLEAN)
 #: Stages of a mesh job.
 MESH_STAGES = (Stage.OCCUPANCY, Stage.SURFACE, Stage.SMOOTHING, Stage.WRITING)
+#: Stages of a quantification job.
+QUANTIFY_STAGES = (Stage.CAVITIES, Stage.SKELETON, Stage.CALIBRE, Stage.NETWORK)
 
 #: Called after each processed item with ``(stage, done, total)``.
 ProgressCallback = Callable[[Stage, int, int], None]
@@ -71,7 +79,7 @@ class Progress:
         done: Items processed in the current stage.
         total: Items in the current stage.
         fraction: Overall progress in ``[0, 1]``, weighted by the stage durations.
-        elapsed_s: Seconds since the tracker was created.
+        elapsed_s: Seconds since the tracker was created or its clock restarted.
         remaining_s: Estimated seconds left (``None`` until there is something to extrapolate).
     """
 
@@ -140,6 +148,12 @@ class ProgressTracker:
         with self._lock:
             self._listeners.append(listener)
 
+    def restart_clock(self) -> None:
+        """Count the elapsed time from now, e.g. once a queued run really starts."""
+        start = self._clock()
+        with self._lock:
+            self._start = start
+
     def cancel(self) -> None:
         """Ask the run to stop: its next progress update raises :class:`CancelledError`."""
         self._cancelled.set()
@@ -178,7 +192,8 @@ class ProgressTracker:
         """
         with self._lock:
             stage, done, total = self._state
-        elapsed = self._clock() - self._start
+            start = self._start
+        elapsed = self._clock() - start
         if stage is None:
             return Progress(None, 0, len(self.plan), 0, 0, 0.0, elapsed, None)
         index = self.plan.index(stage)

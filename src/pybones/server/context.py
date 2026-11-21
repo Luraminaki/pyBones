@@ -14,23 +14,16 @@ from typing import TYPE_CHECKING, Annotated, cast
 # FastAPI reads the annotations of dependencies at runtime (`get_context` below).
 from fastapi import Depends, Request  # noqa: TC002
 
-from pybones.api.jobs import FINISHED_STATES, SEGMENTATION_JOB
-from pybones.api.operations import segment
+from pybones.api.jobs import FINISHED_STATES, UnknownJobError
 from pybones.config.loader import apply_overrides
-from pybones.segmentation.pipeline import planned_stages
-from pybones.server.library import ConflictError, NotFoundError
+from pybones.server.library import ConflictError
 from pybones.server.schemas import JobView
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-    from pathlib import Path
-
     from pybones.api.jobs import JobManager, JobStatus
     from pybones.config.schema import PyBonesConfig, ServerConfig
     from pybones.meshing.formats import MeshFormat
     from pybones.segmentation.labels import Label
-    from pybones.segmentation.results import SegmentationMeta
-    from pybones.segmentation.stages import ProgressTracker
     from pybones.server.library import Library
     from pybones.server.schemas import SegmentationRequest
 
@@ -48,40 +41,6 @@ class JobTarget:
     segmentation: str
     label: "Label | None"
     mesh_format: "MeshFormat | None"
-
-
-def segmentation_work(
-    source: "Path", out_dir: "Path", config: "PyBonesConfig"
-) -> "Callable[[ProgressTracker], SegmentationMeta]":
-    """Build the work of a segmentation job.
-
-    Args:
-        source: Stack to segment.
-        out_dir: New output folder (created by the run).
-        config: Configuration of the run.
-
-    Returns:
-        The job's work: segments, and removes the output folder if the run does not finish
-        (the pipeline leaves it empty then).
-    """
-
-    def work(tracker: "ProgressTracker") -> "SegmentationMeta":
-        """Segment, removing the output folder if the run does not finish.
-
-        Args:
-            tracker: Progress tracker of the job.
-
-        Returns:
-            The segmentation metadata.
-        """
-        try:
-            return segment(source, out_dir, config, tracker)
-        except BaseException:
-            with contextlib.suppress(OSError):
-                out_dir.rmdir()
-            raise
-
-    return work
 
 
 @dataclass(slots=True)
@@ -134,12 +93,9 @@ class ServerContext:
             Its status and target.
 
         Raises:
-            NotFoundError: If no job has this id (or it was forgotten).
+            UnknownJobError: If no job has this id (or it was forgotten).
         """
-        try:
-            return self.view(self.jobs.status(job_id))
-        except KeyError:
-            raise NotFoundError(f"no job {job_id!r}") from None
+        return self.view(self.jobs.status(job_id))
 
     def all_jobs(self) -> list[JobView]:
         """Describe every remembered job, oldest first.
@@ -164,7 +120,8 @@ class ServerContext:
         with self.lock:
             same = [job_id for job_id, t in self.targets.items() if t == target]
         for job_id in same:
-            with contextlib.suppress(NotFoundError):
+            # Another thread may forget a finished job between the two reads.
+            with contextlib.suppress(UnknownJobError):
                 current = self.job(job_id)
                 if current.state not in FINISHED_STATES:
                     return current
@@ -189,7 +146,7 @@ class ServerContext:
         The name is taken as long as its folder exists or an unfinished job will write
         it, so a job cancelled while queued frees it without leaving anything behind.
         The folder is created when the job starts, and removed if the run fails or
-        is cancelled (the pipeline leaves it empty then).
+        is cancelled (see :func:`~pybones.segmentation.pipeline.run_segmentation`).
 
         Args:
             request: Dataset, new name and configuration overrides.
@@ -208,12 +165,7 @@ class ServerContext:
             if self.active_job(target) is not None:
                 raise ConflictError(f"a job is already writing {request.name!r}")
             out_dir = self.library.new_segmentation_path(request.name)
-            job_id = self.jobs.submit(
-                SEGMENTATION_JOB,
-                segmentation_work(source, out_dir, config),
-                planned_stages(config),
-                config.pipeline.stage_weights,
-            )
+            job_id = self.jobs.submit_segmentation(source, out_dir, config)
             self._record(job_id, target)
         return self.job(job_id)
 

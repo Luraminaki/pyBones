@@ -11,8 +11,12 @@ dependencies = [
     "numpy>=2.0",
     "opencv-python-headless>=4.10",
     "pydantic>=2.9",
-    # Marching cubes only (skimage.measure.marching_cubes).
+    # Marching cubes and 3D skeletonisation only (skimage.measure.marching_cubes,
+    # skimage.morphology.skeletonize).
     "scikit-image>=0.24",
+    # One of the interchangeable backends of the vascular quantification (scipy.ndimage);
+    # already required by scikit-image.
+    "scipy>=1.13",
     "uvicorn>=0.32",
 ]
 
@@ -26,6 +30,7 @@ dev = [
     "pytest>=8",
     "pytest-cov>=7.1.0",
     "ruff>=0.8",
+    "scipy-stubs>=1.18.1.1",
 ]
 
 [build-system]

@@ -37,7 +37,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from pybones import __version__
-from pybones.api.jobs import JobManager
+from pybones.api.jobs import JobManager, UnknownJobError
 from pybones.segmentation.results import IncompatibleOutputError
 from pybones.server.context import ServerContext
 from pybones.server.library import ConflictError, Library, NotFoundError
@@ -78,7 +78,7 @@ def _error(status: HTTPStatus, exc: Exception) -> JSONResponse:
 
 
 async def not_found(_request: "Request", exc: Exception) -> JSONResponse:
-    """Answer 404 to a :class:`NotFoundError`.
+    """Answer 404 to a :class:`NotFoundError` or an unknown job.
 
     Args:
         _request: Failed request (unused).
@@ -159,6 +159,7 @@ def create_app(config: "PyBonesConfig", server: "ServerConfig") -> FastAPI:
     )
     app.state.context = context
     app.add_exception_handler(NotFoundError, not_found)
+    app.add_exception_handler(UnknownJobError, not_found)
     app.add_exception_handler(ConflictError, conflict)
     app.add_exception_handler(IncompatibleOutputError, conflict)
     for module in (system, datasets, segmentations, jobs):

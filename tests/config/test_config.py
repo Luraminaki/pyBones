@@ -7,11 +7,12 @@ import pytest
 from pydantic import ValidationError
 
 from pybones.config.loader import (
+    DEFAULT_CONFIG_RESOURCE,
     apply_overrides,
-    default_config_text,
     load_config,
     load_server_config,
     override_section,
+    packaged_text,
 )
 from pybones.segmentation.labels import Label
 from pybones.segmentation.stages import MESH_STAGES, STAGES_3D
@@ -35,7 +36,7 @@ def test_user_file_is_deep_merged(tmp_path: "Path") -> None:
     _ = user.write_text(json.dumps({"segmentation": {"burst": {"density": 0.5}}}))
     config = load_config(user)
     assert config.segmentation.burst.density == 0.5
-    default = json.loads(default_config_text())
+    default = json.loads(packaged_text(DEFAULT_CONFIG_RESOURCE))
     window = default["segmentation"]["burst"]["window_xy_um"]
     assert config.segmentation.burst.window_xy_um == window
 

@@ -8,17 +8,19 @@ import cv2
 import numpy as np
 
 from pybones.config.loader import load_config
+from pybones.config.schema import PruningConfig
 from pybones.segmentation.scales import resolve_pixel_params
 from pybones.utils.constants import UINT16_MAX
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
     from numpy.typing import NDArray
 
     from pybones.config.schema import PyBonesConfig
     from pybones.segmentation.scales import PixelParams
+    from pybones.segmentation.stages import Progress, ProgressTracker, Stage
 
 #: Intensities of the synthetic slices (16-bit grey levels).
 BACKGROUND, BONE, VESSEL = 3_000, 14_000, 32_000
@@ -48,6 +50,12 @@ NEIGHBOURS_26 = tuple(
     if (dz, dy, dx) != (0, 0, 0)
 )
 NEIGHBOURS_6 = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
+
+
+#: Pruning that removes nothing: the network exactly as the skeleton draws it.
+KEEP_ALL = PruningConfig(
+    spur_radius_factor=0.0, min_spur_um=0.0, min_fragment_um=0.0, junction_merge_factor=0.0
+)
 
 
 def small_config(*extra: str) -> "PyBonesConfig":
@@ -152,3 +160,45 @@ class Folders:
 
     data: "Path"
     output: "Path"
+
+
+def line(a: tuple[int, int, int], b: tuple[int, int, int]) -> list[tuple[int, int, int]]:
+    """Voxels of a 26-connected segment from ``a`` to ``b`` (both included).
+
+    Args:
+        a: First voxel.
+        b: Last voxel.
+
+    Returns:
+        The voxels, in order.
+    """
+    steps = max(abs(q - p) for p, q in zip(a, b, strict=True))
+    out: list[tuple[int, int, int]] = []
+    for t in range(steps + 1):
+        voxel = tuple(round(p + (q - p) * t / max(steps, 1)) for p, q in zip(a, b, strict=True))
+        if not out or out[-1] != voxel:
+            out.append((voxel[0], voxel[1], voxel[2]))
+    return out
+
+
+def cancel_in(tracker: "ProgressTracker", stage: "Stage") -> "Callable[[Progress], None]":
+    """Build a listener cancelling a run at its first update in ``stage``.
+
+    Args:
+        tracker: Tracker to cancel.
+        stage: Stage in which to cancel.
+
+    Returns:
+        The listener.
+    """
+
+    def listener(progress: "Progress") -> None:
+        """Cancel the run once it reaches the chosen stage.
+
+        Args:
+            progress: Reported progress.
+        """
+        if progress.stage == stage:
+            tracker.cancel()
+
+    return listener

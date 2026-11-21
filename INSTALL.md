@@ -98,8 +98,10 @@ pip install -U .                 # or: pip install -U -e . --group dev  (pip >= 
 ```
 
 Dependencies are deliberately few: **numpy** and **OpenCV** for the computations, **pydantic** for
-the configuration, **scikit-image** for marching cubes only, and **FastAPI** with **uvicorn** for
-the web server. three.js, for the page's 3D view, is kept in the repository.
+the configuration, **scikit-image** for marching cubes and 3D skeletonisation only, **SciPy** as one
+of the interchangeable backends of the vascular quantification (scikit-image requires it anyway),
+and **FastAPI** with **uvicorn** for the web server. three.js, for the page's 3D view, is kept in the
+repository.
 
 ## DATASET
 
@@ -200,7 +202,8 @@ local** (see the limitations in the [README](README.md#known-limitations)).
 uv run ruff check src tests tools
 uv run ruff format src tests tools
 uv run basedpyright
-uv run pytest
+uv run pytest                                                          # also runs the JavaScript checks
+node --test tests/js/                                                  # the JavaScript tests alone
 uv run pytest --cov=src/pybones --cov=tools --cov-report=term-missing   # coverage
 PYBONES_UPDATE_GOLDEN=1 uv run pytest tests/regression                 # record a new baseline
 ```
@@ -243,6 +246,17 @@ the npm integrity hash and each file's SHA-256. `tests/server/test_page.py` chec
 that every import of every module resolves to a served file. To update three.js: download the new
 package from the npm registry, check its integrity against the registry's, copy the same files, and
 rewrite the manifest; the test then confirms the set is complete.
+
+The page's JavaScript is documented like the Python: a JSDoc comment on every function, checked by
+`tests/server/test_page_js.py`. With [Node.js](https://nodejs.org/) installed (any recent version;
+not needed to use pyBones, and no `npm install`), the same test file also:
+
+- checks that every module parses;
+- runs the `node:test` suites in `tests/js/`: formatting helpers, the HTTP client against a stubbed
+  `fetch` and `EventSource`, the "segment again" settings difference;
+- checks that the labels and finished job states the page knows match Python's.
+
+Without Node those checks are skipped. The page itself is checked by hand in a browser.
 
 [Ruff](https://docs.astral.sh/ruff/) also enforces the project conventions: no magic values, Google
 docstrings, type-only imports under `if TYPE_CHECKING:` (quoted annotations), no imports outside the

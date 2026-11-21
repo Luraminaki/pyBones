@@ -39,10 +39,10 @@ class Label(IntEnum):
         Raises:
             ValueError: If ``key`` names no label.
         """
-        try:
-            return cls[key.upper()]
-        except KeyError:
-            raise ValueError(f"Unknown label {key!r}; expected one of {label_keys()}") from None
+        label = cls.__members__.get(key.upper())
+        if label is None:
+            raise ValueError(f"Unknown label {key!r}; expected one of {label_keys()}")
+        return label
 
 
 #: Labels present in final (refined) volumes.

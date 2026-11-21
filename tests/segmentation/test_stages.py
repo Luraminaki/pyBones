@@ -13,7 +13,7 @@ from pybones.segmentation.stages import (
     ProgressTracker,
     Stage,
 )
-from tests.helpers import small_config
+from tests.helpers import cancel_in, small_config
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -80,6 +80,19 @@ def test_listeners_receive_every_update() -> None:
     assert "[1/2] thresholds" in progress_line(seen[-1])
 
 
+def test_restarting_the_clock_counts_from_then() -> None:
+    """Time before :meth:`ProgressTracker.restart_clock` (e.g. queued) is not elapsed time."""
+    clock = FakeClock()
+    tracker = ProgressTracker(STAGES_2D, EQUAL, clock)
+    clock.now = 10.0
+    tracker.restart_clock()
+    clock.now = 12.0
+    tracker(Stage.THRESHOLDS, 1, 1)  # half of the plan done in 2 s
+    snapshot = tracker.snapshot()
+    assert snapshot.elapsed_s == 2.0
+    assert snapshot.remaining_s == 2.0
+
+
 def test_cancel_raises_at_the_next_update() -> None:
     """A cancelled tracker stops the run at its next update."""
     tracker = ProgressTracker(STAGES_2D, EQUAL)
@@ -97,18 +110,24 @@ def test_cancelled_run_leaves_no_volume_behind(
     """Cancelling during classification or refinement removes every volume it started."""
     config = small_config()
     tracker = ProgressTracker(planned_stages(config), config.pipeline.stage_weights)
-
-    def cancel_in_stage(progress: "Progress") -> None:
-        """Cancel as soon as the chosen stage starts.
-
-        Args:
-            progress: Current snapshot.
-        """
-        if progress.stage == stage:
-            tracker.cancel()
-
-    tracker.add_listener(cancel_in_stage)
+    tracker.add_listener(cancel_in(tracker, stage))
     out_dir = tmp_path / "out"
     with pytest.raises(CancelledError):
         _ = run_segmentation(slice_dir, out_dir, config, tracker)
-    assert list(out_dir.iterdir()) == []
+    assert not out_dir.exists()  # the run created it: nothing of it is left
+
+
+def test_a_cancelled_run_keeps_a_folder_it_did_not_create(
+    slice_dir: "Path", tmp_path: "Path"
+) -> None:
+    """An output folder that existed before the run stays, with what it held."""
+    config = small_config()
+    tracker = ProgressTracker(planned_stages(config), config.pipeline.stage_weights)
+    tracker.add_listener(cancel_in(tracker, Stage.CLASSIFY))
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    keep = out_dir / "notes.txt"
+    _ = keep.write_text("mine")
+    with pytest.raises(CancelledError):
+        _ = run_segmentation(slice_dir, out_dir, config, tracker)
+    assert list(out_dir.iterdir()) == [keep]

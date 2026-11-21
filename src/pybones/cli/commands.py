@@ -14,11 +14,10 @@ from pybones.api.operations import (
     compare_label,
     export_masks,
     preview,
-    segment,
     write_mesh_file,
 )
 from pybones.config.loader import load_server_config
-from pybones.segmentation.pipeline import planned_stages
+from pybones.segmentation.pipeline import planned_stages, run_segmentation
 from pybones.segmentation.stages import MESH_STAGES, ProgressTracker
 from pybones.server.app import DOCS_PATH, create_app, server_url
 from pybones.utils.constants import JSON_INDENT
@@ -89,7 +88,7 @@ def cmd_segment(args: "SegmentArgs", config: "PyBonesConfig") -> None:
     """
     tracker = ProgressTracker(planned_stages(config), config.pipeline.stage_weights)
     tracker.add_listener(_print_progress)
-    meta = segment(args.source, args.output, config, tracker)
+    meta = run_segmentation(args.source, args.output, config, tracker)
     fractions = ", ".join(f"{k}={v:.2%}" for k, v in meta.label_fractions.items())
     logger.info("Label fractions of %s: %s", args.output, fractions)
 

@@ -9,7 +9,12 @@ from fastapi.responses import FileResponse, Response
 
 from pybones.api.operations import preview
 from pybones.meshing.formats import MeshFormat
-from pybones.segmentation.labels import Label, foreground_from_key
+from pybones.segmentation.labels import (
+    FOREGROUND_LABELS,
+    Label,
+    foreground_from_key,
+    label_keys,
+)
 from pybones.segmentation.results import SegmentationMeta
 from pybones.server.context import Context
 from pybones.server.library import NotFoundError
@@ -48,10 +53,11 @@ def foreground_label(label: str) -> Label:
     Raises:
         HTTPException: 422 if it names no foreground label.
     """
-    try:
-        return foreground_from_key(label)
-    except ValueError as exc:
-        raise HTTPException(HTTPStatus.UNPROCESSABLE_ENTITY, str(exc)) from None
+    keys = label_keys(FOREGROUND_LABELS)
+    if label.lower() not in keys:
+        detail = f"choose one of {keys}, not {label!r}"
+        raise HTTPException(HTTPStatus.UNPROCESSABLE_ENTITY, detail)
+    return foreground_from_key(label)
 
 
 ForegroundLabel = Annotated[Label, Depends(foreground_label)]
@@ -153,11 +159,12 @@ def get_slice(
     if scale is not None and scale > context.server.api.max_preview_scale:
         detail = f"scale must be <= {context.server.api.max_preview_scale}"
         raise HTTPException(HTTPStatus.UNPROCESSABLE_ENTITY, detail)
+    depth = context.library.meta(segmentation_id).shape_zyx[0]
+    if z >= depth:
+        raise NotFoundError(f"slice {z} is outside the stack (0..{depth - 1})")
     segmentation = context.library.segmentation_path(segmentation_id)
-    try:
+    try:  # the stack is read from where it was when segmented: it may have moved
         image = preview(segmentation, z, context.config, scale=scale)
-    except IndexError as exc:
-        raise NotFoundError(str(exc)) from None
     except FileNotFoundError as exc:
         raise NotFoundError(f"source stack of {segmentation_id!r} not found: {exc}") from None
     ok, encoded = cv2.imencode(PNG_EXTENSION, image)

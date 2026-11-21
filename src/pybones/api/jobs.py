@@ -22,6 +22,8 @@ the ``jobs.history_size`` most recent finished jobs are remembered.
 """
 
 import contextlib
+import dataclasses
+import functools
 import itertools
 import logging
 import queue
@@ -34,20 +36,25 @@ from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import BaseModel, ConfigDict
 
-from pybones.api.operations import segment, write_mesh_file
-from pybones.segmentation.pipeline import planned_stages
-from pybones.segmentation.stages import MESH_STAGES, CancelledError, ProgressTracker, Stage
+from pybones.api.operations import write_mesh_file
+from pybones.segmentation.pipeline import planned_stages, run_segmentation
+
+# Pydantic reads the type of `JobStatus.progress` at runtime.
+from pybones.segmentation.stages import (  # noqa: TC001
+    MESH_STAGES,
+    CancelledError,
+    Progress,
+    ProgressTracker,
+    Stage,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping
     from concurrent.futures import Future
     from pathlib import Path
 
-    from pybones.api.operations import MeshFile
     from pybones.config.schema import JobsConfig, PyBonesConfig
     from pybones.segmentation.labels import Label
-    from pybones.segmentation.results import SegmentationMeta
-    from pybones.segmentation.stages import Progress
 
 #: Name prefix of the job threads, as shown in the logs.
 JOB_THREAD_PREFIX = "pybones-job"
@@ -55,6 +62,10 @@ SEGMENTATION_JOB = "segmentation"
 MESH_JOB = "mesh"
 
 logger = logging.getLogger(__name__)
+
+
+class UnknownJobError(LookupError):
+    """No job has this id (never submitted, or forgotten since it finished)."""
 
 
 class JobState(StrEnum):
@@ -71,32 +82,6 @@ class JobState(StrEnum):
 FINISHED_STATES = frozenset({JobState.SUCCEEDED, JobState.FAILED, JobState.CANCELLED})
 
 
-class JobProgress(BaseModel):
-    """Progress of a job (see :class:`pybones.segmentation.stages.Progress`).
-
-    Attributes:
-        stage: Current stage (``None`` before the first update).
-        stage_index: 1-based position of the stage in the plan.
-        stage_count: Number of planned stages.
-        done: Items processed in the current stage.
-        total: Items in the current stage.
-        fraction: Overall progress in ``[0, 1]``.
-        elapsed_s: Seconds since the job started.
-        remaining_s: Estimated seconds left, if known.
-    """
-
-    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True)
-
-    stage: Stage | None
-    stage_index: int
-    stage_count: int
-    done: int
-    total: int
-    fraction: float
-    elapsed_s: float
-    remaining_s: float | None
-
-
 class JobStatus(BaseModel):
     """What a front end shows about a job (JSON-ready: ``status.model_dump_json()``).
 
@@ -104,7 +89,8 @@ class JobStatus(BaseModel):
         job_id: Identifier returned by :meth:`JobManager.submit`.
         kind: What the job does, e.g. ``segmentation``.
         state: Where it is in its life cycle.
-        progress: Its progress (``None`` while queued).
+        progress: Its progress (``None`` while queued); a finished job's is frozen at its
+            end (time left 0, and 100 % if it succeeded).
         error: Why it failed, if it did.
         submitted_at: Submission time (seconds since the epoch).
     """
@@ -114,7 +100,7 @@ class JobStatus(BaseModel):
     job_id: str
     kind: str
     state: JobState
-    progress: JobProgress | None
+    progress: Progress | None
     error: str | None
     submitted_at: float
 
@@ -162,18 +148,17 @@ StatusListener = Callable[[JobStatus], None]
 def put_latest(events: "queue.Queue[JobStatus]", status: JobStatus) -> None:
     """Queue a status, dropping the oldest one if the subscriber is too slow.
 
+    Only the job's thread puts statuses, so once room is made the put cannot fail; the
+    follower's thread takes them, and may empty the queue between the check and the drop.
+
     Args:
         events: A subscriber's queue.
         status: Status to send.
     """
-    while True:
-        try:
-            events.put_nowait(status)
-        except queue.Full:
-            with contextlib.suppress(queue.Empty):
-                _ = events.get_nowait()
-        else:
-            return
+    if events.full():
+        with contextlib.suppress(queue.Empty):  # the follower took it first: room made anyway
+            _ = events.get_nowait()
+    events.put_nowait(status)
 
 
 class JobManager:
@@ -242,20 +227,11 @@ class JobManager:
         Returns:
             The job id; its result is the :class:`~pybones.segmentation.results.SegmentationMeta`.
         """
-
-        def work(tracker: ProgressTracker) -> "SegmentationMeta":
-            """Segment, reporting to the job's tracker.
-
-            Args:
-                tracker: Progress tracker of the job.
-
-            Returns:
-                The segmentation metadata.
-            """
-            return segment(source, out_dir, config, tracker)
-
         return self.submit(
-            SEGMENTATION_JOB, work, planned_stages(config), config.pipeline.stage_weights
+            SEGMENTATION_JOB,
+            functools.partial(run_segmentation, source, out_dir, config),
+            planned_stages(config),
+            config.pipeline.stage_weights,
         )
 
     def submit_mesh(
@@ -272,19 +248,12 @@ class JobManager:
         Returns:
             The job id; its result is the :class:`~pybones.api.operations.MeshFile`.
         """
-
-        def work(tracker: ProgressTracker) -> "MeshFile":
-            """Mesh, reporting to the job's tracker.
-
-            Args:
-                tracker: Progress tracker of the job.
-
-            Returns:
-                The written mesh file.
-            """
-            return write_mesh_file(segmentation, label, path, config, tracker)
-
-        return self.submit(MESH_JOB, work, MESH_STAGES, config.mesh.stage_weights)
+        return self.submit(
+            MESH_JOB,
+            functools.partial(write_mesh_file, segmentation, label, path, config),
+            MESH_STAGES,
+            config.mesh.stage_weights,
+        )
 
     def _run(self, job: _Job, work: "Callable[[ProgressTracker], object]") -> object:
         """Run a job in a worker thread and record how it ended.
@@ -300,12 +269,15 @@ class JobManager:
             CancelledError: If the job was cancelled (also recorded in its state).
             Exception: Whatever the work raised (also recorded in its state).
         """
-        with self._lock:
-            cancelled = job.tracker.cancelled
-            job.state = JobState.CANCELLED if cancelled else JobState.RUNNING
-        self._publish(job, state_changed=True)
-        if cancelled:
+        # Time counts from here: a job waiting for a worker is not slow, and its estimate of
+        # the time left must not include the wait.
+        job.tracker.restart_clock()
+        if job.tracker.cancelled:
+            self._finish(job, JobState.CANCELLED, None)
             raise CancelledError(f"{job.job_id} cancelled before it started")
+        with self._lock:
+            job.state = JobState.RUNNING
+        self._publish(job, state_changed=True)
         logger.info("Started job %s", job.job_id)
         try:
             result = work(job.tracker)
@@ -372,7 +344,7 @@ class JobManager:
             The job's status now, and a function that stops the listener.
 
         Raises:
-            KeyError: If no job has this id (or it was forgotten).
+            UnknownJobError: If no job has this id (or it was forgotten).
         """
         job = self._job(job_id)
         with self._lock:
@@ -380,8 +352,9 @@ class JobManager:
 
         def unsubscribe() -> None:
             """Stop sending statuses to the listener (calling it twice is harmless)."""
-            with self._lock, contextlib.suppress(ValueError):
-                job.subscribers.remove(listener)
+            with self._lock:
+                if listener in job.subscribers:
+                    job.subscribers.remove(listener)
 
         return self._describe(job), unsubscribe
 
@@ -404,16 +377,7 @@ class JobManager:
         """
         job = self._job(job_id)
         events: queue.Queue[JobStatus] = queue.Queue(maxsize=self._config.event_queue_size)
-
-        def enqueue(status: JobStatus) -> None:
-            """Queue a status for this follower (oldest dropped if it lags).
-
-            Args:
-                status: Status sent.
-            """
-            put_latest(events, status)
-
-        status, unsubscribe = self.subscribe(job_id, enqueue)
+        status, unsubscribe = self.subscribe(job_id, functools.partial(put_latest, events))
         try:
             yield status
             while status.state not in FINISHED_STATES:
@@ -441,10 +405,13 @@ class JobManager:
             The job record.
 
         Raises:
-            KeyError: If no job has this id (or it was forgotten).
+            UnknownJobError: If no job has this id (or it was forgotten).
         """
         with self._lock:
-            return self._jobs[job_id]
+            job = self._jobs.get(job_id)
+        if job is None:
+            raise UnknownJobError(f"no job {job_id!r}")
+        return job
 
     def status(self, job_id: str) -> JobStatus:
         """Describe a job now (safe to call from any thread).
@@ -470,18 +437,15 @@ class JobManager:
             state, error, final_elapsed = job.state, job.error, job.final_elapsed_s
         progress = None
         if state != JobState.QUEUED:
-            p = job.tracker.snapshot()
-            progress = JobProgress(
-                stage=p.stage,
-                stage_index=p.stage_index,
-                stage_count=p.stage_count,
-                done=p.done,
-                total=p.total,
-                fraction=1.0 if state == JobState.SUCCEEDED else p.fraction,
+            progress = job.tracker.snapshot()
+            if final_elapsed is not None:
                 # A finished job's duration stops at its end, however late it is asked for.
-                elapsed_s=p.elapsed_s if final_elapsed is None else final_elapsed,
-                remaining_s=p.remaining_s if final_elapsed is None else 0.0,
-            )
+                progress = dataclasses.replace(
+                    progress,
+                    fraction=1.0 if state == JobState.SUCCEEDED else progress.fraction,
+                    elapsed_s=final_elapsed,
+                    remaining_s=0.0,
+                )
         return JobStatus(
             job_id=job.job_id,
             kind=job.kind,

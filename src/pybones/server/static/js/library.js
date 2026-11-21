@@ -2,17 +2,23 @@
 
 import { api } from './api.js';
 import { track } from './jobs.js';
-import { cssColor, cssPercent, el, percent, toast } from './ui.js';
+import { cssColor, cssPercent, el, LABELS, percent, toast } from './ui.js';
 
-// Labels drawn in the fraction bar of a card (background is the remainder).
-const BAR_LABELS = ['bone', 'vessel', 'burst'];
 const STACK_SUFFIX = /\.zip$/i;
 
-let state;
+let state; // {server, colors, summaries}
 
+/**
+ * Build the card of a segmentation: its name, size, version and label fractions.
+ * @param {import('./api.js').SegmentationSummary} summary The segmentation.
+ * @param {Object<string, number[]>} colors BGR colour per label.
+ * @param {boolean} selected Whether it is the one shown.
+ * @param {function(string): void} onSelect Called with its id when clicked.
+ * @returns {HTMLElement} The card's list item.
+ */
 function card(summary, colors, selected, onSelect) {
   const [depth, height, width] = summary.shape_zyx;
-  const fractions = BAR_LABELS.map((label) =>
+  const fractions = LABELS.map((label) =>
     el('span', {
       style: `width: ${cssPercent(summary.label_fractions[label] || 0)}; background: ${cssColor(colors[label])}`,
       title: `${label} ${percent(summary.label_fractions[label] || 0, 1)}`,
@@ -36,6 +42,12 @@ function card(summary, colors, selected, onSelect) {
   );
 }
 
+/**
+ * Show the list of segmentations.
+ * @param {import('./api.js').SegmentationSummary[]} summaries The segmentations.
+ * @param {?string} selectedId The one shown, if any.
+ * @param {function(string): void} onSelect Called with an id when a card is clicked.
+ */
 export function renderSegmentations(summaries, selectedId, onSelect) {
   const list = document.getElementById('segmentation-list');
   const empty = document.getElementById('segmentation-empty');
@@ -46,6 +58,10 @@ export function renderSegmentations(summaries, selectedId, onSelect) {
   empty.textContent = `No segmentation yet in ${state.server.output_dir}.`;
 }
 
+/**
+ * Offer the stacks of the data folder in the form.
+ * @param {{id: string, slices: number, height: number, width: number}[]} datasets The stacks.
+ */
 function renderDatasets(datasets) {
   const select = document.getElementById('dataset');
   const empty = document.getElementById('dataset-empty');
@@ -60,7 +76,7 @@ function renderDatasets(datasets) {
   suggestName();
 }
 
-// A free name for the next run, e.g. data_set-2 (the user can change it).
+/** Fill in a free name for the next run, e.g. `data_set-2`, unless the user typed one. */
 function suggestName() {
   const input = document.getElementById('seg-name');
   const dataset = document.getElementById('dataset').value;
@@ -72,12 +88,18 @@ function suggestName() {
   input.value = name;
 }
 
-// The settings of `used` that differ from `base`, as `section.key=value` lines (the form's
-// syntax), within the sections a run may override. Lists count as single values.
+/**
+ * List the settings of `used` that differ from `base`, as `section.key=value` lines (the
+ * form's syntax), within the sections a run may override. Lists count as single values.
+ * @param {object} base The server's configuration.
+ * @param {object} used The configuration of a segmentation.
+ * @param {string[]} sections Sections a request may override.
+ * @returns {string[]} One override line per differing value.
+ */
 export function settingsDiff(base, used, sections) {
   const lines = [];
+  const isSection = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
   const walk = (a, b, path) => {
-    const isSection = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
     if (isSection(a) && isSection(b)) {
       for (const key of Object.keys(b)) walk(a[key], b[key], [...path, key]);
     } else if (JSON.stringify(a) !== JSON.stringify(b)) {
@@ -88,7 +110,12 @@ export function settingsDiff(base, used, sections) {
   return lines;
 }
 
-// Fill in the form for another run: same stack (if still in the data folder), same settings.
+/**
+ * Fill in the form for another run: same stack (if still in the data folder), same settings.
+ * @param {string} datasetId Stack of the run.
+ * @param {string[]} overrides Its settings, as override lines.
+ * @returns {boolean} Whether the stack is still offered.
+ */
 export function prefill(datasetId, overrides) {
   const select = document.getElementById('dataset');
   const known = [...select.options].some((o) => o.value === datasetId);
@@ -105,6 +132,13 @@ export function prefill(datasetId, overrides) {
   return known;
 }
 
+/**
+ * Read the segmentations and stacks again and show them.
+ * @param {?string} selectedId The segmentation shown, if any.
+ * @param {function(string): void} onSelect Called with an id when a card is clicked.
+ * @returns {Promise<import('./api.js').SegmentationSummary[]>} The segmentations.
+ * @throws {import('./api.js').ApiError} If the server cannot list them.
+ */
 export async function reloadLists(selectedId, onSelect) {
   const [summaries, datasets] = await Promise.all([api.segmentations(), api.datasets()]);
   state.summaries = summaries;
@@ -113,6 +147,11 @@ export async function reloadLists(selectedId, onSelect) {
   return summaries;
 }
 
+/**
+ * Wire the form: name suggestions, and starting a segmentation job on submit.
+ * @param {{data_dir: string, output_dir: string}} server What the server describes of itself.
+ * @param {Object<string, number[]>} colors BGR colour per label.
+ */
 export function initLibrary(server, colors) {
   state = { server, colors, summaries: [] };
   const form = document.getElementById('segment-form');
@@ -128,15 +167,17 @@ export function initLibrary(server, colors) {
     const submit = document.getElementById('segment-submit');
     const dataset = document.getElementById('dataset').value;
     submit.disabled = true;
+    let job;
     try {
-      const job = await api.createSegmentation(dataset, name.value, overrides);
-      name.dataset.edited = 'false';
-      toast(`Segmenting ${dataset} into ${name.value}`);
-      void track(job);
+      job = await api.createSegmentation(dataset, name.value, overrides);
     } catch (err) {
       toast(`Could not start: ${err.message}`, { error: true });
+      return;
     } finally {
       submit.disabled = false;
     }
+    name.dataset.edited = 'false';
+    toast(`Segmenting ${dataset} into ${name.value}`);
+    void track(job);
   });
 }

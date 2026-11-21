@@ -2,6 +2,7 @@
 
 import json
 import logging
+from dataclasses import fields
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -12,7 +13,7 @@ from pybones.cli.main import main as pybones_main
 from pybones.segmentation.labels import FINAL_LABELS, Label
 from tests.helpers import cli_overrides
 from tools.phantom.__main__ import main as phantom_main
-from tools.phantom.generator import render_phantom
+from tools.phantom.generator import SegmentState, VesselNetwork, render_phantom
 from tools.phantom.scoring import score_phantom
 from tools.phantom.settings import PhantomSettings, load_settings
 from tools.phantom.storage import load_phantom, save_phantom
@@ -108,6 +109,8 @@ def test_storage_roundtrip(phantom: "Phantom", tmp_path: "Path") -> None:
     np.testing.assert_array_equal(loaded.truth, phantom.truth)
     np.testing.assert_array_equal(loaded.vessel_radius_um, phantom.vessel_radius_um)
     np.testing.assert_array_equal(loaded.clotted, phantom.clotted)
+    for name in (f.name for f in fields(VesselNetwork)):
+        np.testing.assert_array_equal(getattr(loaded.network, name), getattr(phantom.network, name))
 
 
 def test_generate_segment_and_score_cli(tmp_path: "Path", caplog: pytest.LogCaptureFixture) -> None:
@@ -127,3 +130,74 @@ def test_generate_segment_and_score_cli(tmp_path: "Path", caplog: pytest.LogCapt
     assert len(scores) == 1
     assert "\naccuracy " in scores[0]
     assert "vessel recall by radius" in scores[0]
+
+
+#: Settings that make every vessel segment likely to fork.
+BRANCHING = {"branch_probability": 0.5, "branch_depth": 2}
+
+
+def vessel_settings(**vessels: object) -> PhantomSettings:
+    """Build the small phantom settings with some vessel settings replaced.
+
+    Args:
+        **vessels: Vessel settings to replace.
+
+    Returns:
+        The validated settings.
+    """
+    data = json.loads(small_settings().model_dump_json())
+    data["vessels"].update(vessels)
+    return PhantomSettings.model_validate(data)
+
+
+def test_unbranched_walks_record_their_segments(phantom: "Phantom") -> None:
+    """Without branching, each vessel is one branch of segments of the configured length."""
+    settings = small_settings()
+    network = phantom.network
+    assert len(network.branch_parent) == settings.vessels.count
+    assert (network.branch_parent == -1).all()
+    assert len(network.junctions_um) == 0
+    lengths = np.linalg.norm(network.segments_um[:, 1] - network.segments_um[:, 0], axis=1)
+    np.testing.assert_allclose(lengths, settings.vessels.segment_length_um, rtol=1e-5)
+    low, high = settings.vessels.radius_um
+    assert ((network.radius_um >= low) & (network.radius_um <= high)).all()
+    assert set(np.unique(network.state)) <= {int(s) for s in SegmentState}
+
+
+def test_branching_off_does_not_change_the_phantom(phantom: "Phantom") -> None:
+    """Branch settings are ignored at probability 0: the image is the same, draw for draw."""
+    other = render_phantom(
+        vessel_settings(branch_probability=0.0, branch_depth=5, branch_angle_deg=[10, 20]), VOXEL
+    )
+    np.testing.assert_array_equal(other.image, phantom.image)
+
+
+def test_branching_draws_trees_and_records_them() -> None:
+    """Each fork is a junction at the end of a drawn parent segment; branches are thinner."""
+    network = render_phantom(vessel_settings(**BRANCHING), VOXEL).network
+    parents = network.branch_parent
+    side = np.flatnonzero(parents >= 0)
+    assert len(side) == len(network.junctions_um) > 0
+    assert (parents[side] < side).all()  # a parent exists before its branches
+    # Junctions are recorded in the order the side branches start.
+    for branch, junction in zip(side, network.junctions_um, strict=True):
+        parent_ends = network.segments_um[network.branch == parents[branch]][:, 1]
+        assert np.isclose(parent_ends, junction, atol=1e-3).all(axis=1).any()
+    radius = {
+        int(b): float(network.radius_um[network.branch == b][0]) for b in np.unique(network.branch)
+    }
+    for branch in side:
+        if int(branch) in radius and int(parents[branch]) in radius:
+            assert radius[int(branch)] <= radius[int(parents[branch])]
+
+
+def test_an_old_phantom_says_to_generate_it_again(phantom: "Phantom", tmp_path: "Path") -> None:
+    """A truth file without the vessel network is refused with what to do."""
+    settings = small_settings()
+    save_phantom(phantom, tmp_path, settings)
+    path = tmp_path / settings.files.truth
+    with np.load(path) as data:
+        kept = {k: data[k] for k in ("truth", "vessel_radius_um", "clotted")}
+    np.savez_compressed(path, **kept)
+    with pytest.raises(ValueError, match="generate it again"):
+        _ = load_phantom(tmp_path, settings)

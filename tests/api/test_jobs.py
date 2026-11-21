@@ -8,10 +8,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from pybones.api.jobs import MESH_JOB, JobManager, JobState, put_latest
-from pybones.api.operations import MeshFile, segment
+from pybones.api.jobs import MESH_JOB, JobManager, JobState, UnknownJobError, put_latest
+from pybones.api.operations import MeshFile
 from pybones.config.loader import load_config
 from pybones.segmentation.labels import Label
+from pybones.segmentation.pipeline import run_segmentation
 from pybones.segmentation.results import SegmentationMeta
 from pybones.segmentation.stages import STAGES_2D, CancelledError, Stage
 from tests.helpers import small_config
@@ -28,6 +29,8 @@ WAIT_S = 30.0
 FAILURE = "boom"
 #: Wait long enough for a running clock to move.
 SETTLE_S = 0.05
+#: How long the second job waits in the queue.
+QUEUE_WAIT_S = 0.3
 
 
 @pytest.fixture
@@ -105,7 +108,34 @@ def test_queued_job_can_be_cancelled_before_it_starts(manager: JobManager) -> No
     assert manager.result(first, WAIT_S) == "done"
     with pytest.raises(CancelledError):
         _ = manager.result(second, WAIT_S)
-    assert manager.status(second).state == JobState.CANCELLED
+    status = manager.status(second)
+    assert status.state == JobState.CANCELLED
+    assert status.progress is not None
+    elapsed = status.progress.elapsed_s
+    time.sleep(SETTLE_S)
+    later = manager.status(second).progress
+    assert later is not None
+    assert later.elapsed_s == elapsed  # frozen like any finished job, never growing
+
+
+def test_a_queued_job_counts_its_time_from_its_start(manager: JobManager) -> None:
+    """The wait for a worker is not part of a job's elapsed time (nor of its time left)."""
+    release, started = threading.Event(), threading.Event()
+    first = manager.submit("test", blocked_job(release, started), STAGES_2D, WEIGHTS)
+    assert started.wait(WAIT_S)
+    second_release, second_started = threading.Event(), threading.Event()
+    second = manager.submit("test", blocked_job(second_release, second_started), STAGES_2D, WEIGHTS)
+    submitted = time.monotonic()
+    time.sleep(QUEUE_WAIT_S)
+    release.set()
+    assert second_started.wait(WAIT_S)
+    progress = manager.status(second).progress
+    second_release.set()
+    assert progress is not None
+    # Since its submission more than QUEUE_WAIT_S passed; since its start, far less.
+    assert progress.elapsed_s < time.monotonic() - submitted - QUEUE_WAIT_S / 2
+    assert manager.result(first, WAIT_S) == "done"
+    assert manager.result(second, WAIT_S) == "done"
 
 
 def test_running_job_stops_at_its_next_update(manager: JobManager) -> None:
@@ -167,7 +197,7 @@ def test_only_recent_finished_jobs_are_remembered(manager: JobManager) -> None:
     remembered = [s.job_id for s in manager.statuses()]
     assert ids[0] not in remembered
     assert ids[-1] in remembered
-    with pytest.raises(KeyError):
+    with pytest.raises(UnknownJobError):
         _ = manager.status(ids[0])
 
 
@@ -231,7 +261,7 @@ def test_mesh_job_writes_the_stl_file(
     """A mesh job reports the mesh stage, succeeds and returns the written file."""
     config = small_config()
     seg = tmp_path / "seg"
-    _ = segment(slice_dir, seg, config)
+    _ = run_segmentation(slice_dir, seg, config)
     path = tmp_path / "bone.stl"
     job_id = manager.submit_mesh(seg, Label.BONE, path, config)
     result = manager.result(job_id, WAIT_S)

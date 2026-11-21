@@ -40,8 +40,7 @@ class MeshFormat(StrEnum):
             ValueError: If the extension is not a supported format.
         """
         suffix = path.suffix.lower().removeprefix(_SUFFIX_SEPARATOR)
-        try:
-            return cls(suffix)
-        except ValueError:
+        if suffix not in {f.value for f in cls}:
             supported = ", ".join(f.suffix for f in cls)
-            raise ValueError(f"{path}: unsupported mesh format (use {supported})") from None
+            raise ValueError(f"{path}: unsupported mesh format (use {supported})")
+        return cls(suffix)

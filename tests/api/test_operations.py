@@ -5,27 +5,25 @@ from typing import TYPE_CHECKING
 import pytest
 
 from pybones.api.operations import (
-    PARTIAL_SUFFIX,
     compare_label,
     export_masks,
     mesh_label,
     preview,
     save_mesh,
-    segment,
     write_mesh_file,
 )
 from pybones.meshing.gltf import read_glb
 from pybones.meshing.stl import read_stl
 from pybones.segmentation.labels import Label
+from pybones.segmentation.pipeline import run_segmentation
 from pybones.segmentation.stages import MESH_STAGES, CancelledError, ProgressTracker
-from pybones.utils.constants import BGR_CHANNELS
-from tests.helpers import N_SYNTHETIC_SLICES, SLICE_SHAPE, small_config
+from pybones.utils.constants import BGR_CHANNELS, PARTIAL_SUFFIX
+from tests.helpers import N_SYNTHETIC_SLICES, SLICE_SHAPE, cancel_in, small_config
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from pathlib import Path
 
-    from pybones.segmentation.stages import Progress, Stage
+    from pybones.segmentation.stages import Stage
 
 PREVIEW_SCALE = 0.5
 
@@ -42,7 +40,7 @@ def segmentation(slice_dir: "Path", tmp_path: "Path") -> "Path":
         The segmentation output directory.
     """
     out = tmp_path / "seg"
-    _ = segment(slice_dir, out, small_config())
+    _ = run_segmentation(slice_dir, out, small_config())
     return out
 
 
@@ -116,26 +114,3 @@ def test_mesh_file_reports_every_stage_and_appears_only_when_complete(
             _ = write_mesh_file(segmentation, Label.VESSEL, cancelled, config, tracker)
         assert not cancelled.exists()
     assert list(tmp_path.glob(f"*{PARTIAL_SUFFIX}")) == []
-
-
-def cancel_in(tracker: ProgressTracker, stage: "Stage") -> "Callable[[Progress], None]":
-    """Build a listener cancelling a run at its first update in ``stage``.
-
-    Args:
-        tracker: Tracker to cancel.
-        stage: Stage in which to cancel.
-
-    Returns:
-        The listener.
-    """
-
-    def listener(progress: "Progress") -> None:
-        """Cancel the run once it reaches the chosen stage.
-
-        Args:
-            progress: Reported progress.
-        """
-        if progress.stage == stage:
-            tracker.cancel()
-
-    return listener

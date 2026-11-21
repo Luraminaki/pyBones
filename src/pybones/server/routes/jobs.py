@@ -8,9 +8,8 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
-from pybones.api.jobs import FINISHED_STATES
+from pybones.api.jobs import FINISHED_STATES, UnknownJobError
 from pybones.server.context import Context
-from pybones.server.library import NotFoundError
 from pybones.server.schemas import JobView
 
 if TYPE_CHECKING:
@@ -27,20 +26,18 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
 def offer_latest(inbox: "asyncio.Queue[JobStatus]", status: "JobStatus") -> None:
-    """Queue a status, dropping the oldest one if the client lags (runs in the event loop).
+    """Queue a status, dropping the oldest one if the client lags.
+
+    Runs in the event loop, the only thread touching ``inbox``: nothing can change it
+    between the check and the put.
 
     Args:
         inbox: The stream's queue.
         status: Status to send.
     """
-    while True:
-        try:
-            inbox.put_nowait(status)
-        except asyncio.QueueFull:
-            with contextlib.suppress(asyncio.QueueEmpty):
-                _ = inbox.get_nowait()
-        else:
-            return
+    if inbox.full():
+        _ = inbox.get_nowait()
+    inbox.put_nowait(status)
 
 
 def sse_event(context: "ServerContext", status: "JobStatus") -> str:
@@ -91,7 +88,7 @@ async def sse_stream(
             except TimeoutError:
                 try:
                     status = context.jobs.status(job_id)
-                except KeyError:  # forgotten meanwhile: nothing more to say
+                except UnknownJobError:  # forgotten meanwhile by another thread: nothing to say
                     return
             yield sse_event(context, status)
             if await request.is_disconnected():
@@ -147,7 +144,7 @@ async def follow_job(context: Context, job_id: str, request: Request) -> Streami
         The event stream.
 
     Raises:
-        NotFoundError: If no job has this id.
+        UnknownJobError: If no job has this id (answered 404).
     """
     loop = asyncio.get_running_loop()
     inbox: asyncio.Queue[JobStatus] = asyncio.Queue(maxsize=context.config.jobs.event_queue_size)
@@ -161,10 +158,7 @@ async def follow_job(context: Context, job_id: str, request: Request) -> Streami
         with contextlib.suppress(RuntimeError):  # the loop is closing: nobody to tell
             _ = loop.call_soon_threadsafe(offer_latest, inbox, status)
 
-    try:
-        first, unsubscribe = context.jobs.subscribe(job_id, deliver)
-    except KeyError:
-        raise NotFoundError(f"no job {job_id!r}") from None
+    first, unsubscribe = context.jobs.subscribe(job_id, deliver)
     return StreamingResponse(
         sse_stream(context, job_id, first, inbox, unsubscribe, request),
         media_type=SSE_MEDIA_TYPE,
@@ -184,10 +178,7 @@ def cancel_job(context: Context, job_id: str) -> JobView:
         Its status now (follow it to see it end as ``cancelled``).
 
     Raises:
-        NotFoundError: If no job has this id.
+        UnknownJobError: If no job has this id (answered 404).
     """
-    try:
-        context.jobs.cancel(job_id)
-    except KeyError:
-        raise NotFoundError(f"no job {job_id!r}") from None
+    context.jobs.cancel(job_id)
     return context.job(job_id)

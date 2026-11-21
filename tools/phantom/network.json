@@ -1,0 +1,99 @@
+{
+  "shape_zyx": [
+    96,
+    512,
+    512
+  ],
+  "seed": 2026,
+  "intensity": {
+    "background": 5300,
+    "bone": 13800,
+    "vessel": 28600,
+    "vessel_spread": 0.25,
+    "noise_std": 650,
+    "psf_sigma_um": 4.4
+  },
+  "cortex": {
+    "count": 2,
+    "thickness_um": [
+      120,
+      180
+    ]
+  },
+  "trabeculae": {
+    "plates": 14,
+    "plate_thickness_um": [
+      25,
+      45
+    ],
+    "plate_radius_um": [
+      90,
+      220
+    ],
+    "rods": 30,
+    "rod_radius_um": [
+      12,
+      22
+    ],
+    "rod_length_um": [
+      80,
+      260
+    ]
+  },
+  "vessels": {
+    "count": 24,
+    "radius_um": [
+      4,
+      25
+    ],
+    "segments": [
+      10,
+      28
+    ],
+    "segment_length_um": 24,
+    "turn_std_deg": 18,
+    "clot_probability": 0.12,
+    "clot_fill": [
+      0.2,
+      0.5
+    ],
+    "gap_probability": 0.04,
+    "branch_probability": 0.1,
+    "branch_angle_deg": [
+      30,
+      70
+    ],
+    "branch_radius_ratio": [
+      0.6,
+      0.85
+    ],
+    "branch_depth": 3
+  },
+  "bursts": {
+    "count": 2,
+    "radius_um": [
+      110,
+      200
+    ],
+    "speckle_radius_um": [
+      4,
+      10
+    ],
+    "speckle_fill": 0.45,
+    "haze_fill": 0.35
+  },
+  "excluded_value": 255,
+  "files": {
+    "slices_dir": "slices",
+    "slice_template": "slice_{index:04d}.png",
+    "truth": "truth.npz"
+  },
+  "score": {
+    "radius_bins_um": [
+      0,
+      6,
+      12,
+      25
+    ]
+  }
+}

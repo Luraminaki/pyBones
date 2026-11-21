@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 import pytest
 from fastapi.testclient import TestClient
 
-from pybones.api.operations import segment
 from pybones.config.loader import load_server_config
+from pybones.segmentation.pipeline import run_segmentation
 from pybones.server.app import create_app
 from tests.helpers import SEGMENTATION, STACK_DIR, STACK_ZIP, Folders, small_config
 
@@ -44,7 +44,7 @@ def folders(slice_dir: "Path", tmp_path: "Path") -> Folders:
     _ = (data / "notes.txt").write_text("not a stack")
     _ = shutil.copytree(slice_dir, data / ".hidden")
     config = small_config()
-    _ = segment(data / STACK_DIR, output / SEGMENTATION, config)
+    _ = run_segmentation(data / STACK_DIR, output / SEGMENTATION, config)
     (output / "unfinished").mkdir()
     (output / "broken").mkdir()
     _ = (output / "broken" / config.io.meta_file).write_text(json.dumps({"source": "x"}))

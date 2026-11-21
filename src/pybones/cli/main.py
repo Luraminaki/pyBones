@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
@@ -33,6 +34,8 @@ from pybones.utils.logs import configure_logging
 
 #: Program name: console script, log file stem.
 PROGRAM_NAME = "pybones"
+#: Exit status of a program stopped by Ctrl+C (128 + SIGINT), as shells report it.
+INTERRUPTED_EXIT_STATUS = 130
 
 logger = logging.getLogger(__name__)
 
@@ -187,6 +190,11 @@ def main(argv: "Sequence[str] | None" = None) -> None:
     )
     try:
         run_command(invocation.args, config)
+    except KeyboardInterrupt:
+        # The user's choice, not a failure: one line, no traceback, the usual exit status.
+        print(file=sys.stderr)  # leave the progress line
+        logger.warning("pybones %s interrupted", invocation.args.command)
+        raise SystemExit(INTERRUPTED_EXIT_STATUS) from None
     except Exception as exc:
         logger.exception("pybones %s failed", invocation.args.command)
         raise SystemExit(

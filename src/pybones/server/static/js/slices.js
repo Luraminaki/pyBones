@@ -1,15 +1,13 @@
 // Slice viewer: one slice of the stack with its labels overlaid (rendered by the server).
 
 import { fetchSlice } from './api.js';
-import { cssColor, el, percent, toast } from './ui.js';
+import { cssColor, el, LABELS, percent, toast } from './ui.js';
 
 // Image sizes offered, as fractions of the full slice (capped by the server's limit).
 const SCALES = [0.25, 0.5, 1];
 const DEFAULT_SCALE = 0.5;
 // Wait for the slider to settle before asking for a slice.
 const DEBOUNCE_MS = 120;
-// Labels in the legend (the overlay draws these; ambiguous only exists mid-pipeline).
-const LEGEND = ['bone', 'vessel', 'burst'];
 
 let segmentation = null;
 let timer = null;
@@ -20,15 +18,19 @@ let pending = false;
 let voxelZ = 0;
 const nodes = {};
 
+/** Show the slider's position, as an index and a depth in µm. */
 function showPosition() {
   const z = Number(nodes.slider.value);
   nodes.value.textContent = `${z} / ${nodes.slider.max} · ${(z * voxelZ).toFixed(0)} µm`;
 }
 
-// Show a slice without letting the browser keep it: fetch it ourselves ('no-store'), show it
-// through a temporary blob: URL, and revoke that URL once the image is decoded. The <img>
-// keeps the picture on screen; nothing else holds the data, so scrolling through a stack
-// never accumulates slices in memory, however long the page stays open.
+/**
+ * Show the slice at the slider's position, without letting the browser keep it: fetch it
+ * ourselves (`no-store`), show it through a temporary blob: URL, and revoke that URL once
+ * the image is decoded. The <img> keeps the picture on screen; nothing else holds the data,
+ * so scrolling through a stack never accumulates slices in memory, however long the page
+ * stays open.
+ */
 async function load() {
   if (!segmentation) return;
   showPosition();
@@ -61,6 +63,10 @@ async function load() {
   }
 }
 
+/**
+ * Show the slices of a segmentation (from the middle one, unless it is already shown).
+ * @param {import('./api.js').SegmentationSummary} summary The segmentation.
+ */
 export function showSegmentation(summary) {
   const sameStack = segmentation === summary.id;
   segmentation = summary.id;
@@ -68,9 +74,14 @@ export function showSegmentation(summary) {
   [voxelZ] = summary.voxel_size_um; // (z, y, x) µm
   nodes.slider.max = String(depth - 1);
   if (!sameStack) nodes.slider.value = String(Math.floor(depth / 2));
-  load();
+  void load();
 }
 
+/**
+ * Set up the viewer: scales offered, legend, slider and scale listeners.
+ * @param {{max_preview_scale: number}} server What the server describes of itself.
+ * @param {Object<string, number[]>} colors BGR colour per label.
+ */
 export function initSlices(server, colors) {
   nodes.slider = document.getElementById('slice-z');
   nodes.value = document.getElementById('slice-z-value');
@@ -83,7 +94,7 @@ export function initSlices(server, colors) {
     ...scales.map((s) => el('option', { value: String(s), selected: s === DEFAULT_SCALE }, percent(s))),
   );
   document.getElementById('legend').replaceChildren(
-    ...LEGEND.map((label) =>
+    ...LABELS.map((label) =>
       el('li', {}, el('span', { class: 'swatch', style: `background: ${cssColor(colors[label])}` }), label),
     ),
   );
