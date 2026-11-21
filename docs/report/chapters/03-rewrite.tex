@@ -65,21 +65,23 @@ file only states what it changes; single values can be overridden on the command
 \paragraph{Quality} I held the code to explicit conventions: no magic numbers or strings (configuration
 or named constants), complete Google-style docstrings with type hints on every function, imports used
 only in annotations under \code{if TYPE\_CHECKING:}, no imports inside functions. Ruff, basedpyright and
-a dedicated test enforce them. A pytest suite checks every algorithm on synthetic data, most of them
+a dedicated test enforce them; two more tests reject duplicated code and dead code (a definition
+nothing but the tests uses). A pytest suite checks every algorithm on synthetic data, most of them
 against brute-force reference implementations (flood fill for 3D connectivity, \code{numpy.linalg} for
 the eigenvalues, loops for multi-Otsu and the majority vote). A ``golden'' regression test segments a
 small, fixed phantom and compares its scores with a recorded baseline: a change of any score, up or
 down, must be deliberate.
 
-\paragraph{Programmatic interface} Every operation (segment, preview, mesh, export, compare) is a plain
+\paragraph{Programmatic interface} Every operation (segment, preview, mesh, export, compare, quantify) is a plain
 function of \code{pybones.api}, which the command line merely wraps. Long runs can be started as
 background jobs that report their progress (stage, overall fraction, remaining time) and can be
 cancelled, leaving no partial file behind. Every run also writes its own log file.
 
 \paragraph{Web server} \code{pybones serve} puts an HTTP interface (FastAPI) on top of these functions.
-It lists the stacks of a data folder and the segmentations of an output folder, starts segmentations
-and meshes as background jobs whose progress is pushed to the browser as it happens (Server-Sent
-Events, no polling), renders a slice with its labels and serves the meshes. A client only names things
+It lists the stacks of a data folder and the segmentations of an output folder, starts segmentations,
+meshes and quantifications as background jobs whose progress is pushed to the browser as it happens
+(Server-Sent Events, no polling), renders a slice with its labels, and serves the meshes and the
+measured network. A client only names things
 by their id, never by a path, so no request can reach another file. Its settings (address, folders)
 are kept apart from the segmentation configuration, which every segmentation records with its result.
 
@@ -125,6 +127,8 @@ module never meets an old one. Chapter~\ref{chap:performance} describes how it k
   \node[data, below=of ref] (vol) {\code{labels.npy}\\\code{meta.json}};
   \node[box, right=of vol] (mesh) {meshing\\\footnotesize marching cubes, Taubin};
   \node[data, right=of mesh] (stl) {STL, GLB,\\PNG sequences};
+  \node[box, below=of mesh] (net) {vascular network\\\footnotesize skeleton, graph, pruning};
+  \node[data, right=of net] (netfiles) {\code{network.json},\\\code{branches.csv}, centrelines};
   \draw[arrow] (zip) -- (thr);
   \draw[arrow] (thr) -- (cls);
   \draw[arrow] (cls) -- (burst);
@@ -133,6 +137,8 @@ module never meets an old one. Chapter~\ref{chap:performance} describes how it k
   \draw[arrow] (ref) -- (vol);
   \draw[arrow] (vol) -- (mesh);
   \draw[arrow] (mesh) -- (stl);
+  \draw[arrow] (vol) |- (net);
+  \draw[arrow] (net) -- (netfiles);
 \end{tikzpicture}
 \caption{The pyBones pipeline. Only the boxes in the first two rows touch the raw data; each of them
   streams the stack slice by slice (or through a short window of slices).}
@@ -151,4 +157,6 @@ module never meets an old one. Chapter~\ref{chap:performance} describes how it k
   \item \textbf{3D refinement}: each ambiguous 3D blob is decided by what it touches and by its shape;
         3D specks are removed (Section~\ref{sec:refinement}).
   \item \textbf{Meshing}: surfaces for any label (Section~\ref{sec:meshing}).
+  \item \textbf{Vascular network}: centrelines, a graph of branches and junctions, its measures
+        (Chapter~\ref{chap:network}).
 \end{enumerate}

@@ -18,7 +18,7 @@ class QuantificationBackends(Section):
 
 
 class PruningConfig(Section):
-    """When a piece of the centreline network is an artefact (see quantification.graph)."""
+    """When a piece of the centreline network is an artefact (see quantification.pruning)."""
 
     spur_radius_factor: float = Field(
         ge=0.0,

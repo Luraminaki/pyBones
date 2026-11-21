@@ -170,7 +170,7 @@ The dataset is not covered by the MIT License of the code: see
 ## RUN
 
 ```sh
-pybones segment data/data_set.zip -o output/run                  # ~25 s, ~1.7 GB peak (*)
+pybones segment data/data_set.zip -o output/run                  # ~25 s, ~1.6 GB peak (*)
 python -m pybones segment data/data_set.zip -o output/run        # same command, as a module
 pybones preview output/run -z 50 --scale 0.5 -o slice50.png
 pybones mesh output/run --label vessel -o vessels.stl             # µm, Taubin-smoothed
@@ -214,15 +214,18 @@ The page, in a few steps:
 1. **New segmentation**: pick a stack of `data/`, keep or change the suggested name, and press
    *Segment*. Each run gets its own name; to run the segmentation you are looking at again (e.g. with
    one setting changed), press *Segment again…* under its title: the form is filled with its stack
-   and its settings. Under *Settings for this run*, one `section.key=value` per line changes the configuration
-   for this run only, e.g. `refinement.enabled=false`. The *Jobs* panel shows the stage, the progress
-   and the time left (~35 s on the sample); *Cancel* stops the run and removes its partial files.
+   and its settings. Under *Settings for this run*, one `section.key=value` per line changes the
+   configuration for this run only, e.g. `refinement.enabled=false`. The *Jobs* panel shows the stage,
+   the progress, the time elapsed and the time left (~25 s in all on the sample); *Cancel* stops the
+   run and removes its partial files.
 2. **Slices**: when the run ends, the new segmentation opens. Drag the slider to move through the
    stack; *Size* sets the image scale.
-3. **3D**: tick the labels to show. A mesh that does not exist yet is built first (a job, ~15 s for
-   the vessels of the sample, ~30 s for the bone), then loaded. Left-drag turns the view, or moves it
+3. **3D**: tick the labels to show. A mesh that does not exist yet is built first (a job, ~6 s for
+   the vessels of the sample, ~13 s for the bone), then loaded. Left-drag turns the view, or moves it
    with the *Move* switch (Shift swaps the two); right-drag always moves it; the wheel, a two-finger
    swipe or the + / − buttons zoom; *Reset view* looks down the stack again.
+4. **Network**: *Quantify* runs the quantification (a job, ~20 s on the sample), then shows the
+   network's summary; its centrelines can be drawn over the meshes in the 3D tab.
 
 Everything the page does goes through the HTTP API, documented and testable at
 **<http://127.0.0.1:8000/docs>** ("Try it out"). The same session by hand:
@@ -311,6 +314,7 @@ have to:
 | Names are imported from the module that defines them, never through another | `tests/test_conventions.py` |
 | No module, Python or JavaScript, is longer than 500 lines | `tests/test_conventions.py` |
 | No function only forwards its parameters to another; no two functions share a body; no run of logic (3 statements) or of JavaScript (4 lines) is repeated, variable names aside | `tests/test_duplication.py` |
+| No dead code: every function, class, method and constant of `src/` and `tools/` is used by them (not by the tests alone), every test helper by a test, every JavaScript export by another module | `tests/test_unused.py` |
 | Every JavaScript function of both pages has a JSDoc comment; no `var`, loose equality, `innerHTML` or `eval`; every module parses | `tests/server/test_page_js.py` |
 | The labels, job states and job kinds the page knows match Python's | `tests/server/test_page_js.py` |
 | The vendored three.js matches its manifest; every import of the page resolves | `tests/server/test_page.py` |
@@ -343,8 +347,8 @@ through; a slow client loses its oldest snapshots, never the newest.
 ### VS Code and the web page
 
 VS Code settings (basedpyright, Ruff, pytest), launch configurations (segment, serve, preview, mesh,
-quantify, the annotation tool, the current test file) and recommended extensions are versioned in `.vscode/`,
-and work the same on Linux, macOS and Windows: no interpreter path is written there. After
+quantify, the annotation tool, the current test file) and recommended extensions are versioned in
+`.vscode/`, and work the same on Linux, macOS and Windows: no interpreter path is written there. After
 `uv sync`, VS Code selects the project's `.venv` by itself (check the interpreter shown in the status
 bar; *Python: Select Interpreter* picks it otherwise), and basedpyright finds it through
 `[tool.basedpyright]` in `pyproject.toml`.
@@ -360,7 +364,6 @@ rewrite the manifest; the test then confirms the set is complete.
 The `node:test` suites in `tests/js/` cover the page's pure code: formatting helpers, the HTTP client
 against a stubbed `fetch` and `EventSource`, the "segment again" settings difference, and the 3D
 view's memory helpers.
-
 
 ## TOOLS
 

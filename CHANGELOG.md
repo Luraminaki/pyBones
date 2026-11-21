@@ -16,16 +16,21 @@ from package metadata at runtime; every segmentation records it in its
   circumferences loses its longest branch, found with a minimum spanning tree of the network, so
   nothing is ever disconnected (two strands around a small hole, a *bubble*, are the simplest case).
   On the segmented branching phantom: 59 junctions that are not forks instead of 90, 10 independent
-  loops instead of 49 (4 in the exact mask, where vessels cross), 2 real forks lost of 26; the exact
-  mask keeps all its 40 forks. On the sample: 3,129 junctions instead of 4,325, 591 mm of vessels
+  loops instead of 49 (4 in the exact mask, where vessels cross), 2 of its 26 real forks lost; the
+  exact mask keeps all its 40 forks. On the sample: 3,129 junctions instead of 4,325, 591 mm of vessels
   instead of 680 (doubled strands gone); the network stage takes 0.8 s instead of 0.3 (the loop
   search runs only once no cheaper removal applies).
 - Corrected explanation (report, README, page): most junctions that are not forks come from small
-  loops the skeleton draws around holes and folds of the vessel mask, not mainly from bone contact;
-  and the network length is the net of two opposite errors (now about 8 % short on the phantom,
-  mostly thin vessels missed), not reliable by itself. Phantom scores count each network's
-  independent loops. Tried and dropped, measured on the phantom: longer spurs against bone, closing
-  the vessel mask before thinning (fewer false junctions removed, more real forks and length lost).
+  loops the skeleton draws around holes and folds of the vessel mask, not mainly from bone contact.
+  On the phantom, the holes come from bursts (the edge of a burst takes the bright core of a thick
+  vessel passing close by: 96 % of the vessel voxels missed deep inside a vessel are labelled burst)
+  and the folds from bone (a vessel's mask runs along the bone where it presses on it). The network length is the
+  net of two opposite errors (now about 8 % short on the phantom, mostly thin vessels missed), not
+  reliable by itself. Phantom scores count each network's independent loops. Tried and dropped,
+  measured on the phantom: longer spurs against bone and closing the vessel mask before thinning
+  (more real forks and length lost than false junctions removed), filling small holes slice by slice
+  (no effect), tightening the edge of bursts (the bursts' haze becomes false vessel; the standard
+  phantom's validated scores drop).
 - An output written by an earlier build of the same version, with another configuration format, now
   says so, instead of "written by pyBones 0.6.0 and cannot be read by pyBones 0.6.0".
 - Progress you can trust during long silent stages:
@@ -39,6 +44,14 @@ from package metadata at runtime; every segmentation records it in its
   performance chapter) and warns when a weight is more than `stage_weight_tolerance` (0.05) off. The
   defaults were set from these measurements (segmentation resolve 0.12 -> 0.17, mesh occupancy
   0.24 -> 0.30, among others); every stage is now within 0.02 of its share.
+- `tests/test_unused.py`: no dead code. Every function, class, method and module constant of
+  `src/` and `tools/` must be used by them, not by the tests alone; every test helper by a test;
+  every JavaScript export by another module or a Node test (checked against planted dead code).
+  Its first run moved `read_stl` and `classify_slice`, which only the tests used, to
+  `tests/helpers.py`, and un-exported `fitView`.
+- Stale or inconsistent documentation fixed: segmentation time (~25 s everywhere), mesh build times
+  and a Network step in INSTALL's page walkthrough, the thick vessels' radius bias (1.5 µm) and the
+  skeleton time (10 s) in the README, the pipeline figure of the report (the network row).
 - `measure_network` reports the end of its last stage itself (its graph work counted for nothing
   when it ran on its own).
 

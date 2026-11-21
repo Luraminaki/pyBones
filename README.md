@@ -95,7 +95,8 @@ uv run pybones serve
 
 Then open **<http://127.0.0.1:8000>** in a browser (Ctrl+C in the terminal stops the server): segment a
 stack and follow its progress, scroll through its slices with the labels overlaid, turn its meshes
-around in 3D, and measure its vessel network (Network tab; centrelines drawn in 3D). The HTTP API behind the page is documented, and can be tried request by request, at
+around in 3D, and measure its vessel network (Network tab; centrelines drawn in 3D). The HTTP API
+behind the page is documented, and can be tried request by request, at
 **<http://127.0.0.1:8000/docs>** (FastAPI's Swagger UI). Details: [INSTALL.md](INSTALL.md#web-server).
 
 ## INSTALLATION
@@ -132,7 +133,7 @@ every command, the tools and how to build the report: [INSTALL.md](INSTALL.md), 
    |---|---|---|
    | Cavities | `pybones` (default) | no extra dependency, one slice at a time; 6 s |
    | Cavities | `scipy` | one library call, 6 s here, but iterative and several full-size temporaries |
-   | Centrelines | `scikit-image` | topology-preserving thinning; 9 s, ~1.1 GB (whole volume in memory) |
+   | Centrelines | `scikit-image` | topology-preserving thinning; 10 s, ~1.1 GB (whole volume in memory) |
    | Distances | `pybones` (default) | exact, 0.4 s, one slice at a time; square pixels only |
    | Distances | `scipy` | exact for any voxel shape, an independent cross-check; ~100× slower (39 s) |
 
@@ -178,7 +179,7 @@ noisy like the real scan.
 | Burst | 0.913 | 0.897 | 0.929 |
 <!-- scores:end -->
 
-Reference run on the real stack (100 x 2300 x 1487): segmentation in ~25 s with ~1.7 GB peak, on an AMD
+Reference run on the real stack (100 x 2300 x 1487): segmentation in ~25 s with ~1.6 GB peak, on an AMD
 Ryzen AI 9 HX 370 (24 logical cores, 4 worker threads), 24 GB RAM, Linux. Timings depend on the machine:
 the report lists the one every timing was measured on.
 
@@ -219,16 +220,18 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
 
 **Vascular network**
 
-- **Junctions that are not forks**: wherever the vessel mask has a hole or a fold (often where a
-  vessel presses against the bone), the centreline goes around it and draws a loop, and each loop
-  adds about two junctions. Loops barely longer than their vessel's circumference are removed (real
-  loops are several times longer); on the network phantom, the measured junctions of the segmentation
-  are still mostly not forks (24 of 54 true forks found, 59 others; chapter 6 of the report). Counts
-  of junctions and branches are therefore upper bounds.
-- **Lengths come from two errors**: about 8 % short on the phantom, mostly the thin vessels missed;
-  strands doubled around holes would lengthen it, but most are removed with the small loops.
-- **Radius bias depends on the calibre**: thin vessels read about 0.8 µm wide of the truth, thick ones
-  about 1.6 µm narrow, so no single correction applies and none is made. Radii also come in steps of
+- **Junctions that are not forks**: wherever the vessel mask has a hole or a fold, the centreline goes
+  around it and draws a loop, and each loop adds about two junctions. On the phantom, the holes come
+  from bursts (the edge of a burst takes the bright core of a thick vessel passing close by) and the
+  folds from bone (where a vessel presses against it, its mask runs along the bone's surface). Loops
+  barely longer than their vessel's circumference are removed (real loops are several times longer);
+  on the network phantom, the measured junctions of the segmentation are still mostly not forks (24
+  of 54 true forks found, 59 others; chapter 6 of the report). Counts of junctions and branches are
+  therefore upper bounds.
+- **Lengths carry two opposite errors**: about 8 % short on the phantom, mostly from the thin vessels
+  missed; strands doubled around holes would lengthen them, but most go with the small loops.
+- **Radius bias depends on the calibre**: thin vessels read about 0.8 µm too wide, thick ones about
+  1.5 µm too narrow, so no single correction applies and none is made. Radii also come in steps of
   the voxel grid (√k × 3 µm).
 - **Crossings look like forks**: two vessels touching in the mask are joined in the network.
 - **Branches cut by the stack** are counted but truncated (flagged in `branches.csv`): on a 300 µm
@@ -260,11 +263,11 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
   them, segmenting it gives one more sample to look at, not a measured accuracy.
 - **Format**: 16-bit grey-level slices (TIFF or PNG), one file per slice, in a folder or a zip
   archive, ordered by their file names (`slice_2` before `slice_10`).
-- **Size**: the stack is streamed, but memory still grows with it (~1.7 GB peak for the 100 × 2300 ×
+- **Size**: the stack is streamed, but memory still grows with it (~1.6 GB peak for the 100 × 2300 ×
   1487 sample).
 - **Older segmentations**: pyBones only reads the outputs of its own version's format; an output
   written by an older version is refused with a message naming both versions. Segment the stack
-  again (~35 s for the sample): while the project is alpha, outputs are not kept compatible.
+  again (~25 s for the sample): while the project is alpha, outputs are not kept compatible.
 
 **Web server**
 
@@ -281,7 +284,7 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
 - **Jobs live in memory**: stopping the server cancels the running jobs and forgets the finished
   ones (their results stay on disk). The page remembers the last segmentation viewed in this browser
   only.
-- **One job at a time** by default (`jobs.max_concurrent`): a segmentation takes ~1.7 GB of RAM.
+- **One job at a time** by default (`jobs.max_concurrent`): a segmentation takes ~1.6 GB of RAM.
 - **Browser caches**: the page's files are checked on every load, so an update is never missed; a
   browser that kept them before this rule (pyBones 0.5) may need one hard refresh (Ctrl+Shift+R).
 - **Centrelines in 3D** are drawn as points over the meshes, one pixel each: zoomed out, the whole
@@ -292,8 +295,9 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
 
 ## POSSIBLE FUTURE UPDATES
 
-- Vascular network: fewer holes and folds in the vessel mask (the main source of junctions that
-  are not forks), and measures per region (cortex, marrow).
+- Vascular network: telling a thick vessel from a burst, and a vessel from the bone, where they touch
+  (the holes and folds they leave are the main source of junctions that are not forks), and measures
+  per region (cortex, marrow).
 - Bridging small vessel gaps (clots) along the vessel direction.
 - Web page: the raw slice without overlay, measurements in 3D (distances, a picked vessel's calibre),
   and the configuration of a run as a form built from its schema (`GET /api/config/schema`).

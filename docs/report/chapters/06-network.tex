@@ -20,8 +20,8 @@ diagonal step of the centreline is not a fork. A voxel with one link is an end, 
 junction (touching junction voxels form one node); runs of two-link voxels between nodes are the
 branches.
 
-\paragraph{Pruning} Skeletons of real masks are hairy. Three operations repeat until none applies, all
-in micrometres: a branch from a junction to a free end shorter than \pbValueNetSpurFactor{} times the widest radius at its
+\paragraph{Pruning} Skeletons of real masks are hairy. Four kinds of operation repeat until none applies,
+all in micrometres: a branch from a junction to a free end shorter than \pbValueNetSpurFactor{} times the widest radius at its
 junction is a bump of the surface and goes, as do isolated specks; a loop barely longer than the
 circumference of its vessel is a hole or a fold of the vessel mask, not a structure: a ring from a
 junction back to itself goes when shorter than the circumference, and any other loop when shorter than
@@ -67,27 +67,32 @@ its parent vessel.
   \label{tab:network-scores}
 \end{table}
 
-\paragraph{Lengths come from two errors in opposite directions} On the segmentation, the total length differs from the
-truth by \pbValueNetSegLengthErrorPct\,\%. It is the net of two errors in opposite directions: the thin
-vessels the segmentation misses (centreline recall \pbValueNetSegRecall) shorten it, and strands
-doubled where the vessel mask has holes lengthen it. Removing the small loops removes most doubled
-strands, so what remains is mostly the thin vessels missed.
+\paragraph{Lengths} On the segmentation, the total length differs from the truth by
+\pbValueNetSegLengthErrorPct\,\%. It is the net of two errors in opposite directions: the thin vessels
+the segmentation misses (centreline recall \pbValueNetSegRecall) shorten it, and strands doubled where
+the vessel mask has holes lengthen it. Pruning the small loops removes most doubled strands, so what
+remains is mostly the thin vessels missed.
 
-\paragraph{Junctions are not} Even on the true mask, \pbValueNetTrueMaskMissed{} of the \pbValueNetTrueForks{} forks are not
+\paragraph{Junctions are over-counted} Even on the true mask, \pbValueNetTrueMaskMissed{} of the \pbValueNetTrueForks{} forks are not
 found (two close forks merge into one, a short side branch is pruned as a spur), and
 \pbValueNetTrueMaskSpurious{} junctions are not forks. On the segmentation, only \pbValueNetSegForks{}
 forks are found, and \pbValueNetSegSpurious{} junctions are not forks. Most of them come from loops.
 The phantom's vessels are trees, so the network of its exact mask has \pbValueNetTrueMaskCycles{}
 independent loops, all where separate vessels cross; that of its segmentation has
 \pbValueNetSegCycles, and each extra loop adds about two junctions. The skeleton draws a loop wherever
-the vessel mask has a hole or a fold, often where a vessel presses against the bone; those loops are
-small, barely longer than their vessel's circumference, while the real loops of the exact mask are
-several times longer. That is what the loop rule above relies on: the counts given here are after it,
-and before it the segmentation's network had five times as many loops. Two other rules were tried on
-the phantom and dropped: pruning longer spurs whose end touches bone, or closing the vessel mask by a
-voxel before thinning it, removed fewer false junctions for more real forks and vessel length lost, and
-closing fused separate vessels on the exact mask. The counts of junctions and branches remain upper
-bounds; fewer holes and folds in the vessel mask is what will lower them further.
+the vessel mask has a hole or a fold. Looking at them on the phantom shows two causes: near a burst,
+the edge of the burst region takes the bright core of a thick vessel passing by, leaving the vessel
+hollow; and where a vessel presses against the bone, its mask runs along the bone's surface in thin
+strands. These loops are small, barely longer than their vessel's circumference, while the real loops
+of the exact mask are several times longer. The loop rule above relies on that difference, and has
+already removed most of these loops: the counts given here are those left after it. Other fixes were tried on the phantom and
+dropped, each trading the error for another: pruning longer spurs whose end touches bone, and closing
+the vessel mask by a voxel before thinning it, removed a few false junctions at the cost of real forks
+and vessel length (closing also fused separate vessels on the exact mask); tightening the edge of
+bursts gave thick vessels their cores back, but turned the bursts' bright haze into false vessel and
+lowered the validated scores of the standard phantom. The counts of junctions and branches remain
+upper bounds: telling a thick vessel from a burst, and a vessel from the bone, where they touch is
+what will lower them further.
 
 \paragraph{The radius bias depends on the calibre} Table~\ref{tab:network-bands} gives the median
 error of the measured radius by band of true radius. Thin vessels come out wider than they are
@@ -110,7 +115,7 @@ centres are $\sqrt{k}$ times the voxel size.
 
 On the real stack, the quantification takes \pbValueNetSeconds\,s and finds
 \pbValueNetLengthMm\,mm of vessels in \pbValueNetBranches{} branches (\pbValueNetTruncated{} cut by a
-face of the stack, \pbValueNetLoops{} loops), that is \pbValueNetDensity\,mm of vessel per mm$^3$ of
+face of the stack, \pbValueNetLoops{} closed on themselves), that is \pbValueNetDensity\,mm of vessel per mm$^3$ of
 tissue. Branches are short (median \pbValueNetMedianBranchUm\um) and nearly straight (median tortuosity
 \pbValueNetMedianTortuosity); the median radius is \pbValueNetMedianRadiusUm\um. The ends are
 \pbValueNetFreeEnds{} free, \pbValueNetFaceEnds{} at a face and \pbValueNetBurstEnds{} at a burst; the

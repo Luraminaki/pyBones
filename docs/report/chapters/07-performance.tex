@@ -46,8 +46,8 @@ values will differ; the comparison between versions holds, since they all ran on
   \item \textbf{Compact buffers}: the slices waiting for the 3D burst box are bit-packed (eight times
         smaller), the burst density lives on a 12\um{} grid (sixteen times smaller), the tubularity is
         stored on one byte.
-  \item \textbf{Chunks}: eigenvalues, mesh smoothing, normals and mesh writing process bounded
-        batches.
+  \item \textbf{Chunks}: the eigenvalues, and a mesh's smoothing, normals and file, are processed in
+        bounded batches.
 \end{itemize}
 
 \paragraph{Meshes} Extracting and smoothing the surface of the vessels takes
@@ -80,7 +80,7 @@ once, so that a long silent stage is never shown under the name of the previous 
 empties is enough to crash a browser. So the page holds every resource once:
 \begin{itemize}
   \item \textbf{Slices are never kept.} Each one is fetched with the browser's cache disabled, shown
-        through a temporary \code{blob:} address that is released as soon as the image is decoded, and
+        through a temporary \code{blob:} address that is released as soon as the image has loaded, and
         the server forbids caching it as well. Scrolling through a stack for hours costs one image.
   \item \textbf{One slice request at a time.} Dragging the slider never piles renders up on the
         server: a position asked for during a render waits, and only the latest one is fetched.

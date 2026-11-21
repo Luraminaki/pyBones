@@ -133,7 +133,7 @@ reach in 2D, so its blur used to become a ``bone collar'' around the vessel
 A burst is a cloud of contrast agent: a dense cluster of bright speckles, a few hundred micrometres
 across (230 to 450\um{} on this scan). A thin vessel, even a bright one, is sparse at that scale.
 I therefore measure the \emph{density} of bright pixels in a 123\um{} box around each pixel
-(a box filter: integral-image speed), and declares a burst core where it exceeds 35\,\%.
+(a box filter: integral-image speed), and declare a burst core where it exceeds 35\,\%.
 
 \paragraph{In 3D} Measured per slice, the density flickers: near the top and bottom of a cluster a
 slice only shows a sparse cross-section. Summing the per-slice densities over 41 slices (a running sum,
@@ -219,7 +219,7 @@ strongly in two directions ($\lambda_2 \approx \lambda_3 \ll 0$, $\lambda_1 \app
 one ($\lambda_3 \ll 0$, $\lambda_1 \approx \lambda_2 \approx 0$), a blob in three. The ratio
 $R_A = |\lambda_2| / |\lambda_3|$ is close to 1 for a tube and to 0 for a plate, whatever the contrast.
 
-The Hessian is computed at three scales (3, 4.5 and 6\um) from Gaussian derivatives, streamed through
+The Hessian comes from Gaussian derivatives at three scales (3, 4.5 and 6\um), streamed through
 a window of 13 slices: the raw slices are first combined along $z$ with the three derivative kernels,
 then filtered in-plane, never storing a volume. The eigenvalues of millions of $3 \times 3$ symmetric
 matrices are computed in closed form (Smith's trigonometric formula), in chunks, only on the voxels that
@@ -245,7 +245,8 @@ misclassified bone fragments (two of them 6\,000 and 17\,000 voxels) without los
 \section{Meshing}
 \label{sec:meshing}
 
-Surfaces are extracted per label with marching cubes (scikit-image, the only use of that library).
+Surfaces are extracted per label with marching cubes (scikit-image, which pyBones otherwise only uses
+for the skeleton of Chapter~\ref{chap:network}).
 The label volume is first downsampled by an exact block mean, which keeps sub-voxel information and
 divides the memory by $8$ (factor 2). Marching cubes on voxel data produces ``staircase'' surfaces
 (the ``cubic aspect'' noted in 2018): on a voxelised sphere the surface area is 8.5\,\% too large.
