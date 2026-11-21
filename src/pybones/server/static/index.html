@@ -147,10 +147,11 @@
           <dl id="network-stats" class="stats" hidden></dl>
           <p class="hint">
             The vessels are thinned to their centrelines, which become a network of branches between
-            junctions and ends; short spurs and specks are pruned. A branch cut by a face of the stack
-            is counted but truncated. Radii are the distance from the centreline to the wall: within
-            half a voxel, thin vessels slightly wide and thick ones slightly narrow. Where a vessel
-            touches the bone, the mask bulges and adds junctions that are not forks. The files
+            junctions and ends; short spurs, specks and loops smaller than their vessel are pruned. A
+            branch cut by a face of the stack is counted but truncated. Radii are the distance from the
+            centreline to the wall: within half a voxel, thin vessels slightly wide and thick ones
+            slightly narrow. Where the vessel mask has a hole or a fold (often against the bone), the
+            centreline draws a loop that adds junctions that are not forks. The files
             (network.json, branches.csv, centrelines.npz) are in the segmentation folder; the 3D tab
             draws the centrelines.
           </p>

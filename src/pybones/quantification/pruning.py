@@ -128,6 +128,41 @@ def _merge_pairs(state: GraphState, dissolve: "NDArray[np.bool_]") -> GraphState
     return GraphState(start, end, length, state.kind, state.node_length, point_branch, point_node)
 
 
+def _bubbles(
+    state: GraphState, between_forks: "NDArray[np.bool_]", radius: "NDArray[np.float64]"
+) -> "NDArray[np.bool_]":
+    """Find the extra strands of bubbles: branches joining the same two junctions as a shorter one.
+
+    Where the vessel mask has a hole or a fold, its skeleton splits into two strands for a short
+    way: two branches between the same two junctions. When the loop they make is shorter than the
+    vessel's circumference there, it is one vessel, and the longer strand goes.
+
+    Args:
+        state: Current network.
+        between_forks: Branches joining two different junctions.
+        radius: Larger radius of each branch's two end nodes.
+
+    Returns:
+        The branches to remove.
+    """
+    candidates = np.flatnonzero(between_forks)
+    if len(candidates) == 0:
+        return np.zeros(len(state.length), np.bool_)
+    n_nodes = len(state.kind)
+    low = np.minimum(state.start[candidates], state.end[candidates])
+    high = np.maximum(state.start[candidates], state.end[candidates])
+    pair = low * n_nodes + high
+    order = np.lexsort((state.length[candidates], pair))  # by pair, shortest first
+    ranked, pair = candidates[order], pair[order]
+    first = np.concatenate([[True], pair[1:] != pair[:-1]])
+    shortest = np.maximum.accumulate(np.where(first, np.arange(len(pair)), 0))
+    loop = state.length[ranked] + state.length[ranked[shortest]]
+    extra = ~first & (loop < TAU * radius[ranked])
+    removed = np.zeros(len(state.length), np.bool_)
+    removed[ranked[extra]] = True
+    return removed
+
+
 def prune(
     state: GraphState,
     points_um: "NDArray[np.float64]",
@@ -165,7 +200,10 @@ def prune(
         spur = ((s_free & e_fork) | (e_free & s_fork)) & (state.length < spur_limit)
         speck = s_free & e_free & (state.length < rules.min_fragment_um)
         ring = s_fork & (s == e) & (state.length < TAU * radius_ext[s])
-        removable = spur | speck | ring
+        bubble = _bubbles(
+            state, s_fork & e_fork & (s != e), np.maximum(radius_ext[s], radius_ext[e])
+        )
+        removable = spur | speck | ring | bubble
         if removable.any():
             state = _remove(state, removable)
             continue

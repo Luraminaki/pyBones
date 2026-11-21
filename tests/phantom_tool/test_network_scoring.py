@@ -10,7 +10,7 @@ import pytest
 from pybones.quantification.graph import build_network
 from pybones.quantification.network import EndKind
 from tests.helpers import KEEP_ALL, line
-from tools.phantom.network_scoring import score_network
+from tools.phantom.network_scoring import independent_cycles, score_network
 from tools.phantom.vessels import SegmentState, VesselNetwork
 
 if TYPE_CHECKING:
@@ -92,6 +92,7 @@ def test_a_network_laid_on_the_truth_scores_perfectly() -> None:
     assert score.centreline_precision == pytest.approx(1.0)
     assert (score.true_junctions, score.matched_junctions) == (1, 1)
     assert (score.crossing_junctions, score.spurious_junctions) == (0, 0)
+    assert score.independent_cycles == 0  # a tree
     assert (score.radius_offset_um, score.radius_abs_error_um) == (0.0, 0.0)
     assert score.radius_offset_by_band_um[0] == 0.0
     assert math.isnan(score.radius_offset_by_band_um[1])  # no vessel that thick
@@ -114,6 +115,7 @@ def test_a_crossing_of_two_vessels_is_not_a_spurious_fork() -> None:
     )
     assert score.true_junctions == 0
     assert (score.crossing_junctions, score.spurious_junctions) == (1, 0)
+    assert score.independent_cycles == 0  # a cross is a node of degree four, not a loop
 
 
 def test_missing_and_extra_centrelines_lower_recall_and_precision() -> None:
@@ -125,3 +127,12 @@ def test_missing_and_extra_centrelines_lower_recall_and_precision() -> None:
     )
     assert score.centreline_recall == pytest.approx(0.5, abs=0.05)
     assert score.centreline_precision == pytest.approx(0.5, abs=0.05)
+
+
+def test_a_loop_is_counted_once_alone_or_on_a_vessel() -> None:
+    """A ring with no node, or a ring hanging from a vessel, is one independent loop."""
+    ring = [(10, 20, 20), (10, 20, 40), (10, 40, 40), (10, 40, 20), (10, 20, 20)]
+    alone, _ = measured([ring])
+    assert independent_cycles(alone) == 1
+    on_vessel, _ = measured([ring, [(10, 20, 20), (10, 5, 5)]])
+    assert independent_cycles(on_vessel) == 1

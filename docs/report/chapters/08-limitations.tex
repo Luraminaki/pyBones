@@ -80,8 +80,10 @@ the local machine, compressing would take longer than sending. The page needs a 
 \section{The vascular network}
 
 The brief asked for a quantified network: nodes, branches, calibre, branch lengths. pyBones now
-measures it (Chapter~\ref{chap:network}), within the limits measured there: lengths are reliable,
-but junction counts are inflated where vessels touch the bone (most junctions of the segmented phantom
-are not forks), the radius is biased in opposite directions for thin and thick vessels, and many
+measures it (Chapter~\ref{chap:network}), within the limits measured there: lengths are close, but as
+the net of two opposite errors (thin vessels missed, strands doubled around holes); junction counts are
+inflated by the loops the skeleton draws where the vessel mask has holes or folds (most junctions of
+the segmented phantom are not forks); the radius is biased in opposite directions for thin and thick
+vessels; and many
 branches are truncated by the thin stack. The measures cover the whole stack: no region (cortex,
 marrow) is told apart yet.

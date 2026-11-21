@@ -19,7 +19,10 @@ SHAPE = (20, 40, 40)
 UNIT = (1.0, 1.0, 1.0)
 #: Rules that prune nothing (to test the grouping alone).
 RULES = PruningConfig(
-    spur_radius_factor=1.5, min_spur_um=3.0, min_fragment_um=5.0, junction_merge_factor=1.0
+    spur_radius_factor=1.5,
+    min_spur_um=3.0,
+    min_fragment_um=5.0,
+    junction_merge_factor=1.0,
 )
 RADIUS = 2.0
 
@@ -28,6 +31,7 @@ def network(
     voxels: list[tuple[int, int, int]],
     rules: "PruningConfig" = KEEP_ALL,
     kinds: "dict[tuple[int, int, int], EndKind] | None" = None,
+    radius: float = RADIUS,
 ) -> "Network":
     """Build the network of hand-placed centreline voxels (duplicates merged).
 
@@ -35,6 +39,7 @@ def network(
         voxels: Centreline voxels.
         rules: Pruning thresholds.
         kinds: What lies beyond some voxels (default: free).
+        radius: Wall distance of every voxel (the vessel's radius).
 
     Returns:
         The network.
@@ -44,8 +49,8 @@ def network(
     end_kind = np.full(len(points), EndKind.FREE, np.uint8)
     for voxel, kind in (kinds or {}).items():
         end_kind[unique.index(voxel)] = kind
-    radius = np.full(len(points), RADIUS, np.float32)
-    return build_network(points, radius, end_kind, SHAPE, UNIT, rules)
+    distances = np.full(len(points), radius, np.float32)
+    return build_network(points, distances, end_kind, SHAPE, UNIT, rules)
 
 
 def kinds_of(net: "Network") -> list[int]:
@@ -235,3 +240,35 @@ def test_a_small_ring_at_a_fork_is_removed() -> None:
     loop = [(5, 21, 19), (5, 22, 20), (5, 21, 21)]  # leaves the line at x=19, back at x=21
     net = network(main + loop, RULES)
     assert_one_open_branch(net)
+
+
+#: A main line along x, and a strand two voxels away from x=11 to x=15: a loop of about 11 µm,
+#: shorter than the circumference of a vessel of radius 2 µm (12.6 µm), longer than that of a
+#: vessel of radius 0.5 µm (3.1 µm).
+MAIN = line((5, 20, 2), (5, 20, 38))
+SMALL_DETOUR = [(5, 21, 11), (5, 22, 12), (5, 22, 13), (5, 22, 14), (5, 21, 15)]
+THIN = 0.5
+#: A strand leaving at x=8 and rejoining at x=30, 6 voxels away: a loop of about 50 µm.
+LONG_DETOUR = (
+    line((5, 21, 8), (5, 26, 13)) + line((5, 26, 13), (5, 26, 25)) + line((5, 26, 25), (5, 21, 30))
+)
+
+
+def test_a_bubble_smaller_than_the_vessel_is_one_vessel() -> None:
+    """Two strands between the same junctions, the loop shorter than the circumference: one."""
+    assert_one_open_branch(network(MAIN + SMALL_DETOUR, RULES))
+
+
+def test_the_same_loop_in_a_thin_vessel_is_kept() -> None:
+    """In a vessel thinner than the loop, the two strands are real: both junctions remain."""
+    net = network(MAIN + SMALL_DETOUR, RULES, radius=THIN)
+    pairs = [tuple(sorted(p)) for p in zip(net.branch_start, net.branch_end, strict=True)]
+    assert (net.node_kind == NodeKind.JUNCTION).sum() == 2
+    assert len(set(pairs)) < len(pairs)  # two branches share their two junctions
+
+
+def test_a_long_loop_is_two_vessels() -> None:
+    """Strands parting for longer than the vessel's circumference are kept, with their forks."""
+    net = network(MAIN + LONG_DETOUR, RULES)
+    assert (net.node_kind == NodeKind.JUNCTION).sum() == 2
+    assert len(net.branch_length_um) == 4

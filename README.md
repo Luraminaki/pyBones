@@ -122,7 +122,7 @@ every command, the tools and how to build the report: [INSTALL.md](INSTALL.md), 
    chord, tortuosity and radius (distance from the centreline to the wall); ends against a face of
    the stack or a burst are flagged, their branches truncated. Three files land next to the labels:
    `network.json` (summary and nodes), `branches.csv` (one row per branch) and `centrelines.npz`.
-   On the sample: 17 s, 1.2 GB; 680 mm of vessels in 12,072 branches, median radius 6.7 µm.
+   On the sample: 17 s, 1.2 GB; 624 mm of vessels in 10,512 branches, median radius 6.7 µm.
 
    Its three 3D steps are interchangeable (`quantification.backends`; both give the same result,
    tested against each other and against brute force):
@@ -218,10 +218,13 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
 
 **Vascular network**
 
-- **Junctions where vessels touch bone**: the vessel mask bulges there, and the centreline forks into
-  the bulge. On the network phantom, most of the measured junctions of the segmentation are not
-  real forks (26 of 54 true forks found, 90 others; chapter 6 of the report). Counts of junctions and
-  branches are therefore upper bounds; lengths are reliable (within 1 % of the truth on the phantom).
+- **Junctions that are not forks**: wherever the vessel mask has a hole or a fold (often where a
+  vessel presses against the bone), the centreline goes around it and draws a loop, and each loop
+  adds about two junctions. The smallest loops are removed; on the network phantom, most of the
+  measured junctions of the segmentation are still not forks (26 of 54 true forks found, 74 others;
+  chapter 6 of the report). Counts of junctions and branches are therefore upper bounds.
+- **Lengths are close, for two reasons**: about 4 % short on the phantom, the net of thin vessels
+  missed (shorter) and strands doubled around holes (longer).
 - **Radius bias depends on the calibre**: thin vessels read about 0.8 µm wide of the truth, thick ones
   about 1.6 µm narrow, so no single correction applies and none is made. Radii also come in steps of
   the voxel grid (√k × 3 µm).
@@ -287,8 +290,8 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
 
 ## POSSIBLE FUTURE UPDATES
 
-- Vascular network: measures per region (cortex, marrow), and junctions cleaned where vessels touch
-  bone.
+- Vascular network: fewer holes and folds in the vessel mask (the main source of junctions that
+  are not forks), and measures per region (cortex, marrow).
 - Bridging small vessel gaps (clots) along the vessel direction.
 - Web page: the raw slice without overlay, measurements in 3D (distances, a picked vessel's calibre),
   and the configuration of a run as a form built from its schema (`GET /api/config/schema`).

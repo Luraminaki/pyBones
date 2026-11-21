@@ -57,7 +57,10 @@ NEIGHBOURS_6 = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, 
 
 #: Pruning that removes nothing: the network exactly as the skeleton draws it.
 KEEP_ALL = PruningConfig(
-    spur_radius_factor=0.0, min_spur_um=0.0, min_fragment_um=0.0, junction_merge_factor=0.0
+    spur_radius_factor=0.0,
+    min_spur_um=0.0,
+    min_fragment_um=0.0,
+    junction_merge_factor=0.0,
 )
 
 

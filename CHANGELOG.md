@@ -11,6 +11,18 @@ from package metadata at runtime; every segmentation records it in its
 
 ## Unreleased
 
+- Vascular network: a *bubble* (two branches joining the same two junctions around a small hole of
+  the vessel mask, the loop shorter than the vessel's circumference) is now one vessel, its longer
+  strand pruned. On the segmented branching phantom: 74 junctions that are not forks instead of 90,
+  no real fork lost; on the exact mask, 10 instead of 12 and a length closer to the truth. On the
+  sample: 3,641 junctions instead of 4,325, 624 mm of vessels instead of 680 (doubled strands).
+- Corrected explanation (report, README, page): most junctions that are not forks come from loops the
+  skeleton draws around holes and folds of the vessel mask (29 independent loops in the segmented
+  phantom's network, 6 in its exact mask's, where vessels cross), not mainly from bone contact; and
+  the network length is close to the truth as the net of two opposite errors, not because it is
+  reliable (4 % short on the phantom now that doubled strands are gone). Phantom scores count each
+  network's independent loops. Tried and dropped, measured on the phantom: longer spurs against bone,
+  closing the vessel mask before thinning (fewer false junctions, but real forks and length lost).
 - Progress you can trust during long silent stages:
   - the server sends every new stage at once (only progress within a stage is throttled): a stage
     starting right after another, like the quantification's skeleton or a mesh's surface, used to be

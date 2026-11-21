@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from pybones.quantification.network import NO_BRANCH, NO_NODE, NodeKind
+from pybones.segmentation.connectivity import connected_roots
 from pybones.utils.constants import UM_PER_MM
 from tools.phantom.vessels import SegmentState
 
@@ -47,6 +48,8 @@ class NetworkScore:
         matched_junctions: Those found.
         crossing_junctions: Measured junctions where two different true vessels meet.
         spurious_junctions: Other unmatched measured junctions.
+        independent_cycles: Independent loops of the measured network (branches - nodes +
+            connected pieces): a tree has none; crossings and holes in the mask each add one.
         radius_offset_um: Median of (measured wall distance - true radius).
         radius_abs_error_um: Median absolute error of the radius after removing the offset.
         radius_offset_by_band_um: Median of (measured - true radius) per true-radius band
@@ -61,6 +64,7 @@ class NetworkScore:
     matched_junctions: int
     crossing_junctions: int
     spurious_junctions: int
+    independent_cycles: int
     radius_offset_um: float
     radius_abs_error_um: float
     radius_offset_by_band_um: tuple[float, ...]
@@ -175,6 +179,27 @@ def _root_vessel(truth: "VesselNetwork") -> "NDArray[np.int64]":
         root = np.where(moved, up, root)
 
 
+def independent_cycles(network: "Network") -> int:
+    """Count the independent loops of a network (its circuit rank).
+
+    Args:
+        network: The network.
+
+    Returns:
+        Branches - nodes + connected pieces, over the branches joining two nodes (a branch
+        closed on itself, with no node, is one loop).
+    """
+    start, end = network.branch_start.astype(np.int64), network.branch_end.astype(np.int64)
+    linked = (start != NO_NODE) & (end != NO_NODE)
+    closed = int(((start == NO_NODE) & (end == NO_NODE)).sum())
+    nodes = np.unique(np.concatenate([start[linked], end[linked]]))
+    if len(nodes) == 0:
+        return closed
+    index = np.searchsorted(nodes, np.stack([start[linked], end[linked]], axis=1))
+    pieces = len(np.unique(connected_roots(len(nodes), index)))
+    return int(linked.sum()) - len(nodes) + pieces + closed
+
+
 def score_network(
     measured: "Network",
     distances_um: "NDArray[np.float32]",
@@ -272,6 +297,7 @@ def score_network(
         matched_junctions=n_matched,
         crossing_junctions=crossings,
         spurious_junctions=len(leftovers) - crossings,
+        independent_cycles=independent_cycles(measured),
         radius_offset_um=offset,
         radius_abs_error_um=abs_error,
         radius_offset_by_band_um=by_band,

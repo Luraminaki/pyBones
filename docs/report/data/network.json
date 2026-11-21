@@ -1,20 +1,20 @@
 {
   "real": {
-    "branches": 12072,
+    "branches": 10512,
     "truncated_branches": 1443,
-    "loops": 130,
-    "junctions": 4325,
-    "free_ends": 5873,
+    "loops": 141,
+    "junctions": 3641,
+    "free_ends": 5900,
     "face_ends": 1819,
     "burst_ends": 385,
-    "total_length_mm": 679.9113158596824,
+    "total_length_mm": 624.1667406008341,
     "stack_volume_mm3": 9.23427,
-    "length_density_mm_per_mm3": 73.62913536854374,
-    "median_branch_length_um": 31.166715171183768,
+    "length_density_mm_per_mm3": 67.5924291363404,
+    "median_branch_length_um": 34.4558441227157,
     "median_radius_um": 6.7082037925720215,
-    "median_tortuosity": 1.1193663258264106
+    "median_tortuosity": 1.1252137384132181
   },
-  "real_seconds": 17.46667181399971,
+  "real_seconds": 17.496272463000423,
   "radius_bins_um": [
     0.0,
     6.0,
@@ -22,12 +22,13 @@
     25.0
   ],
   "true_mask": {
-    "centreline_recall": 0.9175525339925834,
-    "centreline_precision": 0.9609544468546638,
+    "centreline_recall": 0.9142150803461063,
+    "centreline_precision": 0.9630252100840336,
     "true_junctions": 54,
     "matched_junctions": 40,
-    "crossing_junctions": 8,
-    "spurious_junctions": 12,
+    "crossing_junctions": 7,
+    "spurious_junctions": 10,
+    "independent_cycles": 6,
     "radius_offset_um": -0.6761884689331055,
     "radius_abs_error_um": 0.5113067626953125,
     "radius_offset_by_band_um": [
@@ -36,23 +37,24 @@
       -0.9636592864990234
     ],
     "true_length_mm": 22.86933308806581,
-    "measured_length_mm": 23.875819279525672
+    "measured_length_mm": 23.669642073962333
   },
   "segmented": {
-    "centreline_recall": 0.688504326328801,
-    "centreline_precision": 0.7383469069485358,
+    "centreline_recall": 0.6865265760197775,
+    "centreline_precision": 0.7517314864144912,
     "true_junctions": 54,
     "matched_junctions": 26,
-    "crossing_junctions": 10,
-    "spurious_junctions": 90,
+    "crossing_junctions": 9,
+    "spurious_junctions": 74,
+    "independent_cycles": 29,
     "radius_offset_um": -0.777043342590332,
     "radius_abs_error_um": 0.9296140670776367,
     "radius_offset_by_band_um": [
       0.8195934295654297,
-      -0.5278921127319336,
+      -0.5058813095092773,
       -1.5499982833862305
     ],
     "true_length_mm": 22.86933308806581,
-    "measured_length_mm": 22.69502823423353
+    "measured_length_mm": 21.95602140072061
   }
 }

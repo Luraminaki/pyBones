@@ -52,11 +52,29 @@ def end_kinds(
     position = points.astype(np.float64) * voxel
     far = (np.asarray(shape) - 1) * voxel
     to_face = np.minimum(position, far - position).min(axis=1)
-    reach = distances_um.astype(np.float64) + margin_um
     kind = np.full(len(points), EndKind.FREE, np.uint8)
-    kind[burst_distances_um <= reach] = EndKind.BURST
-    kind[to_face <= reach] = EndKind.FACE
+    kind[within_reach(distances_um, burst_distances_um, margin_um)] = EndKind.BURST
+    kind[within_reach(distances_um, to_face, margin_um)] = EndKind.FACE
     return kind
+
+
+def within_reach(
+    distances_um: "NDArray[np.float32]", target_um: "NDArray[np.floating]", margin_um: float
+) -> "NDArray[np.bool_]":
+    """Tell which centreline voxels have something within their vessel's radius plus a margin.
+
+    A centreline stops short of what it touches by about the vessel's radius: a face of the
+    stack, a burst, the bone.
+
+    Args:
+        distances_um: ``(N,)`` wall distance of each voxel (the vessel's radius there).
+        target_um: ``(N,)`` distance of each voxel to the nearest thing of interest.
+        margin_um: Extra reach beyond the radius.
+
+    Returns:
+        ``(N,)`` whether the thing is within reach.
+    """
+    return target_um <= distances_um.astype(np.float64) + margin_um
 
 
 @dataclass(frozen=True, slots=True)

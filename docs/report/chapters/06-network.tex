@@ -22,9 +22,12 @@ branches.
 
 \paragraph{Pruning} Skeletons of real masks are hairy. Three operations repeat until none applies, all
 in micrometres: a branch from a junction to a free end shorter than \pbValueNetSpurFactor{} times the widest radius at its
-junction is a bump of the surface and goes, as do isolated specks and rings shorter than the
-circumference around them; two junctions joined by a branch shorter than their radii together are
-one fork, merged (the branch's length is kept); a node left with two branches joins them.
+junction is a bump of the surface and goes, as do isolated specks; a loop shorter than the
+circumference of its vessel is a hole or a fold of the vessel mask, not a structure, so a ring from a
+junction back to itself goes, and so does the longer strand of a \emph{bubble}, two branches joining
+the same two junctions around a small hole; two junctions joined by a branch shorter than their radii
+together are one fork, merged (the branch's length is kept); a node left with two branches joins
+them.
 
 \paragraph{Ends} An end within its radius (plus \pbValueNetAnchorMargin\um) of a face of the stack or of a
 burst is not a free end: the vessel goes on beyond it. Such ends are never pruned, and the branches
@@ -63,17 +66,26 @@ its parent vessel.
   \label{tab:network-scores}
 \end{table}
 
-\paragraph{Lengths are reliable} On the segmentation, the total length is within
-\pbValueNetSegLengthErrorPct\,\% of the truth: missed thin vessels and extra spurs nearly cancel.
+\paragraph{Lengths are close, for two reasons} On the segmentation, the total length differs from the
+truth by \pbValueNetSegLengthErrorPct\,\%. It is the net of two errors in opposite directions: the thin
+vessels the segmentation misses (centreline recall \pbValueNetSegRecall) shorten it, and strands
+doubled where the vessel mask has holes lengthen it. The bubble rule removes the shortest doubled
+strands; the others remain.
 
 \paragraph{Junctions are not} Even on the true mask, \pbValueNetTrueMaskMissed{} of the \pbValueNetTrueForks{} forks are not
 found (two close forks merge into one, a short side branch is pruned as a spur), and
 \pbValueNetTrueMaskSpurious{} junctions are not forks. On the segmentation, only \pbValueNetSegForks{}
-forks are found, and \pbValueNetSegSpurious{} junctions are not forks. I looked at them: most sit
-where a vessel touches the bone, and the segmentation lets the vessel mask bulge into the contact. The
-centreline forks into each bulge. This is a limit of the segmentation (vessels and bone are hard to
-tell apart where they touch), and pruning cannot remove it without removing real side branches too.
-The counts of junctions and branches are therefore upper bounds.
+forks are found, and \pbValueNetSegSpurious{} junctions are not forks. Most of them come from loops.
+The phantom's vessels are trees, so the network of its exact mask has \pbValueNetTrueMaskCycles{}
+independent loops, all where separate vessels cross; that of its segmentation has
+\pbValueNetSegCycles, and each extra loop adds about two junctions. The skeleton draws a loop wherever
+the vessel mask has a hole or a fold, often where a vessel presses against the bone. The smallest
+loops (bubbles) are removed, as above; the larger ones look like real loops to the graph. Stricter
+rules were tried on the phantom and dropped: pruning longer spurs whose end touches bone, or closing
+the vessel mask by a voxel before thinning it, removed a few more false junctions but also real forks
+and real vessel length, and closing fused separate vessels on the exact mask. The counts of junctions
+and branches are therefore upper bounds; fewer holes and folds in the vessel mask is what will lower
+them.
 
 \paragraph{The radius bias depends on the calibre} Table~\ref{tab:network-bands} gives the median
 error of the measured radius by band of true radius. Thin vessels come out wider than they are
@@ -100,7 +112,7 @@ face of the stack, \pbValueNetLoops{} loops), that is \pbValueNetDensity\,mm of 
 tissue. Branches are short (median \pbValueNetMedianBranchUm\um) and nearly straight (median tortuosity
 \pbValueNetMedianTortuosity); the median radius is \pbValueNetMedianRadiusUm\um. The ends are
 \pbValueNetFreeEnds{} free, \pbValueNetFaceEnds{} at a face and \pbValueNetBurstEnds{} at a burst; the
-\pbValueNetJunctions{} junctions include the bulges described above.
+\pbValueNetJunctions{} junctions include the loops described above.
 
 These are the first measures of this network, and they inherit the limits of the segmentation: the
 thinnest vessels are partly missed (Chapter~\ref{chap:validation}), clotted segments leave gaps that
