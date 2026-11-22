@@ -96,7 +96,9 @@ uv run pybones serve
 
 Then open **<http://127.0.0.1:8000>** in a browser (Ctrl+C in the terminal stops the server): segment a
 stack and follow its progress, scroll through its slices with the labels overlaid, turn its meshes
-around in 3D, and measure its vessel network (Network tab; centrelines drawn in 3D). The HTTP API
+around in 3D, measure its vessel network (Network tab; centrelines drawn in 3D), and compare it with
+another run (Compare tab: the settings that differ, the results, the same slice of both). Every job
+has a settings form that explains each setting and what a change affects. The HTTP API
 behind the page is documented, and can be tried request by request, at
 **<http://127.0.0.1:8000/docs>** (FastAPI's Swagger UI). Details: [INSTALL.md](INSTALL.md#web-server).
 
@@ -187,7 +189,7 @@ They should become defaults once annotated crops of the real scan confirm them.
     of a voxel on the sample (measured below); `32` stores exact floats.
 
 <!-- meshes:start (written by python -m tools.report figures) -->
-The vessel mesh of the sample (1.36 million points, 2.72 million triangles), with pyBones 0.8.0:
+The vessel mesh of the sample (1.36 million points, 2.72 million triangles), with pyBones 0.8.1:
 
 | Format | Size | Largest position error | Use |
 |---|---|---|---|
@@ -204,7 +206,7 @@ No expert ground truth exists for this scan, so [tools/phantom](tools/phantom/) 
 noisy like the real scan.
 
 <!-- scores:start (written by python -m tools.report figures) -->
-| Phantom (0.8.0) | Dice | Precision | Recall |
+| Phantom (0.8.1) | Dice | Precision | Recall |
 |---|---|---|---|
 | Bone | 0.989 | 0.994 | 0.984 |
 | Vessel | 0.862 | 0.826 | 0.901 |
@@ -338,11 +340,15 @@ docs/             CONFIGURATION.md (every setting, written by tools.docs); repor
   browser that kept them before this rule (pyBones 0.5) may need one hard refresh (Ctrl+Shift+R).
 - **Centrelines in 3D** are drawn as points over the meshes, one pixel each: zoomed out, the whole
   stack's centrelines (about 220,000 points on the sample) cover much of the view.
-- **Settings per run cover the segmentation**: the settings form (and a run request) changes the
-  segmentation's settings only; meshes and networks are built with the server's (`default.json`).
 - **Cached meshes are not rebuilt by themselves**: a mesh is built once per label and format and kept
-  next to its segmentation; after changing the mesh settings (grid, smoothing, precision), build it
-  again (`POST` its address) to refresh it.
+  next to its segmentation, with a record of its settings. The 3D tab says when a loaded mesh was
+  built with other settings than its form's; *Rebuild shown meshes* (or a `POST` to its address)
+  builds it again.
+- **A running job is joined, whatever its settings**: asking for a mesh or a network while the same
+  one is being built joins that job; ask again once it is over to apply other settings.
+- **One section per job**: a mesh job changes `mesh` settings only, a quantification job
+  `quantification` settings only (file names stay the server's); everything else is the
+  segmentation's, or the server's.
 
 ## POSSIBLE FUTURE UPDATES
 
@@ -350,9 +356,8 @@ docs/             CONFIGURATION.md (every setting, written by tools.docs); repor
   joined to their vessel (the halo rule cuts them off before the 3D refinement can), a length that
   follows the centreline instead of its voxel steps, and measures per region (cortex, marrow).
 - Bridging small vessel gaps (clots) along the vessel direction.
-- Web page: comparing two runs side by side (settings, results, the same slice), meshing and
-  measuring again with other settings, the raw slice without overlay, measurements in 3D
-  (distances, a picked vessel's calibre).
+- Web page: the raw slice without overlay, measurements in 3D (distances, a picked vessel's
+  calibre), comparing meshes of two runs.
 - Experimental switches: deciding them on annotated crops of the real scan.
 
 ## LICENSE AND DATA

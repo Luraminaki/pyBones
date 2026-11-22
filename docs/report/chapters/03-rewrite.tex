@@ -88,17 +88,22 @@ are kept apart from the segmentation configuration, which every segmentation rec
 
 \paragraph{Web page} The same server serves a page (Figure~\ref{fig:webpage}) that does what the 2018
 viewer did, in a browser: segment a stack and follow the run, scroll through its slices with the labels
-overlaid, turn its meshes around in 3D, and measure its vessel network (Chapter~\ref{chap:network}).
+overlaid, turn its meshes around in 3D, measure its vessel network (Chapter~\ref{chap:network}), and
+compare it with another run: the settings that differ, the results side by side and the same slice
+of both.
 It is plain HTML, CSS and JavaScript modules, with no build
 step; the 3D view uses three.js, kept in the repository at a fixed version with the hash of each file,
 so that the page works offline and changes only on purpose. A mesh is sent to the browser once as GLB
-(Section~\ref{sec:meshing}) and drawn by the graphics card: rotating it costs no request. A run's settings are
-a form built from the configuration's schema: each setting says what it is, when to change it and what
-a change affects (the labels, and so the meshes and the network; or no result, such as the number of
-threads); values are checked as typed, and the server's own refusals come back next to their setting.
-A run can be started again from the one on screen, with its settings filled in, and the form then says
-what differs from it. Every section of the configuration declares what a change of it affects, and a
-test refuses a new one that does not. Each step of the page was checked
+(Section~\ref{sec:meshing}) and drawn by the graphics card: rotating it costs no request. Each kind of job
+has a settings form built from the configuration's schema (a run's, the meshes', the network's): each
+setting says what it is, when to change it and what a change affects (the labels, and so the meshes
+and the network; the meshes or the network only; or no result, such as the number of threads);
+values are checked as typed, and the server's own refusals come back next to their setting. A job
+changes its own section only, and records what it used: a mesh writes its settings next to it, a
+network inside its file, so the page can say when a mesh was built with other settings than its
+form's. A run can be started again from the one on screen, with its settings filled in, and the form
+then says what differs from it. Every section of the configuration declares what a change of it
+affects, and a test refuses a new one that does not. Each step of the page was checked
 in Firefox, and the tests check that every module it imports is served and every name it imports
 exists; with Node.js installed, they also run unit tests of its helpers and of its HTTP client, and
 check that its labels, job states and job kinds match the Python ones. The page's own files are

@@ -6,8 +6,8 @@ viewer for it. We had identified the real difficulty, telling vessels from bone,
 morphology tuned by eye.
 
 Eight years later, pyBones keeps the goal and changes the method, and replaces our viewer with a local
-web page that segments a stack, shows its slices, turns its meshes around in 3D and measures its
-vessel network: the quantification the brief asked for, with its limits stated. The main lessons I
+web page that segments a stack, shows its slices, turns its meshes around in 3D, measures its
+vessel network and compares two runs: the quantification the brief asked for, with its limits stated. The main lessons I
 draw from the rewrite are:
 \begin{itemize}
   \item \textbf{Measure before improving.} Without a ground truth, a synthetic phantom calibrated on the
@@ -35,7 +35,6 @@ draw from the rewrite are:
   \item \textbf{Measures per region} (cortex, marrow), to compare the network across the bone.
   \item \textbf{Gap bridging} along the vessel direction, to reconnect vessels interrupted by clots.
   \item \textbf{Expert validation} of a few real crops with the annotation page.
-  \item \textbf{The web page}: comparing two runs side by side (settings, results, slices), meshing
-        and measuring again with other settings, the raw slice without overlay, and measurements in
-        3D (distances, the calibre of a picked vessel).
+  \item \textbf{The web page}: the raw slice without overlay, and measurements in 3D (distances,
+        the calibre of a picked vessel).
 \end{itemize}

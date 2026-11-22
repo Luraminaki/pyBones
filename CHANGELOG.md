@@ -9,6 +9,38 @@ The current version lives in [pyproject.toml](pyproject.toml) and is read
 from package metadata at runtime; every segmentation records it in its
 `meta.json`. The [report](docs/report/) measures what each step below changed.
 
+## 0.8.1-alpha
+
+Comparing runs, and settings for every job. The configuration format is unchanged: outputs of
+0.8.0 remain readable (meshes built before 0.8.1 have no record of their settings; the 3D tab
+says so).
+
+- Web page, Compare tab: the shown segmentation next to another one. It lists the settings that
+  differ (the sections a run may change, from each record; once both networks are measured, the
+  settings they were measured with too), shows the results side by side (stack, size, version,
+  label fractions, thin vessels added, time, network measures) and the same slice of both.
+- Settings per job: mesh and quantification jobs take overrides of their own section (an optional
+  `{"overrides": [...]}` body), each with a settings form on the page.
+  - The 3D tab has *Edit mesh settings…* and *Rebuild shown meshes*. A mesh records its settings
+    next to it (`GET .../meshes/{label}/settings`), and the tab says when a loaded mesh was built
+    with other settings than the form's.
+  - The Network tab has *Edit settings…*. `GET .../quantification` now returns the summary and
+    the settings the network was measured with, and the tab shows how they differ from the
+    defaults.
+  - A job may change its own section only; file names stay the server's
+    (`quantification.files`). Invalid values come back per setting, as for a run.
+  - `GET /api/server` describes the sections each kind of job may change (`settings_sections`,
+    replacing `overridable_sections`) and the paths kept (`settings_kept`).
+- Every setting of the mesh and quantification sections now says when to change it (the forms and
+  docs/CONFIGURATION.md); a test makes every setting a job may change carry advice.
+- Files written once complete are flushed to the disk before their rename, and their folder after
+  it: a power cut can no longer leave a complete-looking, empty network or mesh file (owner's
+  remark).
+- Code: `api/jobs.py` split (the job record and `put_latest` move to `api/job_record.py`); the
+  page's slice loading is shared by the Slices and Compare tabs (`slice_loader.js`); the settings
+  form builds its own dialog, one per kind of job; the keys of `network.json` are named once.
+  `pybones.server.app`'s route list was missing the quantification routes: complete.
+
 ## 0.8.0-alpha
 
 Two experimental features and a settings form. Thin vessels the blur hides come back from a

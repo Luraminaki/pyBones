@@ -95,8 +95,8 @@ have to:
 | No function only forwards its parameters to another; no two functions share a body; no run of logic (3 statements) or of JavaScript (4 lines) is repeated, variable names aside | `tests/test_duplication.py` |
 | No dead code: every function, class, method and constant of `src/` and `tools/` is used by them (not by the tests alone), every test helper by a test, every JavaScript export by another module | `tests/test_unused.py` |
 | Every JavaScript function of both pages has a JSDoc comment; no `var`, loose equality, `innerHTML` or `eval`; every module parses | `tests/server/test_page_js.py` |
-| The labels, job states, job kinds, effects and levels the page knows match Python's; the settings form reads every setting a run may change | `tests/server/test_page_js.py` |
-| Every section says what a change affects and how prominently forms show it; every setting of the form says when to change it | `tests/config/test_effects.py` |
+| The labels, job states, job kinds, effects and levels the page knows match Python's; each job's settings form reads every setting that job may change | `tests/server/test_page_js.py` |
+| Every section says what a change affects and how prominently forms show it; every setting of a form says when to change it | `tests/config/test_effects.py` |
 | The vendored three.js matches its manifest; every import of the page resolves | `tests/server/test_page.py` |
 | The phantom's scores do not move unnoticed | `tests/regression/test_golden.py` |
 | Every setting has a description, and docs/CONFIGURATION.md matches the code | `tests/docs_tool/test_configuration.py` |
@@ -113,14 +113,16 @@ schemas hold no defaults. Sizes are physical (`_um`, `_um2`, `_um3` keys), conve
 A new setting takes, together:
 
 1. a schema field with its bounds and a `description` (the reference and its test need it);
-2. in a section the web page's form shows (those a run may change), *advice*: when to change it,
-   `json_schema_extra=advice("...")`; with `advice("...", Effect.NONE)` (or `affects(...)`
-   elsewhere) when a change affects something else than its section says;
+2. in a section one of the web page's forms shows (those a segmentation, a mesh or a
+   quantification job may change, `SETTINGS_REQUESTS` in `server/schemas.py`), *advice*: when to
+   change it, `json_schema_extra=advice("...")`; with `advice("...", Effect.NONE)` (or
+   `affects(...)` elsewhere) when a change affects something else than its section says. A path
+   a job must not change (a file name the server reads back) goes in that request's `KEPT`;
 3. its value in the JSON file;
 4. a validation test in `tests/config/` (an out-of-range value is rejected);
 5. `uv run python -m tools.docs`, which rewrites [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
-A new section declares what a change of it affects and how prominently the form shows it:
+A new section declares what a change of it affects and how prominently the forms show it:
 `model_config = section_config(Effect.LABELS, Level.ADVANCED)` (effects: labels, meshes, network,
 previews, none; levels: common, advanced, experimental). `tests/config/test_effects.py` refuses a
 section or a form setting without them.
@@ -147,8 +149,9 @@ package from the npm registry, check its integrity against the registry's, copy 
 rewrite the manifest; the test then confirms the set is complete.
 
 The `node:test` suites in `tests/js/` cover the page's pure code: formatting helpers, the HTTP client
-against a stubbed `fetch` and `EventSource`, the "segment again" settings difference, and the 3D
-view's memory helpers.
+against a stubbed `fetch` and `EventSource`, the settings forms' model (reading the schema,
+checking values, differences and what they affect), the comparison of two runs, and the 3D view's
+memory helpers.
 
 ## TOOLS
 

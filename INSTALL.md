@@ -224,10 +224,16 @@ The page, in a few steps:
    ~<!-- pb:MeshVesselSeconds -->6<!-- /pb --> s for the vessels of the sample,
    ~<!-- pb:MeshBoneSeconds -->13<!-- /pb --> s for the bone), then loaded. Left-drag turns the view, or moves it
    with the *Move* switch (Shift swaps the two); right-drag always moves it; the wheel, a two-finger
-   swipe or the + / − buttons zoom; *Reset view* looks down the stack again.
+   swipe or the + / − buttons zoom; *Reset view* looks down the stack again. *Edit mesh settings…*
+   changes the settings of the next meshes (grid, smoothing, precision), and *Rebuild shown
+   meshes* builds the shown ones again with them; a label says when its mesh was built with other
+   settings than the form's.
 4. **Network**: *Quantify* runs the quantification (a job, ~<!-- pb:NetSeconds -->18<!-- /pb --> s
-   on the sample), then shows the
-   network's summary; its centrelines can be drawn over the meshes in the 3D tab.
+   on the sample) with the settings of *Edit settings…*, then shows the network's summary and the
+   settings it was measured with; its centrelines can be drawn over the meshes in the 3D tab.
+5. **Compare**: pick another segmentation to see the settings that differ (those a run may
+   change, and the settings both networks were measured with), their results side by side
+   (label fractions, time, network), and the same slice of both.
 
 Everything the page does goes through the HTTP API, documented and testable at
 **<http://127.0.0.1:8000/docs>** ("Try it out"). The same session by hand:
@@ -239,12 +245,15 @@ Everything the page does goes through the HTTP API, documented and testable at
 4. `GET /api/segmentations/run1/slices/50?scale=0.4`: a slice with its labels, as a PNG image.
 5. `POST /api/segmentations/run1/meshes/vessel`, then once its job succeeded,
    `GET /api/segmentations/run1/meshes/vessel`: the vessel surface in µm, as GLB (for the browser);
-   add `?format=stl` to both for an STL file. The mesh settings, precision included, are explained in
-   the [README](README.md#how-it-works) and listed in [docs/CONFIGURATION.md](docs/CONFIGURATION.md#mesh).
-6. `POST /api/segmentations/run1/quantification`, then once its job succeeded,
-   `GET /api/segmentations/run1/quantification`: the vessel network's summary (branches, junctions,
-   ends, length, length density, medians); `GET /api/segmentations/run1/centrelines`: its centreline
-   points as raw float32 `(x, y, z)` µm triples, as drawn in the 3D tab.
+   add `?format=stl` to both for an STL file. A body `{"overrides": ["mesh.taubin.iterations=0"]}`
+   changes mesh settings for this mesh only; `GET .../meshes/vessel/settings` returns those it was
+   built with. The mesh settings, precision included, are explained in the
+   [README](README.md#how-it-works) and listed in [docs/CONFIGURATION.md](docs/CONFIGURATION.md#mesh).
+6. `POST /api/segmentations/run1/quantification` (optional body: `quantification.*` overrides), then
+   once its job succeeded, `GET /api/segmentations/run1/quantification`: the vessel network's
+   summary (branches, junctions, ends, length, length density, medians) and the settings it was
+   measured with; `GET /api/segmentations/run1/centrelines`: its centreline points as raw float32
+   `(x, y, z)` µm triples, as drawn in the 3D tab.
 
 Other folders or port:
 
