@@ -1,10 +1,13 @@
 """Scoring a measured vessel network against the phantom's true one.
 
-* **Centrelines**: the true centrelines (inside the volume, with contrast agent) are
-  sampled every voxel; *recall* is the share of samples within ``tolerance_um`` of a measured
-  centreline voxel, *precision* the share of measured voxels within ``tolerance_um`` of a
-  true centreline.
-* **Junctions**: each visible true bifurcation (inside the volume, its side branch visible
+A true vessel is *visible* where it lies inside the volume, holds contrast agent (not a gap)
+and is not hidden: inside a burst, the truth labels its voxels burst, so no vessel mask can
+contain it.
+
+* **Centrelines**: the visible true centrelines are sampled every voxel; *recall* is the
+  share of samples within ``tolerance_um`` of a measured centreline voxel, *precision* the
+  share of measured voxels within ``tolerance_um`` of a true centreline.
+* **Junctions**: each visible true bifurcation (on a visible voxel, its side branch visible
   for longer than its parent's radius) is matched to the nearest unmatched measured junction
   within ``junction_tolerance_um`` plus the parent's radius; unmatched measured junctions
   are split into *crossings* (where two different vessels of the phantom pass close to each
@@ -54,7 +57,7 @@ class NetworkScore:
         radius_abs_error_um: Median absolute error of the radius after removing the offset.
         radius_offset_by_band_um: Median of (measured - true radius) per true-radius band
             (NaN for a band with no measured voxel).
-        true_length_mm: True centreline length inside the volume (with contrast agent).
+        true_length_mm: Visible true centreline length.
         measured_length_mm: Measured total length.
     """
 
@@ -116,36 +119,59 @@ def _to_segments(
     return np.linalg.norm(point - (a + t[:, None] * ab), axis=1)
 
 
-def _visible_length(truth: "VesselNetwork", extent: "NDArray[np.float64]") -> "NDArray[np.float64]":
-    """Measure how much of each true branch is visible: inside the volume, with contrast.
+def _visible_points(
+    points_um: "NDArray[np.float64]",
+    hidden: "NDArray[np.bool_]",
+    voxel: "NDArray[np.float64]",
+) -> "NDArray[np.bool_]":
+    """Tell which points lie inside the volume, on a voxel where a vessel can be seen.
+
+    Args:
+        points_um: ``(N, 3)`` points in µm.
+        hidden: ``(Z, Y, X)`` voxels where no vessel can be seen (bursts).
+        voxel: Voxel size ``(z, y, x)`` in µm.
+
+    Returns:
+        ``(N,)`` visibility of each point.
+    """
+    extent = (np.asarray(hidden.shape) - 1) * voxel
+    inside = np.all((points_um >= 0) & (points_um <= extent), axis=1)
+    index = np.clip(np.rint(points_um / voxel).astype(np.int64), 0, np.asarray(hidden.shape) - 1)
+    return inside & ~hidden[tuple(index.T)]
+
+
+def _visible_length(
+    truth: "VesselNetwork", hidden: "NDArray[np.bool_]", voxel: "NDArray[np.float64]"
+) -> "NDArray[np.float64]":
+    """Measure how much of each true branch is visible (see the module).
 
     Args:
         truth: True network.
-        extent: Far corner of the volume in µm (the near one is the origin).
+        hidden: Voxels where no vessel can be seen.
+        voxel: Voxel size in µm.
 
     Returns:
         Visible length per branch (µm), counted by segment midpoints.
     """
     a, b = truth.segments_um[:, 0].astype(np.float64), truth.segments_um[:, 1].astype(np.float64)
-    mid = (a + b) / 2
-    seen = np.all((mid >= 0) & (mid <= extent), axis=1) & (truth.state != SegmentState.GAP)
+    seen = _visible_points((a + b) / 2, hidden, voxel) & (truth.state != SegmentState.GAP)
     length = np.linalg.norm(b - a, axis=1) * seen
     return np.bincount(truth.branch, length, minlength=len(truth.branch_parent))
 
 
 def _visible_junctions(
-    truth: "VesselNetwork", extent: "NDArray[np.float64]", inside_length: "NDArray[np.float64]"
+    truth: "VesselNetwork", hidden: "NDArray[np.bool_]", voxel: "NDArray[np.float64]"
 ) -> "tuple[NDArray[np.float64], NDArray[np.float64]]":
     """Keep the bifurcations an image can show, with how far from them a fork may appear.
 
-    A bifurcation counts if it lies inside the volume and its side branch is visible for
+    A bifurcation counts if it lies on a visible voxel and its side branch is visible for
     longer than its parent's radius (otherwise no fork is drawn). The fork of a thick
     parent is found anywhere across it: the reach is the parent's radius.
 
     Args:
         truth: True network.
-        extent: Far corner of the volume in µm.
-        inside_length: Visible length per branch.
+        hidden: Voxels where no vessel can be seen.
+        voxel: Voxel size in µm.
 
     Returns:
         Visible bifurcations ``(J, 3)`` µm, and the parent's radius at each.
@@ -154,9 +180,9 @@ def _visible_junctions(
     radius = np.zeros(len(truth.branch_parent))
     np.maximum.at(radius, truth.branch, truth.radius_um.astype(np.float64))
     parent_radius = radius[truth.branch_parent[side]]
-    points = truth.junctions_um.astype(np.float64)
-    inside = np.all((points >= 0) & (points <= extent), axis=1)
-    visible = inside & (inside_length[side] > parent_radius)
+    points = truth.junctions_um.astype(np.float64).reshape(-1, _DIMS)
+    side_length = _visible_length(truth, hidden, voxel)[side]
+    visible = _visible_points(points, hidden, voxel) & (side_length > parent_radius)
     return points[visible], parent_radius[visible]
 
 
@@ -204,7 +230,7 @@ def score_network(
     measured: "Network",
     distances_um: "NDArray[np.float32]",
     truth: "VesselNetwork",
-    shape: tuple[int, int, int],
+    hidden: "NDArray[np.bool_]",
     voxel_um: tuple[float, float, float],
     tolerance_um: float,
     junction_tolerance_um: float,
@@ -216,7 +242,8 @@ def score_network(
         measured: Network built from a segmentation of the phantom.
         distances_um: Wall distance of each of its voxels.
         truth: The phantom's true network.
-        shape: Volume shape.
+        hidden: ``(Z, Y, X)`` voxels of the volume where no vessel can be seen (the true
+            bursts): the true network is not scored there.
         voxel_um: Voxel size ``(z, y, x)`` in µm.
         tolerance_um: Distance under which a centreline voxel and a true centreline agree.
         junction_tolerance_um: Distance under which a measured junction matches a true one.
@@ -226,18 +253,17 @@ def score_network(
         The scores.
     """
     voxel = np.asarray(voxel_um)
-    extent = (np.asarray(shape) - 1) * voxel
     a = truth.segments_um[:, 0].astype(np.float64)
     b = truth.segments_um[:, 1].astype(np.float64)
     filled = truth.state != SegmentState.GAP
 
-    # True centreline samples, every voxel, inside the volume, with contrast agent.
+    # True centreline samples, every voxel, where visible.
     length = np.linalg.norm(b - a, axis=1)
     steps = np.maximum(np.ceil(length / voxel.min()).astype(int), 1)
     seg_of = np.repeat(np.arange(len(a)), steps)
     t = (np.arange(len(seg_of)) - np.repeat(np.cumsum(steps) - steps, steps) + 0.5) / steps[seg_of]
     samples = a[seg_of] + t[:, None] * (b - a)[seg_of]
-    inside = np.all((samples >= 0) & (samples <= extent), axis=1) & filled[seg_of]
+    inside = _visible_points(samples, hidden, voxel) & filled[seg_of]
     sample_step = length[seg_of] / steps[seg_of]
     true_length = float(sample_step[inside].sum())
 
@@ -272,7 +298,7 @@ def score_network(
     )
 
     # Junctions: greedy nearest matching, then classify the leftovers.
-    true_j, reach = _visible_junctions(truth, extent, inside_length=_visible_length(truth, extent))
+    true_j, reach = _visible_junctions(truth, hidden, voxel)
     reach = reach + junction_tolerance_um
     measured_j = measured.node_position_um[measured.node_kind == NodeKind.JUNCTION]
     matched = np.zeros(len(measured_j), np.bool_)

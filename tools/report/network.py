@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from pybones.quantification.measures import NetworkSummary
 from pybones.quantification.pipeline import measure_network, run_quantification
+from pybones.segmentation.labels import Label
 from pybones.segmentation.pipeline import run_segmentation
 from pybones.segmentation.results import load_labels
 from pybones.utils.constants import JSON_INDENT
@@ -67,17 +68,28 @@ def _score(
     """
     voxel = ctx.config.acquisition.voxel_size_um
     measured = measure_network(labels, voxel, ctx.config.quantification)
-    shape = (int(labels.shape[0]), int(labels.shape[1]), int(labels.shape[2]))
     return score_network(
         measured.network,
         measured.distances_um,
         phantom.network,
-        shape,
+        phantom.truth == Label.BURST,  # no vessel mask can hold a vessel the truth calls burst
         voxel,
         ctx.settings.network.tolerance_um,
         ctx.settings.network.junction_tolerance_um,
         bins,
     )
+
+
+def _length_error_pct(score: NetworkScore) -> str:
+    """Format how far a measured total length is from the true one, in percent.
+
+    Args:
+        score: A network's score.
+
+    Returns:
+        LaTeX text, signed, in math mode (a real minus sign, never split from its number).
+    """
+    return f"${_PERCENT * (score.measured_length_mm / score.true_length_mm - 1):+.1f}$"
 
 
 def _signed(value: float) -> str:
@@ -177,7 +189,6 @@ def network_values(ctx: "Context") -> dict[str, str]:
     seg = NetworkScore(**record[SEGMENTED_KEY])
     true = NetworkScore(**record[TRUE_MASK_KEY])
     bands = seg.radius_offset_by_band_um
-    length_error = seg.measured_length_mm / seg.true_length_mm - 1
     phantom = load_phantom_settings(ctx.repo / ctx.settings.network.phantom_settings)
     report = ctx.settings.network
     quantification = ctx.config.quantification
@@ -215,7 +226,8 @@ def network_values(ctx: "Context") -> dict[str, str]:
         "NetSegSpurious": f"{seg.spurious_junctions}",
         "NetSegRecall": f"{seg.centreline_recall:.2f}",
         "NetSegPrecision": f"{seg.centreline_precision:.2f}",
-        "NetSegLengthErrorPct": f"${_PERCENT * length_error:+.1f}$",
+        "NetSegLengthErrorPct": _length_error_pct(seg),
+        "NetTrueLengthErrorPct": _length_error_pct(true),
         # Signed values in math mode: a real minus sign, never split from its number.
         "NetSegRadiusOffset": f"${seg.radius_offset_um:+.2f}$",
         "NetSegRadiusThin": f"${bands[0]:+.1f}$",

@@ -25,6 +25,10 @@ TOLERANCE = 4.0
 JUNCTION_TOLERANCE = 6.0
 #: Radius bands of the calibre error: the true radius (4 µm) falls in the first.
 RADIUS_BINS = (0.0, 6.0, 30.0)
+#: No burst anywhere: every true vessel of the volume can be seen.
+NOTHING_HIDDEN = np.zeros(SHAPE, np.bool_)
+#: Length of the parent left visible by a burst from voxel x = 35: from 4 to 69 µm.
+VISIBLE_LENGTH_MM = 0.065
 
 
 def true_network(paths: list[list[tuple[int, int, int]]], parents: list[int]) -> VesselNetwork:
@@ -82,7 +86,7 @@ def test_a_network_laid_on_the_truth_scores_perfectly() -> None:
         net,
         distances,
         true_network(paths, [-1, 0]),
-        SHAPE,
+        NOTHING_HIDDEN,
         VOXEL,
         TOLERANCE,
         JUNCTION_TOLERANCE,
@@ -107,7 +111,7 @@ def test_a_crossing_of_two_vessels_is_not_a_spurious_fork() -> None:
         net,
         distances,
         true_network(paths, [-1, -1]),
-        SHAPE,
+        NOTHING_HIDDEN,
         VOXEL,
         TOLERANCE,
         JUNCTION_TOLERANCE,
@@ -123,7 +127,7 @@ def test_missing_and_extra_centrelines_lower_recall_and_precision() -> None:
     truth = true_network([[(10, 30, 2), (10, 30, 57)], [(10, 10, 2), (10, 10, 57)]], [-1, -1])
     net, distances = measured([[(10, 30, 2), (10, 30, 57)], [(10, 50, 2), (10, 50, 57)]])
     score = score_network(
-        net, distances, truth, SHAPE, VOXEL, TOLERANCE, JUNCTION_TOLERANCE, RADIUS_BINS
+        net, distances, truth, NOTHING_HIDDEN, VOXEL, TOLERANCE, JUNCTION_TOLERANCE, RADIUS_BINS
     )
     assert score.centreline_recall == pytest.approx(0.5, abs=0.05)
     assert score.centreline_precision == pytest.approx(0.5, abs=0.05)
@@ -136,3 +140,24 @@ def test_a_loop_is_counted_once_alone_or_on_a_vessel() -> None:
     assert independent_cycles(alone) == 1
     on_vessel, _ = measured([ring, [(10, 20, 20), (10, 5, 5)]])
     assert independent_cycles(on_vessel) == 1
+
+
+def test_vessels_hidden_by_a_burst_are_not_scored() -> None:
+    """A true vessel inside a burst is expected neither as a centreline nor as a fork."""
+    paths = [[(10, 30, 2), (10, 30, 57)], [(10, 30, 40), (10, 55, 40)]]
+    hidden = np.zeros(SHAPE, np.bool_)
+    hidden[:, :, 35:] = True  # a burst over the fork and the far half of the parent
+    net, distances = measured([[(10, 30, 2), (10, 30, 34)]])
+    score = score_network(
+        net,
+        distances,
+        true_network(paths, [-1, 0]),
+        hidden,
+        VOXEL,
+        TOLERANCE,
+        JUNCTION_TOLERANCE,
+        RADIUS_BINS,
+    )
+    assert score.true_junctions == 0
+    assert score.centreline_recall == pytest.approx(1.0)
+    assert score.true_length_mm == pytest.approx(VISIBLE_LENGTH_MM, rel=0.05)
