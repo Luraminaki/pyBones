@@ -17,6 +17,7 @@ from pybones.segmentation.tubularity import TubularityParams, scale_kernels
 
 if TYPE_CHECKING:
     from pybones.config.schema import PyBonesConfig
+    from pybones.imaging.morphology import Radius
     from pybones.segmentation.geometry import Ball
 
 
@@ -34,6 +35,9 @@ class PixelParams:
         vessel_rim_occupancy: Contrast-agent fraction of a vessel edge (0.5 = half-maximum).
         vessel_core_ball: Ball in which a voxel looks for the vessel core it borders.
         vessel_surround_ball: Ball in which a voxel looks for the material around a vessel.
+        vessel_bone_side: Whether a vessel's edge is measured against bone on the bone side of
+            a contact (see :func:`pybones.segmentation.classifier.vessel_edges`).
+        vessel_bone_barrier: Radius of the disc bone must hold to count as the bone side.
         vessel_min_area: Smaller 2D vessel blobs are noise.
         bone_min_area: Smaller 2D bone blobs are noise.
         burst_grid: Block size of the coarse bright-density grid.
@@ -41,7 +45,8 @@ class PixelParams:
         burst_window_z: z extent of the density box (1 = 2D only).
         burst_density: Minimum bright-pixel density of a burst core.
         burst_min_area: Minimum area of a burst core.
-        burst_boundary_sigma: Sigma of the fine density that places the burst boundary.
+        burst_boundary_sigma: In-plane sigma of the fine density that places the burst
+            boundary, in blocks of the coarse grid.
         burst_boundary_fraction: Fraction of the core density where the boundary lies.
         z_window: Slices of the z majority vote (1 = off).
         vessel_contact_ratio: Ambiguous component becomes vessel if its vessel contacts
@@ -58,6 +63,8 @@ class PixelParams:
     vessel_rim_occupancy: float
     vessel_core_ball: "Ball"
     vessel_surround_ball: "Ball"
+    vessel_bone_side: bool
+    vessel_bone_barrier: "Radius"
     vessel_min_area: int
     bone_min_area: int
     burst_grid: tuple[int, int]
@@ -105,6 +112,7 @@ def resolve_pixel_params(config: "PyBonesConfig") -> PixelParams:
     geo = voxel_geometry(config)
     seg, burst, ref = config.segmentation, config.segmentation.burst, config.refinement
     grid = geo.block_yx(burst.density_grid_um)
+    boundary_sy, boundary_sx = geo.sigma_yx(burst.boundary_sigma_um)
     params = PixelParams(
         connectivity=seg.connectivity,
         smoothing_sigma=geo.sigma_yx(seg.smoothing_sigma_um),
@@ -113,6 +121,8 @@ def resolve_pixel_params(config: "PyBonesConfig") -> PixelParams:
         vessel_core_ball=geo.ball(seg.vessel.rim_um),
         # The surround is sought one voxel beyond the rim.
         vessel_surround_ball=geo.ball(seg.vessel.rim_um + max(geo.y, geo.x)),
+        vessel_bone_side=seg.vessel.bone_side.enabled,
+        vessel_bone_barrier=geo.radius_yx(seg.vessel.bone_side.barrier_um),
         vessel_min_area=geo.area_px(seg.vessel.min_area_um2),
         bone_min_area=geo.area_px(seg.bone.min_area_um2),
         burst_grid=grid,
@@ -123,7 +133,7 @@ def resolve_pixel_params(config: "PyBonesConfig") -> PixelParams:
         burst_window_z=geo.window_z(burst.window_z_um),
         burst_density=burst.density,
         burst_min_area=geo.area_px(burst.min_area_um2),
-        burst_boundary_sigma=geo.sigma_yx(burst.boundary_sigma_um),
+        burst_boundary_sigma=(boundary_sy / grid[0], boundary_sx / grid[1]),
         burst_boundary_fraction=burst.boundary_fraction,
         z_window=geo.window_z(config.z_smoothing.window_um),
         vessel_contact_ratio=ref.vessel_contact_ratio,

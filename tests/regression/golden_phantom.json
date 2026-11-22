@@ -1,20 +1,20 @@
 {
-  "config_digest": "90dda5a735bd8495047cbfb803e04d86bd2894a1c3f3dd546d0054f420ff60d4",
+  "config_digest": "03643952e82b63e895db1abe20dde6144f1c92fa946b303df7bdbc44b304c3b2",
   "phantom_digest": "b3cc2e6ef2cbe3463627ab3cfe8d0b3586092763ee6ceb2be978f0136db0d5e7",
   "scores": {
-    "accuracy": 0.976087,
-    "bone_dice": 0.989859,
-    "bone_precision": 0.996353,
-    "bone_recall": 0.983449,
-    "burst_dice": 0.798551,
-    "burst_precision": 0.695174,
-    "burst_recall": 0.938046,
+    "accuracy": 0.980474,
+    "bone_dice": 0.990615,
+    "bone_precision": 0.99638,
+    "bone_recall": 0.984916,
+    "burst_dice": 0.837589,
+    "burst_precision": 0.756238,
+    "burst_recall": 0.938552,
     "clotted_recall": 0.838109,
-    "vessel_dice": 0.772692,
-    "vessel_precision": 0.768115,
-    "vessel_recall": 0.777324,
-    "vessel_recall_0_6um": 0.587997,
-    "vessel_recall_12_25um": 0.78296,
+    "vessel_dice": 0.838714,
+    "vessel_precision": 0.790072,
+    "vessel_recall": 0.893738,
+    "vessel_recall_0_6um": 0.603406,
+    "vessel_recall_12_25um": 0.908759,
     "vessel_recall_6_12um": 0.766345
   }
 }

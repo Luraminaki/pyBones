@@ -47,7 +47,11 @@
     "vessel": {
       "rim_occupancy": 0.5,
       "rim_um": 9.0,
-      "min_area_um2": 54
+      "min_area_um2": 54,
+      "bone_side": {
+        "enabled": false,
+        "barrier_um": 12
+      }
     },
     "bone": {
       "min_area_um2": 270

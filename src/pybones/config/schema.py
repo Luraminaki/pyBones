@@ -146,6 +146,21 @@ class AcquisitionConfig(Section):
     )
 
 
+class BoneSideConfig(Section):
+    """Vessel edges where a vessel touches bone (off by default: unconfirmed on real scans)."""
+
+    enabled: bool = Field(
+        description="Measure a vessel's half-maximum edge against bone on the bone side of a "
+        + "contact, instead of against the darkest material around the vessel. Better on the "
+        + "phantom; on a real scan it may turn thin dim vessels next to bone into bone, which no "
+        + "annotation can yet confirm or refute."
+    )
+    barrier_um: Length = Field(
+        description="Only bone that holds a disc of this radius counts as the bone side (thin "
+        + "foreground, such as a dim vessel, does not)."
+    )
+
+
 class VesselConfig(Section):
     """Vessel detection (physical units)."""
 
@@ -155,6 +170,7 @@ class VesselConfig(Section):
     )
     rim_um: Length = Field(description="Max rim growth around bright cores (partial volume).")
     min_area_um2: Area = Field(description="Smaller 2D vessel blobs are noise.")
+    bone_side: BoneSideConfig
 
 
 class BoneConfig(Section):
@@ -175,7 +191,9 @@ class BurstConfig(Section):
     density: float = Field(gt=0.0, le=1.0, description="Min bright-pixel density of a core.")
     min_area_um2: Area = Field(description="Min area of a burst core.")
     boundary_sigma_um: Length = Field(
-        description="Scale of the fine bright-pixel density that places the cluster boundary."
+        description="In-plane Gaussian scale of the fine bright-pixel density that places the "
+        + "cluster boundary; along z it is averaged over the box's slices (a 3D density: a "
+        + "vessel lying in the slice is a cylinder, not a dense strip)."
     )
     boundary_fraction: Fraction = Field(
         description="The boundary is where the fine density falls to this fraction of the "

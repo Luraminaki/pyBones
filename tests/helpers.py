@@ -251,7 +251,7 @@ def truncated_window(z: int, window: int, depth: int) -> tuple[int, int]:
 def classify_slice(
     img: "NDArray[np.uint16]", thresholds: "Thresholds", params: "PixelParams"
 ) -> "NDArray[np.uint8]":
-    """Classify a single slice on its own (2D burst density, no neighbouring slices).
+    """Classify a single slice on its own (2D burst densities, no neighbouring slices).
 
     The pipeline never does this (it always looks at a window of slices); the tests use it as
     the 2D reference the pipeline is compared with.
@@ -266,7 +266,7 @@ def classify_slice(
     """
     features = extract_features([smooth(img, params.smoothing_sigma)], 0, thresholds, params)
     core = upsample_grid(features.burst_density >= params.burst_density, params, img.shape)
-    return finalize_slice(features.masks, core, params)
+    return finalize_slice(features.masks, core, features.boundary_density, params)
 
 
 def read_stl(path: "Path") -> "NDArray[np.float32]":

@@ -61,7 +61,8 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from pybones.config.schema import PipelineConfig, PyBonesConfig
-    from pybones.segmentation.classifier import SliceFeatures, SliceMasks, Thresholds
+    from pybones.segmentation.bursts import SliceBursts
+    from pybones.segmentation.classifier import SliceFeatures, Thresholds
     from pybones.segmentation.scales import PixelParams
     from pybones.segmentation.stages import ProgressCallback
     from pybones.segmentation.tubularity import TubularityParams
@@ -169,17 +170,17 @@ def iter_classified(
         tubularity = quantize_tubularity(slice_tubularity(floats, candidates, tube_params))
         return replace(features, masks=replace(features.masks, tubularity=tubularity))
 
-    def finalize(item: "tuple[SliceMasks, NDArray[np.bool_]]") -> ClassifiedSlice:
-        """Label a slice once its burst core is known.
+    def finalize(item: "SliceBursts") -> ClassifiedSlice:
+        """Label a slice once its burst core and boundary are known.
 
         Args:
-            item: Masks of the slice and its burst core.
+            item: Masks of the slice and its burst inputs.
 
         Returns:
             The label image and the tubularity map of the slice.
         """
-        masks, core = item
-        return ClassifiedSlice(finalize_slice(masks, core, params), masks.tubularity)
+        labels = finalize_slice(item.masks, item.core, item.boundary, params)
+        return ClassifiedSlice(labels, item.masks.tubularity)
 
     prepared = ordered_map(prepare, range(len(stack)), workers, extra)
     windows = sliding_windows(prepared, len(stack), half)

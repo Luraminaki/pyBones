@@ -129,10 +129,13 @@ class SliceFeatures:
         burst_density: Fraction of bright pixels in the burst window around each cell
             of the coarse density grid (see :func:`coarse_density`); averaged over
             slices for the 3D burst density.
+        boundary_density: The same fraction at the boundary's finer scale (see
+            :func:`boundary_density`); averaged over the same slices for the 3D boundary.
     """
 
     masks: SliceMasks
     burst_density: "NDArray[np.float32]"
+    boundary_density: "NDArray[np.float32]"
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,31 +181,64 @@ def extract_features(
     foreground &= ~halo
 
     masks = SliceMasks(foreground, bright, vessel, tubularity)
-    return SliceFeatures(masks, coarse_density(bright, params))
+    blocks = grid_blocks(bright, params)
+    return SliceFeatures(masks, coarse_density(blocks, params), boundary_density(blocks, params))
 
 
-def coarse_density(bright: "NDArray[np.bool_]", params: "PixelParams") -> "NDArray[np.float32]":
-    """Measure the bright-pixel density in the burst window, on a coarse grid of blocks.
+def grid_blocks(bright: "NDArray[np.bool_]", params: "PixelParams") -> "NDArray[np.float32]":
+    """Measure the fraction of bright pixels in each block of the coarse burst grid.
 
-    The density is a mean over a window an order of magnitude larger than a grid
-    block, so storing it per block loses nothing that matters while using 16x
-    less memory than per pixel (it is buffered over the whole 3D window).
+    The burst densities are means over areas an order of magnitude larger than a
+    block, so storing them per block loses nothing that matters while using 16x
+    less memory than per pixel (they are buffered over the whole 3D window).
 
     Args:
         bright: Bright vessel-core mask.
-        params: Pixel-unit parameters (grid block and window size in blocks).
+        params: Pixel-unit parameters (grid block size).
 
     Returns:
-        ``float32`` density in ``[0, 1]``, one value per grid block.
+        ``float32`` fraction in ``[0, 1]``, one value per grid block.
     """
     gy, gx = params.burst_grid
     h, w = bright.shape
     ny, nx = -(-h // gy), -(-w // gx)
     padded = np.zeros((ny * gy, nx * gx), np.float32)
     padded[:h, :w] = bright
-    blocks = padded.reshape(ny, gy, nx, gx).mean(axis=(1, 3), dtype=np.float32)
+    return padded.reshape(ny, gy, nx, gx).mean(axis=(1, 3), dtype=np.float32)
+
+
+def coarse_density(blocks: "NDArray[np.float32]", params: "PixelParams") -> "NDArray[np.float32]":
+    """Measure the bright-pixel density in the burst window (a box), on the coarse grid.
+
+    Args:
+        blocks: Bright fraction per grid block (see :func:`grid_blocks`).
+        params: Pixel-unit parameters (window size in blocks).
+
+    Returns:
+        ``float32`` density in ``[0, 1]``, one value per grid block.
+    """
     ky, kx = params.burst_window_blocks
     density = cv2.boxFilter(blocks, -1, (kx, ky), normalize=True, borderType=cv2.BORDER_CONSTANT)
+    return cast("NDArray[np.float32]", density)
+
+
+def boundary_density(blocks: "NDArray[np.float32]", params: "PixelParams") -> "NDArray[np.float32]":
+    """Measure the bright-pixel density at the burst boundary's scale (a Gaussian), on the grid.
+
+    In-plane only: the burst detection averages it over the burst window's slices, so that the
+    boundary follows a 3D density. In 2D, a vessel lying in the slice is a strip of bright
+    pixels, dense at this scale from a radius of about 8 µm, and a burst touching it would
+    follow it along its length; in 3D it is a cylinder, dense only from about 22 µm.
+
+    Args:
+        blocks: Bright fraction per grid block (see :func:`grid_blocks`).
+        params: Pixel-unit parameters (boundary sigma in blocks).
+
+    Returns:
+        ``float32`` density in ``[0, 1]``, one value per grid block.
+    """
+    sy, sx = params.burst_boundary_sigma
+    density = cv2.GaussianBlur(blocks, (0, 0), sigmaX=sx, sigmaY=sy, borderType=cv2.BORDER_CONSTANT)
     return cast("NDArray[np.float32]", density)
 
 
@@ -221,6 +257,28 @@ def upsample_grid(
     """
     gy, gx = params.burst_grid
     return np.repeat(np.repeat(mask, gy, axis=0), gx, axis=1)[: shape[0], : shape[1]]
+
+
+def upsample_density(
+    density: "NDArray[np.float32]", params: "PixelParams", shape: tuple[int, int]
+) -> "NDArray[np.float32]":
+    """Interpolate a coarse-grid density back to pixels (bilinear between block centres).
+
+    Args:
+        density: Density on the coarse grid.
+        params: Pixel-unit parameters (grid block size).
+        shape: Pixel shape of the slice (the last blocks may overhang it).
+
+    Returns:
+        ``float32`` density per pixel, of shape ``shape``.
+    """
+    gy, gx = params.burst_grid
+    ny, nx = density.shape
+    fine = cast(
+        "NDArray[np.float32]",
+        cv2.resize(density, (nx * gx, ny * gy), interpolation=cv2.INTER_LINEAR),
+    )
+    return fine[: shape[0], : shape[1]]
 
 
 def ambiguous_candidates(masks: SliceMasks, params: "PixelParams") -> "NDArray[np.bool_]":
@@ -268,11 +326,17 @@ def vessel_edges(
     in a neighbouring slice is recognised as its halo too. Offsets missing from
     ``smoothed`` (single-slice use) are skipped, which gives the 2D behaviour.
 
+    Where a vessel touches bone, the darkest value of the ball is usually the soft
+    tissue around the vessel, so its edge is measured against soft tissue on the
+    bone side too, and bone with a little vessel blur counts as vessel. With
+    ``vessel_bone_side``, a pixel on the bone side of the contact (see
+    :func:`_bone_side`) is measured against bone instead.
+
     Args:
         smoothed: Smoothed slices around the current one (consecutive z).
         centre: Index of the current slice in ``smoothed``.
         thresholds: Global thresholds and class means.
-        params: Pixel-unit parameters (rim balls, occupancy fraction).
+        params: Pixel-unit parameters (rim balls, occupancy fraction, bone side).
 
     Returns:
         ``(rim, halo)``: pixels at or above the local half-maximum, and pixels near a
@@ -293,47 +357,83 @@ def vessel_edges(
                 darkest, cv2.erode(smoothed[centre + dz], morph.ellipse(radius)), out=darkest
             )
     core_level = core_level.astype(np.float32)
-    soft_tissue = darkest < thresholds.bone
-    surround = np.where(
-        soft_tissue,
-        np.float32(thresholds.background_mean),
-        np.minimum(darkest, thresholds.bone_mean).astype(np.float32),
-    )
-    threshold = surround + params.vessel_rim_occupancy * (core_level - surround)
     near = core_level > 0
+    soft_tissue = darkest < thresholds.bone
+    bone_level = np.minimum(darkest, thresholds.bone_mean).astype(np.float32)
+    if params.vessel_bone_side:
+        # On the bone side, a darkest value below the bone threshold is the soft tissue seen
+        # past the vessel: the material there is bone, at the bone's mean level.
+        bone_side = _bone_side(sm, near, thresholds, params)
+        bone_level[soft_tissue & bone_side] = thresholds.bone_mean
+        soft_tissue &= ~bone_side
+    surround = np.where(soft_tissue, np.float32(thresholds.background_mean), bone_level)
+    threshold = surround + params.vessel_rim_occupancy * (core_level - surround)
     rim = near & (sm >= threshold)
     return rim, near & ~rim & soft_tissue
 
 
+def _bone_side(
+    sm: "NDArray[np.uint16]",
+    near: "NDArray[np.bool_]",
+    thresholds: Thresholds,
+    params: "PixelParams",
+) -> "NDArray[np.bool_]":
+    """Find the pixels nearer to thick bone than to soft tissue: the bone side of a contact.
+
+    Only the pixels out of every core's reach (``near`` false) show their own material: soft
+    tissue below the bone threshold, bone at or above it where the foreground holds a disc of
+    the barrier radius. Thin foreground is no barrier: a dim (partly filled) vessel continuing
+    past its bright spots is foreground too. Each pixel takes the side of the nearer material.
+    Distances are counted in pixels (the comparison assumes square pixels).
+
+    Args:
+        sm: Smoothed slice.
+        near: Pixels within reach of a bright core.
+        thresholds: Global thresholds.
+        params: Pixel-unit parameters (barrier radius).
+
+    Returns:
+        The pixels on the bone side.
+    """
+    foreground = sm >= thresholds.bone
+    barrier = morph.ellipse(params.vessel_bone_barrier)
+    thick = cv2.morphologyEx(morph.as_uint8(foreground), cv2.MORPH_OPEN, barrier) > 0
+    # Distance to the nearest pixel of each material (OpenCV measures it to the zeros).
+    to_bone = cv2.distanceTransform(morph.as_uint8(~(thick & ~near)), cv2.DIST_L2, cv2.DIST_MASK_5)
+    to_soft = cv2.distanceTransform(morph.as_uint8(foreground | near), cv2.DIST_L2, cv2.DIST_MASK_5)
+    return to_bone < to_soft
+
+
 def burst_region(
-    core: "NDArray[np.bool_]", bright: "NDArray[np.bool_]", params: "PixelParams"
+    core: "NDArray[np.bool_]", boundary: "NDArray[np.float32]", params: "PixelParams"
 ) -> "NDArray[np.bool_]":
     """Turn a raw burst core (dense bright area) into the final burst region.
 
     Args:
         core: Pixels whose bright-pixel density reaches the burst density.
-        bright: Bright vessel-core mask of the slice.
+        boundary: 3D boundary density of the slice on the coarse grid (see
+            :func:`pybones.segmentation.bursts.iter_burst_cores`).
         params: Segmentation parameters in pixel units.
 
     Returns:
-        Burst mask: the cores grown, at a fine scale, wherever the bright-pixel
-        density stays above a fraction of the core density (a half-maximum on the
-        density, like the vessel edges), enclosed holes filled.
+        Burst mask: the cores grown wherever the boundary density stays above a
+        fraction of the core density (a half-maximum on the density, like the vessel
+        edges), enclosed holes filled.
     """
     conn = params.connectivity
     core = morph.area_open(core, params.burst_min_area, conn)
     if not core.any():
         return core
-    sy, sx = params.burst_boundary_sigma
-    fine = cv2.GaussianBlur(
-        bright.astype(np.float32), (0, 0), sigmaX=sx, sigmaY=sy, borderType=cv2.BORDER_CONSTANT
-    )
+    fine = upsample_density(boundary, params, (core.shape[0], core.shape[1]))
     dense = fine >= params.burst_density * params.burst_boundary_fraction
     return morph.fill_holes(morph.reconstruct(core, dense | core, conn))
 
 
 def finalize_slice(
-    masks: SliceMasks, burst_core: "NDArray[np.bool_]", params: "PixelParams"
+    masks: SliceMasks,
+    burst_core: "NDArray[np.bool_]",
+    burst_boundary: "NDArray[np.float32]",
+    params: "PixelParams",
 ) -> "NDArray[np.uint8]":
     """Build the :class:`Label` image of a slice (``AMBIGUOUS`` included).
 
@@ -341,13 +441,14 @@ def finalize_slice(
         masks: Masks of the slice (see :func:`extract_features`).
         burst_core: Pixel mask of the dense burst cores of this slice (see
             :func:`pybones.segmentation.bursts.iter_burst_cores`).
+        burst_boundary: 3D boundary density of this slice, on the coarse grid.
         params: Segmentation parameters in pixel units.
 
     Returns:
         ``uint8`` label image.
     """
     conn = params.connectivity
-    burst = burst_region(burst_core, masks.bright, params)
+    burst = burst_region(burst_core, burst_boundary, params)
     # Remaining foreground: large blobs are bone, small ones are undecidable in 2D.
     remaining = masks.foreground & ~masks.vessel & ~burst
     dim = morph.area_open(remaining, params.bone_min_area, conn)

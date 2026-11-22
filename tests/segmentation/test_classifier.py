@@ -16,6 +16,19 @@ CONFIG = small_config()
 #: Centre ``(y, x)`` of the synthetic vessel and of the small dim blob (see ``synthetic_slice``).
 VESSEL_CENTRE = (150, 60)
 DIM_BLOB = (120, 120)
+#: Hand-set thresholds of the drawn slices below, and their intensity levels.
+THRESHOLDS = Thresholds(
+    bone=9_000, vessel=20_000, background_mean=4_000, bone_mean=13_000, vessel_mean=30_000
+)
+SOFT, BONE, CORE = 4_000, 13_000, 30_000
+#: Bone holding a quarter of a vessel's blur: under the half-maximum against bone (21,500),
+#: over the one against soft tissue (17,000).
+BLURRED_BONE = 17_250
+#: A vessel's edge against soft tissue, just over its half-maximum.
+SOFT_RIM = 17_500
+#: A partly filled vessel: bone-like intensity.
+DIM_VESSEL = 14_000
+ENABLE_BONE_SIDE = "segmentation.vessel.bone_side.enabled=true"
 
 
 @pytest.fixture(scope="module")
@@ -71,16 +84,44 @@ def test_background_stays_background(labels: "NDArray[np.uint8]") -> None:
 def test_z_blur_of_a_vessel_in_the_next_slice_is_halo_not_bone() -> None:
     """The z blur of a vessel lying in a neighbouring slice is its halo in 3D, not bone."""
     params = small_params()
-    thresholds = Thresholds(
-        bone=9_000, vessel=20_000, background_mean=4_000, bone_mean=13_000, vessel_mean=30_000
-    )
-    vessel_slice = np.full((64, 64), 4_000, np.uint16)
-    vessel_slice[30:34, 8:56] = 30_000
-    blur_slice = np.full((64, 64), 4_000, np.uint16)
+    vessel_slice = np.full((64, 64), SOFT, np.uint16)
+    vessel_slice[30:34, 8:56] = CORE
+    blur_slice = np.full((64, 64), SOFT, np.uint16)
     blur_slice[30:34, 8:56] = 12_000  # bone-like intensity, but only the vessel's z blur
     window = [blur_slice, vessel_slice, blur_slice]
-    in_3d = extract_features(window, 0, thresholds, params).masks
-    in_2d = extract_features([blur_slice], 0, thresholds, params).masks
+    in_3d = extract_features(window, 0, THRESHOLDS, params).masks
+    in_2d = extract_features([blur_slice], 0, THRESHOLDS, params).masks
     assert in_2d.foreground[32, 30]  # 2D: looks like bone
     assert not in_3d.foreground[32, 30]  # 3D: halo of the vessel next door
     assert not in_3d.vessel[32, 30]
+
+
+@pytest.mark.parametrize(("bone_side", "blurred_bone_is_vessel"), [(False, True), (True, False)])
+def test_bone_side_edge_keeps_blurred_bone_out_of_the_vessel(
+    bone_side: bool, blurred_bone_is_vessel: bool
+) -> None:
+    """At a contact, bone with some vessel blur is vessel against soft tissue, bone against bone."""
+    params = small_params(*([ENABLE_BONE_SIDE] if bone_side else []))
+    img = np.full((64, 64), SOFT, np.uint16)
+    img[0:30] = BONE  # a thick plate
+    img[30:33, 8:56] = CORE  # a thin vessel pressing on it: soft tissue just past it
+    img[29, 8:56] = BLURRED_BONE
+    img[30:33, 56] = SOFT_RIM  # the vessel's end, in soft tissue
+    vessel = extract_features([img], 0, THRESHOLDS, params).masks.vessel
+    assert vessel[29, 30] == blurred_bone_is_vessel
+    assert vessel[31, 30]  # the core
+    assert vessel[31, 56]  # the edge against soft tissue is unchanged
+
+
+@pytest.mark.parametrize(("barrier_um", "edge_is_vessel"), [(12, True), (3, False)])
+def test_thin_foreground_is_no_bone_barrier(barrier_um: int, edge_is_vessel: bool) -> None:
+    """A dim vessel continuing a bright one is not bone: thinner than the barrier disc."""
+    params = small_params(
+        ENABLE_BONE_SIDE, f"segmentation.vessel.bone_side.barrier_um={barrier_um}"
+    )
+    img = np.full((64, 64), SOFT, np.uint16)
+    img[30:33, 4:30] = CORE
+    img[30:33, 30:60] = DIM_VESSEL  # 9 µm thick: holds a 3 µm disc, not a 12 µm one
+    img[30:33, 30] = SOFT_RIM
+    vessel = extract_features([img], 0, THRESHOLDS, params).masks.vessel
+    assert vessel[31, 30] == edge_is_vessel

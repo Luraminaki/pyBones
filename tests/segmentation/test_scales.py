@@ -13,7 +13,8 @@ def test_default_physical_values_give_the_reference_pixel_values() -> None:
     assert (p.vessel_min_area, p.bone_min_area, p.small_blob_max_area) == (6, 30, 700)
     assert (p.burst_grid, p.burst_window_blocks, p.burst_window_z) == ((4, 4), (10, 10), 41)
     assert p.burst_min_area == 2000
-    assert p.burst_boundary_sigma == (12.0, 12.0)
+    assert p.burst_boundary_sigma == (3.0, 3.0)  # 36 µm in 12 µm grid blocks
+    assert (p.vessel_bone_side, p.vessel_bone_barrier) == (False, (4, 4))  # off; 12 µm
     assert p.z_window == 1
     assert (p.min_isolated_vessel_voxels, p.min_vessel_voxels, p.min_bone_voxels) == (30, 30, 1000)
 
@@ -27,6 +28,8 @@ def test_sizes_follow_the_voxel_size() -> None:
     assert p.burst_grid == (8, 4)  # 12 µm blocks on 1.5 / 3 µm pixels
     assert p.burst_window_blocks == (10, 10)  # 123 µm / 12 µm in both directions
     assert p.burst_window_z == 21  # 123 µm / 6 µm slices
+    assert p.burst_boundary_sigma == (3.0, 3.0)  # 36 µm = 24 rows or 12 columns = 3 blocks
+    assert p.vessel_bone_barrier == (8, 4)  # 12 µm
     assert p.bone_min_area == 60  # 270 µm² / 4.5 µm²
     assert p.min_bone_voxels == 1000  # 27000 µm³ / 27 µm³
 

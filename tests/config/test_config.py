@@ -53,6 +53,8 @@ def test_overrides_parse_json_values() -> None:
     [
         "acquisition.voxel_size_um=[0, 3, 3]",  # voxel size must be > 0
         "segmentation.vessel.rim_occupancy=1.5",  # > 1
+        "segmentation.vessel.bone_side.barrier_um=-1",  # a radius cannot be negative
+        'segmentation.vessel.bone_side.enabled="maybe"',  # not a boolean
         "pipeline.workers=0",  # < 1
         "segmentation.connectivity=6",  # not 4/8
         'mesh.downsample={"bone": 2}',  # missing labels

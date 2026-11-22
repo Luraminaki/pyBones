@@ -15,6 +15,10 @@ The burst core of a slice is the union of
   flickering slices), and the guard stops a dense cluster's box from painting
   slices past its end.
 
+The burst boundary grows the core over a finer density (a Gaussian in-plane),
+averaged over the same slices: a 3D density. Measured per slice, a vessel lying in
+the slice is a dense strip, and the boundary would follow it along its length.
+
 The running sum costs one addition and one subtraction per slice whatever the
 window size. Buffered: the coarse densities of the window, and the masks of the
 slices waiting for their upper neighbours, bit-packed (8x smaller).
@@ -37,6 +41,24 @@ if TYPE_CHECKING:
 
     from pybones.segmentation.classifier import SliceFeatures
     from pybones.segmentation.scales import PixelParams
+
+#: Planes of the stacked coarse maps summed over the window: core density, boundary density.
+_CORE, _BOUNDARY = 0, 1
+
+
+@dataclass(frozen=True, slots=True)
+class SliceBursts:
+    """What the final labelling of a slice needs from the 3D burst detection.
+
+    Attributes:
+        masks: Masks of the slice.
+        core: Pixel mask of the dense burst cores.
+        boundary: 3D boundary density on the coarse grid (mean over the burst window).
+    """
+
+    masks: SliceMasks
+    core: "NDArray[np.bool_]"
+    boundary: "NDArray[np.float32]"
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,18 +130,18 @@ class _PackedSlice:
 
 def iter_burst_cores(
     features: "Iterable[SliceFeatures]", params: "PixelParams"
-) -> "Iterator[tuple[SliceMasks, NDArray[np.bool_]]]":
-    """Pair each slice's masks with its burst core (2D core united with the guarded 3D one).
+) -> "Iterator[SliceBursts]":
+    """Give each slice its burst core (2D core united with the guarded 3D one) and boundary.
 
-    At the stack ends the box is truncated to the available slices (the density
-    is a mean over existing slices).
+    At the stack ends the box is truncated to the available slices (the densities
+    are means over existing slices).
 
     Args:
         features: Slice features in z order.
         params: Segmentation parameters in pixel units (burst grid, window, density).
 
     Yields:
-        ``(masks, core)`` in z order; ``core`` is a pixel mask.
+        The burst inputs of each slice, in z order.
     """
     stream = iter(features)
     first = next(stream, None)
@@ -127,22 +149,23 @@ def iter_burst_cores(
         return
     half = params.burst_window_z // 2
     waiting: deque[_PackedSlice] = deque()  # slices next_out.. not yet emitted
-    densities: deque[NDArray[np.float32]] = deque()  # coarse densities of slices start..last
-    total = np.zeros(first.burst_density.shape, dtype=np.float64)  # sum of `densities`
-    start = 0  # z index of densities[0]
+    maps: deque[NDArray[np.float32]] = deque()  # stacked coarse maps of slices start..last
+    total = np.zeros((2, *first.burst_density.shape), dtype=np.float64)  # sum of `maps`
+    start = 0  # z index of maps[0]
     next_out = 0
 
-    def emit() -> "tuple[SliceMasks, NDArray[np.bool_]]":
+    def emit() -> SliceBursts:
         """Finish slice ``next_out``, whose upper neighbours are all in the window.
 
         Returns:
-            The masks of the slice and its burst core.
+            The burst inputs of the slice.
         """
         nonlocal start, next_out
-        core_3d = total >= params.burst_density * len(densities)
+        core_3d = total[_CORE] >= params.burst_density * len(maps)
+        boundary = (total[_BOUNDARY] / len(maps)).astype(np.float32)
         next_out += 1
         while start < next_out - half:
-            total[...] -= densities.popleft()
+            total[...] -= maps.popleft()
             start += 1
         packed = waiting.popleft()
         masks = packed.unpack()
@@ -150,12 +173,13 @@ def iter_burst_cores(
         guarded_3d = morph.reconstruct(
             masks.bright, upsample_grid(core_3d, params, packed.shape), params.connectivity
         )
-        return masks, core_2d | guarded_3d
+        return SliceBursts(masks, core_2d | guarded_3d, boundary)
 
     for z, feat in enumerate(itertools.chain((first,), stream)):
         waiting.append(_PackedSlice.pack(feat, params))
-        densities.append(feat.burst_density)
-        total[...] += feat.burst_density
+        stacked = np.stack([feat.burst_density, feat.boundary_density])
+        maps.append(stacked)
+        total[...] += stacked
         if next_out <= z - half:
             yield emit()
     while waiting:
