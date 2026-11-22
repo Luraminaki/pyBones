@@ -12,6 +12,7 @@ from tools.phantom.settings import load_settings as load_phantom_settings
 from tools.phantom.storage import load_phantom
 from tools.report.arguments import Command, FiguresArgs, HistoryArgs, ReportInvocation
 from tools.report.context import Context
+from tools.report.experimental import experimental_files
 from tools.report.figures import (
     comparisons,
     overview,
@@ -48,6 +49,7 @@ FIGURE_STEPS: "tuple[Callable[[Context], None], ...]" = (
     history_table,
     mesh_files,
     network_files,
+    experimental_files,
     stage_weights,
     values,
     markdown_values,

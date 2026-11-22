@@ -47,12 +47,12 @@ ACQUISITION_KEY = "acquisition"
 VOXEL_KEY = "voxel_size_um"
 #: Rows of the score table: key of ``network.json`` and its caption.
 _SCORED = ((TRUE_MASK_KEY, "True mask"), (SEGMENTED_KEY, "Segmentation"))
-_PHANTOM_DIR = "phantom"
+PHANTOM_DIR = "phantom"
 _SEGMENTATION_DIR = "segmentation"
 _PERCENT = 100.0
 
 
-def _score(
+def score_phantom_network(
     ctx: "Context", labels: Any, phantom: "Phantom", bins: tuple[float, ...]
 ) -> NetworkScore:
     """Measure the network of a label volume of the phantom and score it.
@@ -80,7 +80,7 @@ def _score(
     )
 
 
-def _length_error_pct(score: NetworkScore) -> str:
+def length_error_pct(score: NetworkScore) -> str:
     """Format how far a measured total length is from the true one, in percent.
 
     Args:
@@ -160,16 +160,18 @@ def network_files(ctx: "Context") -> None:
     work = ctx.repo / ctx.settings.network.work_dir
     shutil.rmtree(work, ignore_errors=True)  # afresh: a cache would outlive code changes
     phantom = render_phantom(settings, ctx.config.acquisition.voxel_size_um)
-    save_phantom(phantom, work / _PHANTOM_DIR, settings)
+    save_phantom(phantom, work / PHANTOM_DIR, settings)
     segmentation = work / _SEGMENTATION_DIR
-    _ = run_segmentation(work / _PHANTOM_DIR / settings.files.slices_dir, segmentation, ctx.config)
+    _ = run_segmentation(work / PHANTOM_DIR / settings.files.slices_dir, segmentation, ctx.config)
     bins = settings.score.radius_bins_um
     record = {
         REAL_KEY: summary.model_dump(mode="json"),
         REAL_SECONDS_KEY: real_seconds,
         BINS_KEY: list(bins),
-        TRUE_MASK_KEY: asdict(_score(ctx, phantom.truth, phantom, bins)),
-        SEGMENTED_KEY: asdict(_score(ctx, load_labels(segmentation, ctx.config.io), phantom, bins)),
+        TRUE_MASK_KEY: asdict(score_phantom_network(ctx, phantom.truth, phantom, bins)),
+        SEGMENTED_KEY: asdict(
+            score_phantom_network(ctx, load_labels(segmentation, ctx.config.io), phantom, bins)
+        ),
     }
     _ = (ctx.data / NETWORK_JSON).write_text(json.dumps(record, indent=JSON_INDENT) + "\n")
     _tables(ctx, record)
@@ -226,8 +228,8 @@ def network_values(ctx: "Context") -> dict[str, str]:
         "NetSegSpurious": f"{seg.spurious_junctions}",
         "NetSegRecall": f"{seg.centreline_recall:.2f}",
         "NetSegPrecision": f"{seg.centreline_precision:.2f}",
-        "NetSegLengthErrorPct": _length_error_pct(seg),
-        "NetTrueLengthErrorPct": _length_error_pct(true),
+        "NetSegLengthErrorPct": length_error_pct(seg),
+        "NetTrueLengthErrorPct": length_error_pct(true),
         # Signed values in math mode: a real minus sign, never split from its number.
         "NetSegRadiusOffset": f"${seg.radius_offset_um:+.2f}$",
         "NetSegRadiusThin": f"${bands[0]:+.1f}$",

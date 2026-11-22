@@ -15,6 +15,7 @@ from pybones.segmentation.classifier import smooth
 from pybones.segmentation.labels import FOREGROUND_LABELS, Label
 from pybones.segmentation.scales import resolve_pixel_params
 from pybones.utils.constants import MIB_PER_GIB
+from tools.report.experimental import experimental_values
 from tools.report.history import (
     ACCURACY_COLUMN,
     CLOTTED_RECALL_COLUMN,
@@ -242,6 +243,7 @@ def values(ctx: "Context") -> None:
     entries["ClottedRecall"] = f"{float(current[CLOTTED_RECALL_COLUMN]):.2f}"
     entries.update(mesh_values(ctx))
     entries.update(network_values(ctx))
+    entries.update(experimental_values(ctx))
     numbers = {  # unformatted twins, for pgfplots coordinates
         "ThrBone": th["bone"],
         "ThrVessel": th["vessel"],

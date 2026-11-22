@@ -17,6 +17,7 @@ from tools.report import history as history_module
 from tools.report import runs as runs_module
 from tools.report.__main__ import FIGURE_STEPS
 from tools.report.context import Context
+from tools.report.experimental import EXPERIMENTAL_TABLE, SETUPS
 from tools.report.extracts import extract_path, load_extract, needed_slices
 from tools.report.history import KEY_COLUMN, history_rows, read_history, write_csv
 from tools.report.latex import README_SCORES_END, README_SCORES_START
@@ -213,6 +214,9 @@ def test_every_figure_step_runs_on_the_extracts(repo: "Path") -> None:
         assert sum(shares) == pytest.approx(1.0, abs=0.01)
     assert "\\pbValueNetBranches" in values
     assert "\\pbValueNetSegRadiusThick" in values
+    assert "\\pbValueExpBothSpurious" in values  # the experimental switches, measured
+    assert "\\pbValueExpRealThinVesselPct" in values
+    assert (ctx.data / EXPERIMENTAL_TABLE).read_text().count("\\\\") == len(SETUPS) + 2
     record = json.loads((ctx.data / NETWORK_JSON).read_text())
     assert record[REAL_KEY]["branches"] > 0
     assert (ctx.data / NETWORK_TABLE).read_text().count("\\\\") == len(SCORED_ROWS) + 1
