@@ -34,7 +34,8 @@ The synthetic phantom used for validation: image, exact ground truth, segmentati
 
 ![Phantom](screenshots/04-phantom.jpg)
 
-A local annotation page, ready for whoever can provide expert labels:
+A local annotation page, ready for whoever can provide expert labels
+([how to use it](INSTALL.md#labelling-crops)):
 
 ![Annotation tool](screenshots/05-annotation-tool.png)
 

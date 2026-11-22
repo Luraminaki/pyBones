@@ -11,6 +11,10 @@ from package metadata at runtime; every segmentation records it in its
 
 ## Unreleased
 
+- INSTALL: a LABELLING CROPS section for whoever labels the real scan. It covers starting the
+  annotation page (regenerate, serve), painting and the *unsure* label, the neighbouring slices,
+  correcting rather than trusting the pre-fill, where the labels are saved, and scoring. The
+  README's annotation screenshot links to it.
 - Documentation reorganised, each fact in one place:
   - `CONTRIBUTING.md` (new): checking a change, the tests and the rules they enforce, adding a
     setting, VS Code and the web page, the tools, the generated documentation, the report. `INSTALL.md`

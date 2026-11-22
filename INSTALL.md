@@ -21,6 +21,7 @@ are in [CONTRIBUTING.md](CONTRIBUTING.md); every setting is in
   - [DATASET](#dataset)
   - [RUN](#run)
   - [WEB SERVER](#web-server)
+  - [LABELLING CROPS](#labelling-crops)
   - [FROM PYTHON](#from-python)
 
 <!-- /TOC -->
@@ -253,6 +254,49 @@ The server settings (address, folders, limits) live in
 configuration (which every segmentation records in its `meta.json`). Clients only send ids (a name in
 the data or output folder), never paths. It listens on `127.0.0.1` without any login: **keep it
 local** (see the limitations in the [README](README.md#known-limitations)).
+
+## LABELLING CROPS
+
+No expert reference exists for the real scan, so pyBones' accuracy on it is unknown. A local page
+lets someone who can tell bone, vessels and bursts apart label a few small crops of the scan;
+pyBones is then scored against them. The work is a set of about ten crops of 256 × 256 pixels, one
+slice each (with 3 slices above and below to look at), not whole slices.
+
+Start it from the repository root, with the [dataset](#dataset) in place and a segmentation of it
+in `output/latest` (the crops start pre-filled from it):
+
+```sh
+uv run pybones segment data/data_set.zip -o output/latest                 # if not done yet
+uv run python -m tools.annotation regenerate --name 102OAcentri8sDXZ08    # the crops, after a clone
+uv run python -m tools.annotation serve --name 102OAcentri8sDXZ08 --open  # http://127.0.0.1:8765
+```
+
+`--open` opens the page in the browser; Ctrl+C in the terminal stops it.
+
+On the page:
+
+- **Paint the centre slice.** Labels 0-3: background, bone, vessel, burst. Tools: brush (B), fill
+  (F), wand (W, pixels of similar brightness). A right click paints *unsure*.
+- **Mark what you cannot tell as *unsure*** (U, or right click). Those pixels are left out of the
+  score, so a doubt costs nothing, while a guess can be wrong.
+- **Check the neighbouring slices** (↑ / ↓, Home to come back). A vessel keeps a round section
+  from slice to slice, while a trabecula widens into a plate.
+- **The pre-filled labels are pyBones' own.** Correct them rather than trusting them: where you
+  agree without looking closely, pyBones is scored against itself.
+- **View:** Space (held) hides the labels; O shows their outlines only. The wheel zooms,
+  middle- or Alt-drag pans, R resets the view.
+- **Saving:** Ctrl+S saves; ← / → go to the previous / next crop and save first. Ctrl+Z / Ctrl+Y
+  undo and redo; a note per crop records remarks. H lists every shortcut.
+
+The labels are saved in `annotations/102OAcentri8sDXZ08/labels/`, one PNG per crop; that folder
+and `manifest.json` are versioned, the crops themselves are regenerated from the dataset. To
+score a segmentation against them:
+
+```sh
+uv run python -m tools.annotation score output/latest --name 102OAcentri8sDXZ08
+```
+
+`prepare` picks a new set of crops instead (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## FROM PYTHON
 
