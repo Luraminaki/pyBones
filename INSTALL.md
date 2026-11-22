@@ -170,7 +170,7 @@ The dataset is not covered by the MIT License of the code: see
 ## RUN
 
 ```sh
-pybones segment data/data_set.zip -o output/run                  # ~25 s, ~1.6 GB peak (*)
+pybones segment data/data_set.zip -o output/run                  # ~25 s, ~1.7 GB peak (*)
 python -m pybones segment data/data_set.zip -o output/run        # same command, as a module
 pybones preview output/run -z 50 --scale 0.5 -o slice50.png
 pybones mesh output/run --label vessel -o vessels.stl             # µm, Taubin-smoothed

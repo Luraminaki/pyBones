@@ -63,7 +63,21 @@ where $C$ is the brightest core within the rim radius (a grey-level dilation: th
 filled voxel of \emph{that} vessel, whatever its filling), $S$ the surrounding material, and
 $f = 0.5$ the occupancy. The surround is read from the darkest intensity just beyond the rim (a
 grey-level erosion): below the bone threshold it is soft tissue and the soft-tissue mean is used,
-otherwise it is bone. A vessel running along bone is thus measured against bone and cannot eat into it.
+otherwise it is bone. A vessel running inside bone is thus measured against bone and cannot eat into it.
+
+\paragraph{Where a vessel touches bone} A vessel pressing on bone usually has soft tissue on its other
+side, within the reach of the erosion: the darkest intensity is then soft tissue, also for the pixels
+on the bone side of the contact, and bone holding a fifth to a third of the vessel's blur passes the
+half-maximum.
+A band of bone one to three voxels wide joins the vessel along the contact. On the branching phantom
+(Chapter~\ref{chap:network}) these bands are the main source of junctions that are not forks. A
+setting, \texttt{segmentation.vessel.bone\_side}, measures each pixel against the material on its own
+side instead: the nearer of soft tissue and bone, both beyond the reach of every core, bone counting
+only where it is thick enough to hold a 12\um{} disk (a dim, partly filled vessel is foreground too,
+but thin). On both phantoms it raises the vessel and bone scores; on the real scan, however, it also turns into bone
+networks of thin, dim structures next to bone that may be partly filled vessels, and neither the 2018
+masks nor any annotation can tell which is right. It is therefore off by default
+(Chapter~\ref{chap:limitations}).
 
 Pixels near a core but below the half-maximum, with soft tissue around, form the \emph{halo}: a
 vessel/soft-tissue mix whose intensity can reach bone level. They are background, not bone. This
@@ -149,6 +163,17 @@ added an 18\um{} halo. On the phantom, I found every burst error 2 to 16 pixels 
 boundary: the radii imposed it. The boundary is now placed like the vessel edges, at a half-maximum: the
 core grows over the pixels whose fine-scale density (36\um) stays above half the core density, then the
 enclosed holes are filled (a purely topological operation, no radius).
+
+This fine density is measured in 3D: a Gaussian in the slice, averaged along $z$ over the same 41 slices
+as the core density (a box that wide has the spread of a 36\um{} Gaussian), on the same 12\um{} grid.
+Measured in the slice alone, it made the bursts follow vessels. A vessel lying in the slice plane is a
+strip of bright pixels, as dense at this scale as a burst's edge once its radius exceeds about 8\um: a
+burst touching it grew along its whole length, taking the core of thick vessels far from the burst and
+leaving them hollow (on the branching phantom, most of the vessel the bursts took, and many of the loops
+of Chapter~\ref{chap:network}). In 3D the same vessel is a cylinder, as dense only from about 22\um{}
+of radius, while a cluster of speckles is as dense in 3D as in any slice. Tightening the 2D boundary
+could not do this: it gave the vessels back only by leaving the edge speckles of the bursts out, as
+false vessel.
 
 \begin{figure}[ht]
 \centering

@@ -9,8 +9,52 @@ The current version lives in [pyproject.toml](pyproject.toml) and is read
 from package metadata at runtime; every segmentation records it in its
 `meta.json`. The [report](docs/report/) measures what each step below changed.
 
-## Unreleased
+## 0.7.0-alpha
 
+Fewer false junctions in the vascular network: bursts no longer follow the vessels lying in a slice,
+an optional vessel edge against bone (off until the real scan can confirm it), small loops pruned, and
+phantom network scores that expect only what an image can show. The causes of the remaining false
+junctions are measured and ranked. Outputs of 0.6.0 must be segmented again.
+
+- Bursts no longer follow vessels: the density that places a burst's boundary is now measured in 3D
+  (a Gaussian in the slice, on the 12 µm grid, averaged along z over the burst box's 41 slices), like
+  the core density. Measured per slice, a vessel lying in the slice plane is a strip of bright pixels,
+  as dense as a burst's edge from about 8 µm of radius: a burst touching it grew along its whole
+  length and took the core of thick vessels, leaving them hollow (on the branching phantom, 47,000 of
+  the 60,000 vessel voxels the bursts took, half of them more than 60 µm away from the burst). In 3D
+  the same vessel is a cylinder, as dense only from about 22 µm. Tightening the 2D boundary could not
+  do this (it left the bursts' edge speckles out, as false vessel).
+  - Standard phantom: vessel Dice 0.851 → 0.862, burst 0.913 → 0.922, bone 0.989 unchanged; golden
+    baseline refreshed, every score up (vessel Dice 0.773 → 0.839, burst 0.799 → 0.838).
+  - Branching phantom: vessel Dice 0.790 → 0.850; 26 forks found instead of 24, 49 junctions that
+    are not forks instead of 59, 7 independent loops instead of 10, centreline precision 0.76 → 0.85.
+  - Real stack: bursts more consistent along z (slice-to-slice Dice mean 0.961 → 0.978, min
+    0.847 → 0.887), burst +2.2 %, vessel +1.0 %, bone −0.1 %. The network barely changes (3,121
+    junctions instead of 3,129): on the sample, a burst's growth past its core mostly covers speckled
+    lobes of the burst, not vessels; the phantom, whose bursts sit anywhere among solid vessels,
+    exaggerated that error.
+  - Same time (~24 s); peak memory +30 MB (a second coarse map in the z window), and the
+    full-resolution Gaussian of each slice is gone. `PixelParams.burst_boundary_sigma` is now in grid
+    blocks.
+- New setting `segmentation.vessel.bone_side` (off by default). Where a vessel presses on bone, its
+  half-maximum edge is measured against the soft tissue around it, so a band of bone one to three
+  voxels wide joins the vessel: the largest source of junctions that are not forks on the branching
+  phantom. With `enabled: true`, each pixel near a vessel is measured against the nearer of soft
+  tissue and bone, bone counting only where it holds a disc of `barrier_um` (12 µm; a dim, partly
+  filled vessel is foreground too, but thin).
+  - Standard phantom: vessel Dice 0.862 → 0.887, bone 0.989 → 0.990. Branching phantom: vessel Dice
+    0.850 → 0.870, 28 junctions that are not forks instead of 49, 30 forks instead of 26.
+  - Off, because the real stack cannot confirm it: it turns 0.98 million voxels of vessel into bone
+    (vessel −4.0 %), largely networks of thin, dim structures next to bone that may be partly filled
+    vessels. Against the 2018 masks, vessel precision rises (0.828 → 0.858) but bone precision falls
+    (0.931 → 0.916), and no annotation exists to decide. It should become the default once annotated
+    crops confirm it.
+- Network scores of the phantom: a vessel crossing a burst is no longer expected (the truth labels it
+  burst, so no vessel mask can hold it), as gaps already were not: 1.15 of the 22.87 mm and 1 of the 54
+  forks of the branching phantom. Centreline recall of the old segmentation: 0.68 → 0.72 from this
+  alone. It shows that the measure itself reads lengths 8 % long on the exact mask (a centreline of
+  voxels zigzags, each step counted from centre to centre); the report and the README now say so and
+  read lengths only with recall and precision (new macro `\pbValueNetTrueLengthErrorPct`).
 - Vascular network: loops barely longer than their vessel's circumference are holes or folds of the
   vessel mask, not structures. Every loop shorter than `quantification.pruning.loop_factor` (1.5)
   circumferences loses its longest branch, found with a minimum spanning tree of the network, so
@@ -21,16 +65,17 @@ from package metadata at runtime; every segmentation records it in its
   instead of 680 (doubled strands gone); the network stage takes 0.8 s instead of 0.3 (the loop
   search runs only once no cheaper removal applies).
 - Corrected explanation (report, README, page): most junctions that are not forks come from small
-  loops the skeleton draws around holes and folds of the vessel mask, not mainly from bone contact.
-  On the phantom, the holes come from bursts (the edge of a burst takes the bright core of a thick
-  vessel passing close by: 96 % of the vessel voxels missed deep inside a vessel are labelled burst)
-  and the folds from bone (a vessel's mask runs along the bone where it presses on it). The network length is the
-  net of two opposite errors (now about 8 % short on the phantom, mostly thin vessels missed), not
-  reliable by itself. Phantom scores count each network's independent loops. Tried and dropped,
-  measured on the phantom: longer spurs against bone and closing the vessel mask before thinning
-  (more real forks and length lost than false junctions removed), filling small holes slice by slice
-  (no effect), tightening the edge of bursts (the bursts' haze becomes false vessel; the standard
-  phantom's validated scores drop).
+  loops the skeleton draws around holes and folds of the vessel mask. Repairing the segmented mask
+  from the truth one defect at a time, the quantification unchanged, ranks their causes: the band of
+  bone that joins a vessel where it presses on bone (repaired alone, about half of them go; see
+  `segmentation.vessel.bone_side` above), then the bursts hollowing out thick vessels (fixed above),
+  vessel drawn over soft tissue, and clotted segments cut off by the halo rule. With every defect
+  repaired, the segmentation's network is nearly the exact mask's: the quantification is sound. The
+  network length is the net of several errors, not reliable by itself. Phantom scores count each
+  network's independent loops. Tried and dropped, measured on the phantom: longer spurs against bone
+  and closing the vessel mask before thinning (more real forks and length lost than false junctions
+  removed), filling small holes slice by slice (no effect), tightening the 2D edge of bursts (the
+  bursts' edge speckles become false vessel; the standard phantom's validated scores drop).
 - An output written by an earlier build of the same version, with another configuration format, now
   says so, instead of "written by pyBones 0.6.0 and cannot be read by pyBones 0.6.0".
 - Progress you can trust during long silent stages:

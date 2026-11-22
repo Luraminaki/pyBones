@@ -1,20 +1,20 @@
 {
   "real": {
-    "branches": 9546,
-    "truncated_branches": 1440,
-    "loops": 129,
-    "junctions": 3129,
-    "free_ends": 6029,
-    "face_ends": 1819,
-    "burst_ends": 385,
-    "total_length_mm": 590.8974665368058,
+    "branches": 9514,
+    "truncated_branches": 1459,
+    "loops": 120,
+    "junctions": 3121,
+    "free_ends": 6044,
+    "face_ends": 1836,
+    "burst_ends": 298,
+    "total_length_mm": 592.339953638222,
     "stack_volume_mm3": 9.23427,
-    "length_density_mm_per_mm3": 63.98962414319765,
-    "median_branch_length_um": 36.87758621965183,
-    "median_radius_um": 6.7082037925720215,
-    "median_tortuosity": 1.128385872532125
+    "length_density_mm_per_mm3": 64.14583433646861,
+    "median_branch_length_um": 37.31637932947775,
+    "median_radius_um": 6.70820426940918,
+    "median_tortuosity": 1.1283314162699112
   },
-  "real_seconds": 18.343696608000755,
+  "real_seconds": 17.966819328999918,
   "radius_bins_um": [
     0.0,
     6.0,
@@ -22,9 +22,9 @@
     25.0
   ],
   "true_mask": {
-    "centreline_recall": 0.9095179233621755,
+    "centreline_recall": 0.9552432995055946,
     "centreline_precision": 0.9637901861252115,
-    "true_junctions": 54,
+    "true_junctions": 53,
     "matched_junctions": 40,
     "crossing_junctions": 7,
     "spurious_junctions": 8,
@@ -36,25 +36,25 @@
       -0.601651668548584,
       -0.9636592864990234
     ],
-    "true_length_mm": 22.86933308806581,
+    "true_length_mm": 21.716333137886004,
     "measured_length_mm": 23.50194796289965
   },
   "segmented": {
-    "centreline_recall": 0.6825710754017306,
-    "centreline_precision": 0.7637824023366192,
-    "true_junctions": 54,
-    "matched_junctions": 24,
-    "crossing_junctions": 8,
-    "spurious_junctions": 59,
-    "independent_cycles": 10,
-    "radius_offset_um": -0.777043342590332,
-    "radius_abs_error_um": 0.9221410751342773,
+    "centreline_recall": 0.7887067395264117,
+    "centreline_precision": 0.8528812303131369,
+    "true_junctions": 53,
+    "matched_junctions": 26,
+    "crossing_junctions": 7,
+    "spurious_junctions": 49,
+    "independent_cycles": 7,
+    "radius_offset_um": -0.8217239379882812,
+    "radius_abs_error_um": 0.897186279296875,
     "radius_offset_by_band_um": [
       0.8195934295654297,
-      -0.5058813095092773,
-      -1.5499982833862305
+      -0.47666311264038086,
+      -1.4812355041503906
     ],
-    "true_length_mm": 22.86933308806581,
-    "measured_length_mm": 21.155738985338434
+    "true_length_mm": 21.716333137886004,
+    "measured_length_mm": 21.05829479245152
   }
 }

@@ -18,16 +18,18 @@ draw from the rewrite are:
         and bursts, physical units for every size.
   \item \textbf{3D where 2D cannot decide.} Connectivity and shape in 3D resolve most of the blobs that a
         single slice leaves ambiguous; what remains is a property of the scan (resolution) and of the
-        anatomy (rods are tubes too).
+        anatomy (rods are tubes too). A density measured in one slice even mistook a vessel lying in it
+        for the edge of a burst.
 \end{itemize}
 
 \section*{Future work}
 \addcontentsline{toc}{section}{Future work}
 
 \begin{itemize}
-  \item \textbf{Cleaner junctions}: telling a thick vessel from a burst, and a vessel from the bone,
-        where they touch: the holes and strands they leave in the vessel mask are the main error of
-        the network measures (Chapter~\ref{chap:network}).
+  \item \textbf{Cleaner junctions}: telling a vessel from the bone where they touch (an edge measured
+        on each side of the contact exists, but stays off until annotated crops confirm it on the real
+        scan), and keeping clotted segments joined to their vessels. The defects of the vessel mask,
+        not the measure, make the errors of the network (Chapter~\ref{chap:network}).
   \item \textbf{Measures per region} (cortex, marrow), to compare the network across the bone.
   \item \textbf{Gap bridging} along the vessel direction, to reconnect vessels interrupted by clots.
   \item \textbf{Expert validation} of a few real crops with the annotation page.
