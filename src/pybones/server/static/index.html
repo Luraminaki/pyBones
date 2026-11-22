@@ -72,12 +72,10 @@
                  pattern="[A-Za-z0-9][A-Za-z0-9._\-]*"
                  title="Letters, digits, dot, dash or underscore; not starting with a dot">
 
-          <details>
-            <summary>Settings for this run</summary>
-            <label for="overrides">One <code>section.key=value</code> per line</label>
-            <textarea id="overrides" name="overrides" rows="3" spellcheck="false"
-                      placeholder="refinement.enabled=false&#10;segmentation.burst.density=0.3"></textarea>
-          </details>
+          <div class="settings-line">
+            <p id="settings-summary" class="hint" aria-live="polite">Same settings as the defaults.</p>
+            <button type="button" id="settings-open" class="ghost small">Edit settings…</button>
+          </div>
 
           <button type="submit" id="segment-submit">Segment</button>
         </form>
@@ -159,6 +157,25 @@
       </div>
     </section>
   </main>
+
+  <dialog id="settings-dialog" class="settings-dialog" aria-labelledby="settings-title">
+    <form method="dialog" class="settings-frame">
+      <header class="settings-head">
+        <h2 id="settings-title">Settings for this run</h2>
+        <label class="switch"><input type="checkbox" id="settings-advanced"> Show advanced settings</label>
+      </header>
+      <p class="hint">
+        Each setting says what it is, when to change it and what a change affects. Only the
+        settings that differ from the defaults are sent with the run, and recorded with it.
+      </p>
+      <div id="settings-body" class="settings-body"></div>
+      <footer class="settings-foot">
+        <p id="settings-effect" class="hint" aria-live="polite"></p>
+        <button type="button" id="settings-reset" class="ghost">Back to the defaults</button>
+        <button type="submit" id="settings-done">Done</button>
+      </footer>
+    </form>
+  </dialog>
 
   <div id="toasts" class="toasts" aria-live="assertive"></div>
 

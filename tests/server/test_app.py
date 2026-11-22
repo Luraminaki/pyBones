@@ -19,6 +19,7 @@ from pybones.server.context import ServerContext
 from pybones.server.routes.jobs import SSE_MEDIA_TYPE
 from pybones.server.routes.segmentations import (
     CENTRELINES_MEDIA_TYPE,
+    CONFIG_LOCATION,
     MESH_MEDIA_TYPES,
     PNG_MEDIA_TYPE,
 )
@@ -192,6 +193,19 @@ def test_segmentation_requests_are_checked(
     assert "detail" in response.json()
     assert client.get("/api/jobs").json() == []
     assert not (folders.output / "x").exists()
+
+
+def test_an_invalid_setting_is_reported_at_its_path(client: "TestClient") -> None:
+    """Out-of-range values come back one per setting, located by their path (for the form)."""
+    overrides = ["pipeline.workers=0", "thin_vessels.iterations=0", "thin_vessels.enabled=true"]
+    body = {"dataset": STACK_DIR, "name": "x", "overrides": overrides}
+    response = client.post("/api/segmentations", json=body)
+    assert response.status_code == HTTPStatus.UNPROCESSABLE_ENTITY
+    located = {tuple(d["loc"]): d["msg"] for d in response.json()["detail"]}
+    assert set(located) == {
+        (CONFIG_LOCATION, "pipeline", "workers"),
+        (CONFIG_LOCATION, "thin_vessels", "iterations"),
+    }
 
 
 def test_queued_segmentation_holds_its_name_until_cancelled(

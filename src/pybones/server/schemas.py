@@ -25,6 +25,7 @@ OVERRIDABLE_SECTIONS = frozenset(
         "tubularity",
         "z_smoothing",
         "refinement",
+        "thin_vessels",
     }
 )
 

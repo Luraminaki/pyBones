@@ -1,10 +1,11 @@
 """Progress stage weights checked against the time each stage really takes.
 
 A progress bar and its estimate of the time left are only right if each stage's weight
-matches its share of the run. :func:`stage_weights` runs the three long operations on the
-sample (segmentation, the vessel mesh, the quantification) with a stopwatch on their progress
-reports, and writes each stage's configured weight next to its measured share
-(``stage_weights.csv`` and a table for the report). A stage further off than
+matches its share of the run. :func:`stage_weights` runs the long operations on the sample
+(segmentation, with and without the optional thin-vessel pass, which adds stages of its own;
+the vessel mesh; the quantification) with a stopwatch on their progress reports, and writes
+each stage's configured weight next to its measured share (``stage_weights.csv`` and a table
+for the report). A stage further off than
 ``stage_weight_tolerance`` is logged with the weight to use instead; the configuration is
 never changed here.
 """
@@ -19,6 +20,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pybones.api.operations import write_mesh_file
+from pybones.config.loader import apply_overrides
 from pybones.quantification.pipeline import measure_network
 from pybones.segmentation.pipeline import planned_stages, run_segmentation
 from pybones.segmentation.results import load_labels, load_meta
@@ -37,6 +39,9 @@ STAGE_WEIGHTS_TABLE = "stage_weights.tex"
 _COLUMNS: tuple[str, ...] = ("operation", "stage", "weight", "measured")
 _MESH_FILE = "mesh.glb"
 _SEGMENTATION_DIR = "segmentation"
+_THIN_SEGMENTATION_DIR = "segmentation_thin"
+#: The optional pass that adds stages of its own (off by default), switched on for its run.
+THIN_VESSELS_ON = "thin_vessels.enabled=true"
 
 logger = logging.getLogger(__name__)
 
@@ -144,12 +149,13 @@ def _table(rows: list[dict[str, str]], path: Path) -> None:
 
 
 def stage_weights(ctx: "Context") -> None:
-    """Measure each stage's share of the three long operations and compare it with its weight.
+    """Measure each stage's share of the long operations and compare it with its weight.
 
     Args:
         ctx: Figure context.
     """
     config = ctx.config
+    thin = apply_overrides(config, [THIN_VESSELS_ON])
     real = run_dir(ctx.settings, ctx.repo, ctx.settings.figures.reference_key, REAL_RUN)
     voxel = load_meta(real, config.io).config.acquisition.voxel_size_um
     with tempfile.TemporaryDirectory() as tmp:
@@ -165,6 +171,17 @@ def stage_weights(ctx: "Context") -> None:
                 ),
                 planned_stages(config),
                 config.pipeline.stage_weights,
+            ),
+            *_measure(
+                "segmentation, thin vessels",
+                functools.partial(
+                    run_segmentation,
+                    ctx.repo / ctx.settings.dataset,
+                    work / _THIN_SEGMENTATION_DIR,
+                    thin,
+                ),
+                planned_stages(thin),
+                thin.pipeline.stage_weights,
             ),
             *_measure(
                 "mesh",

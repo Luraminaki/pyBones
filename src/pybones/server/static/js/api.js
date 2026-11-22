@@ -78,16 +78,21 @@ export const JOB_KINDS = Object.freeze({
   QUANTIFICATION: 'quantification',
 });
 
-/** A request that failed: its message is readable as is, `status` is 0 without an answer. */
+/**
+ * A request that failed: its message is readable as is, `status` is 0 without an answer, and
+ * `detail` keeps what the server sent (a list of `{loc, msg}` locates invalid settings).
+ */
 export class ApiError extends Error {
   /**
    * @param {string} message What went wrong.
    * @param {number} status HTTP status (0 if the server did not answer).
+   * @param {*} [detail] The server's error detail, as sent.
    */
-  constructor(message, status) {
+  constructor(message, status, detail = null) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.detail = detail;
   }
 }
 
@@ -111,12 +116,14 @@ function describe(detail) {
  */
 async function failure(response) {
   let message = `${response.status} ${response.statusText}`;
+  let detail = null;
   try {
-    message = describe((await response.json()).detail);
+    detail = (await response.json()).detail;
+    message = describe(detail);
   } catch {
     // not JSON: keep the status line
   }
-  return new ApiError(message, response.status);
+  return new ApiError(message, response.status, detail);
 }
 
 /**
@@ -190,6 +197,7 @@ export async function fetchSlice(segmentation, z, scale) {
 export const api = {
   server: () => request('GET', '/server'),
   config: () => request('GET', '/config'),
+  configSchema: () => request('GET', '/config/schema'),
   datasets: () => request('GET', '/datasets'),
   segmentations: () => request('GET', '/segmentations'),
   segmentation: (segmentation) => request('GET', `/segmentations/${id(segmentation)}`),

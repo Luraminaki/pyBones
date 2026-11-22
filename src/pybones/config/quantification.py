@@ -1,16 +1,27 @@
 """Schema of the ``quantification`` section: backends, pruning, files, progress weights."""
 
-from typing import Annotated, Self
+from typing import Annotated, ClassVar, Self
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
-from pybones.config.fields import FileName, Length, Micrometres, Section
+from pybones.config.fields import (
+    Effect,
+    FileName,
+    Length,
+    Level,
+    Micrometres,
+    Section,
+    affects,
+    section_config,
+)
 from pybones.quantification.protocols import CavityBackend, DistanceBackend, SkeletonBackend
 from pybones.segmentation.stages import QUANTIFY_STAGES, Stage
 
 
 class QuantificationBackends(Section):
     """Implementation of each step of the quantification (interchangeable, same results)."""
+
+    model_config: ClassVar[ConfigDict] = section_config(Effect.NONE, Level.ADVANCED)
 
     cavities: CavityBackend = Field(description="Filling the cavities of the vessel mask.")
     skeleton: SkeletonBackend = Field(description="Thinning the vessels to centrelines.")
@@ -19,6 +30,8 @@ class QuantificationBackends(Section):
 
 class PruningConfig(Section):
     """When a piece of the centreline network is an artefact (see quantification.pruning)."""
+
+    model_config: ClassVar[ConfigDict] = section_config(Effect.NETWORK)
 
     spur_radius_factor: float = Field(
         ge=0.0,
@@ -45,6 +58,8 @@ class PruningConfig(Section):
 class QuantificationFiles(Section):
     """Files the quantification writes into the segmentation folder."""
 
+    model_config: ClassVar[ConfigDict] = section_config(Effect.NONE, Level.ADVANCED)
+
     network_file: Annotated[FileName, Field(pattern=r"\.json$")] = Field(
         description="Summary and node table."
     )
@@ -59,6 +74,8 @@ class QuantificationFiles(Section):
 class QuantificationConfig(Section):
     """Vascular quantification: centrelines, network, per-branch measures."""
 
+    model_config: ClassVar[ConfigDict] = section_config(Effect.NETWORK)
+
     backends: QuantificationBackends
     pruning: PruningConfig
     anchor_margin_um: Length = Field(
@@ -67,7 +84,8 @@ class QuantificationConfig(Section):
     )
     files: QuantificationFiles
     stage_weights: dict[Stage, Annotated[float, Field(gt=0.0, le=1.0)]] = Field(
-        description="Relative duration of each quantification stage (progress bar)."
+        description="Relative duration of each quantification stage (progress bar).",
+        json_schema_extra=affects(Effect.NONE),
     )
     max_radius_um: Micrometres = Field(
         description="Largest vessel radius measured (distances are capped there)."

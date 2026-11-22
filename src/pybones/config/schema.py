@@ -5,21 +5,32 @@ file (``default.json`` ships with the package). All sections are strict: unknown
 keys are rejected and models are immutable.
 """
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, ClassVar, Literal, Self
 
-from pydantic import AfterValidator, Field, model_validator
+from pydantic import AfterValidator, ConfigDict, Field, model_validator
 
 from pybones.config.fields import (
-    Area,
+    EFFECT_TEXT,
+    EFFECTS_KEY,
     ColorBGR,
+    Effect,
     FileName,
     Fraction,
-    Length,
+    Level,
     Micrometres,
     Section,
-    Volume,
+    advice,
+    affects,
+    section_config,
 )
 from pybones.config.quantification import QuantificationConfig
+from pybones.config.segmentation import (
+    RefinementConfig,
+    SegmentationConfig,
+    ThinVesselsConfig,
+    TubularityConfig,
+    ZSmoothingConfig,
+)
 from pybones.segmentation.labels import FOREGROUND_LABELS, Label, label_keys
 from pybones.segmentation.stages import MESH_STAGES, STAGES_3D, THIN_STAGES, Stage
 
@@ -62,6 +73,8 @@ def _keyed_by(labels: tuple[Label, ...]) -> AfterValidator:
 class IOConfig(Section):
     """File names and slice discovery rules."""
 
+    model_config: ClassVar[ConfigDict] = section_config(Effect.NONE, Level.ADVANCED)
+
     slice_extensions: tuple[Annotated[str, Field(pattern=r"^\.\w+$")], ...] = Field(
         min_length=1, description="Slice file extensions, in lower case (files may use upper case)."
     )
@@ -94,11 +107,30 @@ class IOConfig(Section):
 class PipelineConfig(Section):
     """Parallelism of the per-slice stage, and progress estimation."""
 
-    workers: int = Field(ge=1, le=256, description="Threads (1 = sequential).")
-    extra_in_flight: int = Field(ge=0, le=256, description="Queued slices beyond `workers`.")
+    model_config: ClassVar[ConfigDict] = section_config(Effect.NONE, Level.ADVANCED)
+
+    workers: int = Field(
+        ge=1,
+        le=256,
+        description="Threads (1 = sequential).",
+        json_schema_extra=advice(
+            "Lower it to use less memory or leave cores to other work; more than the cores "
+            + "gains nothing."
+        ),
+    )
+    extra_in_flight: int = Field(
+        ge=0,
+        le=256,
+        description="Queued slices beyond `workers`.",
+        json_schema_extra=advice("Rarely: more keeps the threads busier and uses more memory."),
+    )
     stage_weights: dict[Stage, Annotated[float, Field(gt=0.0, le=1.0)]] = Field(
         description="Relative duration of each stage, for the overall progress fraction "
-        + "(measured on the reference stack; normalised over the stages that run)."
+        + "(measured on the reference stack; normalised over the stages that run).",
+        json_schema_extra=advice(
+            "Only if the progress bar runs unevenly on another machine; "
+            + "`python -m tools.report figures` measures them."
+        ),
     )
 
     @model_validator(mode="after")
@@ -124,6 +156,8 @@ LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 class LoggingConfig(Section):
     """Log files (one per process, rotated by size) and console output."""
 
+    model_config: ClassVar[ConfigDict] = section_config(Effect.NONE, Level.ADVANCED)
+
     directory: Annotated[str, Field(min_length=1)] = Field(
         description="Directory of the log files (relative to the working directory)."
     )
@@ -139,12 +173,29 @@ class LoggingConfig(Section):
 class ThresholdConfig(Section):
     """Global multi-Otsu threshold estimation."""
 
-    histogram_stride: int = Field(ge=1, le=10_000, description="Use one slice every N.")
-    histogram_bins: int = Field(ge=16, le=4096, description="Otsu search resolution.")
+    model_config: ClassVar[ConfigDict] = section_config(Effect.LABELS, Level.ADVANCED)
+
+    histogram_stride: int = Field(
+        ge=1,
+        le=10_000,
+        description="Use one slice every N.",
+        json_schema_extra=advice(
+            "Lower it if the stack's brightness varies along z and few slices are sampled; "
+            + "raise it to start faster on a deep stack."
+        ),
+    )
+    histogram_bins: int = Field(
+        ge=16,
+        le=4096,
+        description="Otsu search resolution.",
+        json_schema_extra=advice("Rarely: finer bins place the thresholds more precisely."),
+    )
 
 
 class JobsConfig(Section):
     """Background jobs (see :mod:`pybones.api.jobs`)."""
+
+    model_config: ClassVar[ConfigDict] = section_config(Effect.NONE, Level.ADVANCED)
 
     max_concurrent: int = Field(
         ge=1, le=64, description="Jobs run at once (each one also uses `pipeline.workers` threads)."
@@ -161,157 +212,20 @@ class JobsConfig(Section):
 class AcquisitionConfig(Section):
     """Scan geometry shared by segmentation (µm -> pixels) and meshing."""
 
+    model_config: ClassVar[ConfigDict] = section_config(Effect.LABELS)
+
     voxel_size_um: tuple[Micrometres, Micrometres, Micrometres] = Field(
-        description="Voxel size along (z, y, x) in µm."
-    )
-
-
-class BoneSideConfig(Section):
-    """Vessel edges where a vessel touches bone (off by default: unconfirmed on real scans)."""
-
-    enabled: bool = Field(
-        description="Measure a vessel's half-maximum edge against bone on the bone side of a "
-        + "contact, instead of against the darkest material around the vessel. Better on the "
-        + "phantom; on a real scan it may turn thin dim vessels next to bone into bone, which no "
-        + "annotation can yet confirm or refute."
-    )
-    barrier_um: Length = Field(
-        description="Only bone that holds a disc of this radius counts as the bone side (thin "
-        + "foreground, such as a dim vessel, does not)."
-    )
-
-
-class VesselConfig(Section):
-    """Vessel detection (physical units)."""
-
-    rim_occupancy: Fraction = Field(
-        description="Contrast-agent fraction at which a partial-volume voxel (agent + soft "
-        + "tissue) counts as vessel; 0.5 = half-maximum edge."
-    )
-    rim_um: Length = Field(description="Max rim growth around bright cores (partial volume).")
-    min_area_um2: Area = Field(description="Smaller 2D vessel blobs are noise.")
-    bone_side: BoneSideConfig
-
-
-class BoneConfig(Section):
-    """Bone detection (physical units)."""
-
-    min_area_um2: Area = Field(description="Smaller 2D bone blobs are noise.")
-
-
-class BurstConfig(Section):
-    """Burst-vessel (leaked contrast agent) detection (physical units)."""
-
-    window_xy_um: Length = Field(description="In-plane side of the bright-density box.")
-    density_grid_um: Micrometres = Field(
-        description="Block size of the grid the density is stored on (much smaller than "
-        + "the box; saves memory along the 3D window)."
-    )
-    window_z_um: Length = Field(description="z extent of the box (<= one slice: 2D only).")
-    density: float = Field(gt=0.0, le=1.0, description="Min bright-pixel density of a core.")
-    min_area_um2: Area = Field(description="Min area of a burst core.")
-    boundary_sigma_um: Length = Field(
-        description="In-plane Gaussian scale of the fine bright-pixel density that places the "
-        + "cluster boundary; along z it is averaged over the box's slices (a 3D density: a "
-        + "vessel lying in the slice is a cylinder, not a dense strip)."
-    )
-    boundary_fraction: Fraction = Field(
-        description="The boundary is where the fine density falls to this fraction of the "
-        + "core density (0.5 = half-maximum)."
-    )
-
-
-class SegmentationConfig(Section):
-    """Per-slice classification (physical units)."""
-
-    smoothing_sigma_um: Length = Field(description="Gaussian denoising sigma (0 = off).")
-    connectivity: Literal[4, 8] = Field(description="In-plane pixel connectivity.")
-    small_blob_max_area_um2: Area = Field(
-        description="Bone-intensity blobs smaller than this are ambiguous in 2D (rod "
-        + "cross-section or dim vessel; decided in 3D); larger ones are bone.",
-    )
-    vessel: VesselConfig
-    bone: BoneConfig
-    burst: BurstConfig
-
-
-class TubularityConfig(Section):
-    """Multi-scale 3D Hessian tube-vs-plate ratio, used to veto plate-like vessels."""
-
-    enabled: bool = Field(
-        description="Compute it (only with the refinement; off: no plate veto, faster)."
-    )
-    scales_um: tuple[Annotated[float, Field(gt=0.0, le=1e4)], ...] = Field(
-        min_length=1, description="Gaussian scales (about structure radius / sqrt 2)."
-    )
-
-
-class ZSmoothingConfig(Section):
-    """Sliding majority vote along z."""
-
-    window_um: Length = Field(description="z extent of the vote (<= one slice: off).")
-
-
-class RefinementConfig(Section):
-    """3D connectivity refinement (physical units)."""
-
-    enabled: bool = Field(
-        description="Decide the ambiguous blobs in 3D (off: they become bone, slice by slice)."
-    )
-    vessel_contact_ratio: float = Field(
-        gt=0.0,
-        le=1000.0,
-        description="Ambiguous component becomes vessel if "
-        + "vessel contacts > ratio x bone contacts.",
-    )
-    min_tubularity: Fraction = Field(
-        description="Ambiguous components flatter than this mean tube-vs-plate ratio "
-        + "(|l2|/|l3|: ~1 tube, ~0 plate) cannot be vessels (needs tubularity.enabled)."
-    )
-    min_isolated_vessel_um3: Volume = Field(
-        description="Isolated ambiguous components smaller than this are noise."
-    )
-    min_vessel_um3: Volume = Field(description="Smaller 3D vessels are noise.")
-    min_bone_um3: Volume = Field(description="Smaller 3D bone pieces are noise.")
-
-
-class ThinVesselsConfig(Section):
-    """Thin vessels the blur hides, found on a deconvolved image (off by default: unconfirmed)."""
-
-    enabled: bool = Field(
-        description="After the other stages, deconvolve the stack and turn thin bright pieces "
-        + "labelled background or bone into vessel. Finds about half of the thin vessels the "
-        + "blur hides on the phantom; on a real scan the pieces it adds sit in or along bone, "
-        + "where only an expert can tell a vessel from dense bone."
-    )
-    psf_sigma_um: Annotated[float, Field(gt=0.0, le=1000.0)] = Field(
-        description="Scanner blur the deconvolution undoes (Gaussian sigma), as measured on the "
-        + "scan's bone edges."
-    )
-    iterations: int = Field(
-        ge=1,
-        le=100,
-        description="Richardson-Lucy iterations: more sharpens more, and amplifies the noise.",
-    )
-    min_volume_um3: Volume = Field(description="Smaller added pieces are noise.")
-    max_half_thickness_um: Length = Field(
-        description="A piece holding a ball of this radius is not thin: it is not added."
-    )
-    block_slices: int = Field(
-        ge=1,
-        le=100_000,
-        description="Slices of a deconvolution block: larger blocks repeat their margins less "
-        + "(faster) and take more memory per worker.",
-    )
-    block_px: int = Field(
-        ge=1,
-        le=100_000,
-        description="In-plane side of a deconvolution block, in pixels (same trade-off).",
+        description="Voxel size along (z, y, x) in µm.",
+        json_schema_extra=advice(
+            "Set it to the scan's real voxel size: every size in µm, and the meshes, follow it."
+        ),
     )
 
 
 class TaubinConfig(Section):
     """Taubin λ|μ smoothing of extracted surfaces (removes the voxel staircase)."""
+
+    model_config: ClassVar[ConfigDict] = section_config(Effect.MESHES)
 
     iterations: int = Field(ge=0, le=1000, description="λ|μ passes (0 = no smoothing).")
     lambda_factor: float = Field(gt=0.0, le=1.0, description="Shrinking step (λ > 0).")
@@ -335,6 +249,8 @@ class TaubinConfig(Section):
 class MeshConfig(Section):
     """Surface extraction and mesh files."""
 
+    model_config: ClassVar[ConfigDict] = section_config(Effect.MESHES)
+
     downsample: Annotated[
         dict[str, Annotated[int, Field(ge=1, le=_MAX_DOWNSAMPLE)]],
         _keyed_by(FOREGROUND_LABELS),
@@ -344,14 +260,20 @@ class MeshConfig(Section):
     )
     step_size: int = Field(ge=1, le=50, description="Marching-cubes step (coarser if larger).")
     iso_level: float = Field(gt=0.0, lt=1.0, description="Occupancy level of the surface.")
-    chunk_faces: int = Field(ge=1024, le=10**9, description="Triangles per write chunk.")
+    chunk_faces: int = Field(
+        ge=1024,
+        le=10**9,
+        description="Triangles per write chunk.",
+        json_schema_extra=affects(Effect.NONE),
+    )
     glb_position_bits: Literal[16, 32] = Field(
         description="GLB positions: 16-bit integers over the bounding box (error <= half of "
         + "its size / 65535, 8-bit normals) or 32-bit floats. STL is always 32-bit."
     )
     stage_weights: dict[Stage, Annotated[float, Field(gt=0.0, le=1.0)]] = Field(
         description="Relative duration of each meshing stage, for the progress of a mesh job "
-        + "(measured on the vessels and the bone of the reference stack)."
+        + "(measured on the vessels and the bone of the reference stack).",
+        json_schema_extra=affects(Effect.NONE),
     )
     taubin: TaubinConfig
 
@@ -387,6 +309,8 @@ class MeshConfig(Section):
 class RenderConfig(Section):
     """2D overlays."""
 
+    model_config: ClassVar[ConfigDict] = section_config(Effect.PREVIEWS)
+
     alpha: Fraction = Field(description="Opacity of the label colours over the slice.")
     low_percentile: float = Field(
         ge=0.0, le=100.0, description="Intensity percentile shown black (contrast stretch)."
@@ -415,6 +339,12 @@ class RenderConfig(Section):
 
 class PyBonesConfig(Section):
     """Root of the configuration (``default.json``), recorded by every segmentation."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        json_schema_extra={EFFECTS_KEY: {e.value: text for e, text in EFFECT_TEXT.items()}},
+    )
 
     io: IOConfig
     logging: LoggingConfig

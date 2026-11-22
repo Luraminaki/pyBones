@@ -9,7 +9,13 @@ ways, each taking only the values it changes:
 - a JSON file of your own, `pybones --config my_config.json ...` (`pybones config` prints the
   effective configuration, a good start);
 - `--set section.key=value` on the command line, repeated as needed (the value is JSON);
-- one `section.key=value` per line under *Settings for this run* on the web page.
+- the settings form of the web page (*Settings for this run*), for the sections a run may
+  change, with the same explanations as here.
+
+Each section says what a change affects, so what must be computed again: the labels (and with
+them the meshes and the network), the meshes only, the network only, the previews only, or no
+result at all. A setting that differs from its section says so in its row. The settings of the
+web page's form also say when to change them.
 
 Sizes are physical: `_um` in micrometres, `_um2` in µm², `_um3` in µm³; change
 `acquisition.voxel_size_um` and every kernel follows. Every segmentation records its full
@@ -58,6 +64,8 @@ Root of the configuration (`default.json`), recorded by every segmentation.
 
 File names and slice discovery rules.
 
+A change here affects no result (speed, memory, progress or file names).
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
 | `slice_extensions` | `[".tif", ".tiff", ".png"]` | list of text matching `^\.\w+$` (at least 1) | Slice file extensions, in lower case (files may use upper case). |
@@ -72,6 +80,8 @@ File names and slice discovery rules.
 
 Log files (one per process, rotated by size) and console output.
 
+A change here affects no result (speed, memory, progress or file names).
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
 | `directory` | `"logs"` | non-empty text | Directory of the log files (relative to the working directory). |
@@ -85,6 +95,8 @@ Log files (one per process, rotated by size) and console output.
 
 Background jobs (see `pybones.api.jobs`).
 
+A change here affects no result (speed, memory, progress or file names).
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
 | `max_concurrent` | `1` | integer, 1 ≤ x ≤ 64 | Jobs run at once (each one also uses `pipeline.workers` threads). |
@@ -96,140 +108,168 @@ Background jobs (see `pybones.api.jobs`).
 
 Scan geometry shared by segmentation (µm -> pixels) and meshing.
 
+A change here affects the segmentation's labels, and so its meshes and its network.
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `voxel_size_um` | `[3.0, 3.0, 3.0]` | 3 values, each 0 < x ≤ 1,000,000 | Voxel size along (z, y, x) in µm. |
+| `voxel_size_um` | `[3.0, 3.0, 3.0]` | 3 values, each 0 < x ≤ 1,000,000 | Voxel size along (z, y, x) in µm. *When to change it:* Set it to the scan's real voxel size: every size in µm, and the meshes, follow it. |
 
 ### `pipeline`
 
 Parallelism of the per-slice stage, and progress estimation.
 
+A change here affects no result (speed, memory, progress or file names).
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `workers` | `4` | integer, 1 ≤ x ≤ 256 | Threads (1 = sequential). |
-| `extra_in_flight` | `2` | integer, 0 ≤ x ≤ 256 | Queued slices beyond `workers`. |
-| `stage_weights` | `{"thresholds": 0.02, "classify": 0.65, "analyse": 0.11, "resolve": 0.17, "clean": 0.05, "sharpen": 0.68, "thin": 0.03}` | 0 < x ≤ 1, for each of `thresholds`, `classify`, `analyse`, `resolve`, `clean`, `sharpen`, `thin` | Relative duration of each stage, for the overall progress fraction (measured on the reference stack; normalised over the stages that run). |
+| `workers` | `4` | integer, 1 ≤ x ≤ 256 | Threads (1 = sequential). *When to change it:* Lower it to use less memory or leave cores to other work; more than the cores gains nothing. |
+| `extra_in_flight` | `2` | integer, 0 ≤ x ≤ 256 | Queued slices beyond `workers`. *When to change it:* Rarely: more keeps the threads busier and uses more memory. |
+| `stage_weights` | `{"thresholds": 0.02, "classify": 0.65, "analyse": 0.11, "resolve": 0.17, "clean": 0.05, "sharpen": 0.68, "thin": 0.03}` | 0 < x ≤ 1, for each of `thresholds`, `classify`, `analyse`, `resolve`, `clean`, `sharpen`, `thin` | Relative duration of each stage, for the overall progress fraction (measured on the reference stack; normalised over the stages that run). *When to change it:* Only if the progress bar runs unevenly on another machine; `python -m tools.report figures` measures them. |
 
 ### `thresholds`
 
 Global multi-Otsu threshold estimation.
 
+A change here affects the segmentation's labels, and so its meshes and its network.
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `histogram_stride` | `5` | integer, 1 ≤ x ≤ 10,000 | Use one slice every N. |
-| `histogram_bins` | `1024` | integer, 16 ≤ x ≤ 4,096 | Otsu search resolution. |
+| `histogram_stride` | `5` | integer, 1 ≤ x ≤ 10,000 | Use one slice every N. *When to change it:* Lower it if the stack's brightness varies along z and few slices are sampled; raise it to start faster on a deep stack. |
+| `histogram_bins` | `1024` | integer, 16 ≤ x ≤ 4,096 | Otsu search resolution. *When to change it:* Rarely: finer bins place the thresholds more precisely. |
 
 ### `segmentation`
 
 Per-slice classification (physical units).
 
+A change here affects the segmentation's labels, and so its meshes and its network.
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `smoothing_sigma_um` | `3.0` | 0 ≤ x ≤ 1,000,000 | Gaussian denoising sigma (0 = off). |
-| `connectivity` | `8` | `4` / `8` | In-plane pixel connectivity. |
-| `small_blob_max_area_um2` | `6300.0` | 0 ≤ x ≤ 1,000,000,000,000 | Bone-intensity blobs smaller than this are ambiguous in 2D (rod cross-section or dim vessel; decided in 3D); larger ones are bone. |
+| `smoothing_sigma_um` | `3.0` | 0 ≤ x ≤ 1,000,000 | Gaussian denoising sigma (0 = off). *When to change it:* Raise it on a noisier scan; it also blurs thin vessels, so keep it small. |
+| `connectivity` | `8` | `4` / `8` | In-plane pixel connectivity. *When to change it:* Rarely: 8 links diagonal pixels (thin oblique vessels stay whole); 4 splits more. |
+| `small_blob_max_area_um2` | `6300.0` | 0 ≤ x ≤ 1,000,000,000,000 | Bone-intensity blobs smaller than this are ambiguous in 2D (rod cross-section or dim vessel; decided in 3D); larger ones are bone. *When to change it:* Raise it if dim vessels wider than usual end up as bone; lower it if bone rods are taken for vessels. |
 
 ### `segmentation.vessel`
 
 Vessel detection (physical units).
 
+A change here affects the segmentation's labels, and so its meshes and its network.
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `rim_occupancy` | `0.5` | 0 ≤ x ≤ 1 | Contrast-agent fraction at which a partial-volume voxel (agent + soft tissue) counts as vessel; 0.5 = half-maximum edge. |
-| `rim_um` | `9.0` | 0 ≤ x ≤ 1,000,000 | Max rim growth around bright cores (partial volume). |
-| `min_area_um2` | `54.0` | 0 ≤ x ≤ 1,000,000,000,000 | Smaller 2D vessel blobs are noise. |
+| `rim_occupancy` | `0.5` | 0 ≤ x ≤ 1 | Contrast-agent fraction at which a partial-volume voxel (agent + soft tissue) counts as vessel; 0.5 = half-maximum edge. *When to change it:* Rarely: 0.5 is the physical edge. Lower it to draw vessels wider, raise it to draw them narrower (diameters move with it). |
+| `rim_um` | `9.0` | 0 ≤ x ≤ 1,000,000 | Max rim growth around bright cores (partial volume). *When to change it:* Raise it with a wider scanner blur (another scanner or resolution), so that the rim of thick vessels is reached. |
+| `min_area_um2` | `54.0` | 0 ≤ x ≤ 1,000,000,000,000 | Smaller 2D vessel blobs are noise. *When to change it:* Raise it on a noisier scan (speckle read as vessel); lower it to keep the smallest vessel sections. |
 
 ### `segmentation.vessel.bone_side`
 
 Vessel edges where a vessel touches bone (off by default: unconfirmed on real scans).
 
+**Experimental, off by default.** A change here affects the segmentation's labels, and so its meshes and its network.
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `enabled` | `false` | `true` / `false` | Measure a vessel's half-maximum edge against bone on the bone side of a contact, instead of against the darkest material around the vessel. Better on the phantom; on a real scan it may turn thin dim vessels next to bone into bone, which no annotation can yet confirm or refute. |
-| `barrier_um` | `12.0` | 0 ≤ x ≤ 1,000,000 | Only bone that holds a disc of this radius counts as the bone side (thin foreground, such as a dim vessel, does not). |
+| `enabled` | `false` | `true` / `false` | Measure a vessel's half-maximum edge against bone on the bone side of a contact, instead of against the darkest material around the vessel. Better on the phantom; on a real scan it may turn thin dim vessels next to bone into bone, which no annotation can yet confirm or refute. *When to change it:* To compare with a run without it, where vessels press on bone: false vessel along bone surfaces is what it removes. Keep it off for measurements until an expert has checked it. |
+| `barrier_um` | `12.0` | 0 ≤ x ≤ 1,000,000 | Only bone that holds a disc of this radius counts as the bone side (thin foreground, such as a dim vessel, does not). *When to change it:* Raise it if thin vessels lying on bone are lost to bone; lower it if thin bone plates should count as the bone side too. |
 
 ### `segmentation.bone`
 
 Bone detection (physical units).
 
+A change here affects the segmentation's labels, and so its meshes and its network.
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `min_area_um2` | `270.0` | 0 ≤ x ≤ 1,000,000,000,000 | Smaller 2D bone blobs are noise. |
+| `min_area_um2` | `270.0` | 0 ≤ x ≤ 1,000,000,000,000 | Smaller 2D bone blobs are noise. *When to change it:* Raise it on a noisier scan; lower it to keep thin trabeculae. |
 
 ### `segmentation.burst`
 
 Burst-vessel (leaked contrast agent) detection (physical units).
 
+A change here affects the segmentation's labels, and so its meshes and its network.
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `window_xy_um` | `123.0` | 0 ≤ x ≤ 1,000,000 | In-plane side of the bright-density box. |
-| `density_grid_um` | `12.0` | 0 < x ≤ 1,000,000 | Block size of the grid the density is stored on (much smaller than the box; saves memory along the 3D window). |
-| `window_z_um` | `123.0` | 0 ≤ x ≤ 1,000,000 | z extent of the box (<= one slice: 2D only). |
-| `density` | `0.35` | 0 < x ≤ 1 | Min bright-pixel density of a core. |
-| `min_area_um2` | `18000.0` | 0 ≤ x ≤ 1,000,000,000,000 | Min area of a burst core. |
-| `boundary_sigma_um` | `36.0` | 0 ≤ x ≤ 1,000,000 | In-plane Gaussian scale of the fine bright-pixel density that places the cluster boundary; along z it is averaged over the box's slices (a 3D density: a vessel lying in the slice is a cylinder, not a dense strip). |
-| `boundary_fraction` | `0.5` | 0 ≤ x ≤ 1 | The boundary is where the fine density falls to this fraction of the core density (0.5 = half-maximum). |
+| `window_xy_um` | `123.0` | 0 ≤ x ≤ 1,000,000 | In-plane side of the bright-density box. *When to change it:* Scale it with the bursts of the scan: about half of their usual size. |
+| `density_grid_um` | `12.0` | 0 < x ≤ 1,000,000 | Block size of the grid the density is stored on (much smaller than the box; saves memory along the 3D window). *When to change it:* Raise it to save memory on a very large stack; results move slightly. |
+| `window_z_um` | `123.0` | 0 ≤ x ≤ 1,000,000 | z extent of the box (<= one slice: 2D only). *When to change it:* Lower it if bursts spread into neighbouring slices where there are none; one slice or less makes the detection 2D. |
+| `density` | `0.35` | 0 < x ≤ 1 | Min bright-pixel density of a core. *When to change it:* Raise it if dense vessel networks are taken for bursts; lower it if real bursts are missed. |
+| `min_area_um2` | `18000.0` | 0 ≤ x ≤ 1,000,000,000,000 | Min area of a burst core. *When to change it:* Raise it if small vessel clusters become bursts. |
+| `boundary_sigma_um` | `36.0` | 0 ≤ x ≤ 1,000,000 | In-plane Gaussian scale of the fine bright-pixel density that places the cluster boundary; along z it is averaged over the box's slices (a 3D density: a vessel lying in the slice is a cylinder, not a dense strip). *When to change it:* Lower it for tighter burst edges, which give thick vessels near bursts back; too low and the burst's bright haze becomes vessel. |
+| `boundary_fraction` | `0.5` | 0 ≤ x ≤ 1 | The boundary is where the fine density falls to this fraction of the core density (0.5 = half-maximum). *When to change it:* Raise it to shrink bursts, lower it to grow them. |
 
 ### `tubularity`
 
 Multi-scale 3D Hessian tube-vs-plate ratio, used to veto plate-like vessels.
 
+A change here affects the segmentation's labels, and so its meshes and its network.
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `enabled` | `true` | `true` / `false` | Compute it (only with the refinement; off: no plate veto, faster). |
-| `scales_um` | `[3.0, 4.5, 6.0]` | list of 0 < x ≤ 10,000 (at least 1) | Gaussian scales (about structure radius / sqrt 2). |
+| `enabled` | `true` | `true` / `false` | Compute it (only with the refinement; off: no plate veto, faster). *When to change it:* Turn it off for a faster run when bone plates are not mistaken for vessels. |
+| `scales_um` | `[3.0, 4.5, 6.0]` | list of 0 < x ≤ 10,000 (at least 1) | Gaussian scales (about structure radius / sqrt 2). *When to change it:* Match them to the radii of the vessels to judge: add a larger scale for thicker vessels (each scale costs time). |
 
 ### `z_smoothing`
 
 Sliding majority vote along z.
 
+A change here affects the segmentation's labels, and so its meshes and its network.
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `window_um` | `0.0` | 0 ≤ x ≤ 1,000,000 | z extent of the vote (<= one slice: off). |
+| `window_um` | `0.0` | 0 ≤ x ≤ 1,000,000 | z extent of the vote (<= one slice: off). *When to change it:* Raise it if labels flicker from slice to slice; lower it if thin structures crossing the slices are erased. |
 
 ### `refinement`
 
 3D connectivity refinement (physical units).
 
+A change here affects the segmentation's labels, and so its meshes and its network.
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `enabled` | `true` | `true` / `false` | Decide the ambiguous blobs in 3D (off: they become bone, slice by slice). |
-| `vessel_contact_ratio` | `1.0` | 0 < x ≤ 1,000 | Ambiguous component becomes vessel if vessel contacts > ratio x bone contacts. |
-| `min_tubularity` | `0.45` | 0 ≤ x ≤ 1 | Ambiguous components flatter than this mean tube-vs-plate ratio (\|l2\|/\|l3\|: ~1 tube, ~0 plate) cannot be vessels (needs tubularity.enabled). |
-| `min_isolated_vessel_um3` | `810.0` | 0 ≤ x ≤ 1e18 | Isolated ambiguous components smaller than this are noise. |
-| `min_vessel_um3` | `810.0` | 0 ≤ x ≤ 1e18 | Smaller 3D vessels are noise. |
-| `min_bone_um3` | `27000.0` | 0 ≤ x ≤ 1e18 | Smaller 3D bone pieces are noise. |
+| `enabled` | `true` | `true` / `false` | Decide the ambiguous blobs in 3D (off: they become bone, slice by slice). *When to change it:* Leave it on: off is the 2D result, for comparison only (many vessels become bone). |
+| `vessel_contact_ratio` | `1.0` | 0 < x ≤ 1,000 | Ambiguous component becomes vessel if vessel contacts > ratio x bone contacts. *When to change it:* Raise it if bone pieces touching vessels become vessel; lower it if vessel pieces touching bone become bone. |
+| `min_tubularity` | `0.45` | 0 ≤ x ≤ 1 | Ambiguous components flatter than this mean tube-vs-plate ratio (\|l2\|/\|l3\|: ~1 tube, ~0 plate) cannot be vessels (needs tubularity.enabled). *When to change it:* Raise it if bone plates become vessel; lower it if flattened vessels become bone. |
+| `min_isolated_vessel_um3` | `810.0` | 0 ≤ x ≤ 1e18 | Isolated ambiguous components smaller than this are noise. *When to change it:* Raise it on a noisier scan; lower it to keep isolated specks. |
+| `min_vessel_um3` | `810.0` | 0 ≤ x ≤ 1e18 | Smaller 3D vessels are noise. *When to change it:* Raise it if the network has many tiny isolated pieces; lower it to keep short vessel fragments (cut by clots). |
+| `min_bone_um3` | `27000.0` | 0 ≤ x ≤ 1e18 | Smaller 3D bone pieces are noise. *When to change it:* Raise it on a noisier scan; lower it to keep small bone pieces. |
 
 ### `thin_vessels`
 
 Thin vessels the blur hides, found on a deconvolved image (off by default: unconfirmed).
 
+**Experimental, off by default.** A change here affects the segmentation's labels, and so its meshes and its network.
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `enabled` | `false` | `true` / `false` | After the other stages, deconvolve the stack and turn thin bright pieces labelled background or bone into vessel. Finds about half of the thin vessels the blur hides on the phantom; on a real scan the pieces it adds sit in or along bone, where only an expert can tell a vessel from dense bone. |
-| `psf_sigma_um` | `4.4` | 0 < x ≤ 1,000 | Scanner blur the deconvolution undoes (Gaussian sigma), as measured on the scan's bone edges. |
-| `iterations` | `3` | integer, 1 ≤ x ≤ 100 | Richardson-Lucy iterations: more sharpens more, and amplifies the noise. |
-| `min_volume_um3` | `540.0` | 0 ≤ x ≤ 1e18 | Smaller added pieces are noise. |
-| `max_half_thickness_um` | `6.0` | 0 ≤ x ≤ 1,000,000 | A piece holding a ball of this radius is not thin: it is not added. |
-| `block_slices` | `64` | integer, 1 ≤ x ≤ 100,000 | Slices of a deconvolution block: larger blocks repeat their margins less (faster) and take more memory per worker. |
-| `block_px` | `128` | integer, 1 ≤ x ≤ 100,000 | In-plane side of a deconvolution block, in pixels (same trade-off). |
+| `enabled` | `false` | `true` / `false` | After the other stages, deconvolve the stack and turn thin bright pieces labelled background or bone into vessel. Finds about half of the thin vessels the blur hides on the phantom; on a real scan the pieces it adds sit in or along bone, where only an expert can tell a vessel from dense bone. *When to change it:* To compare with a run without it, where thin vessels matter (marrow networks, vessel lengths). Keep it off for measurements until an expert has checked it. It adds about 70 % to the segmentation's time. |
+| `psf_sigma_um` | `4.4` | 0 < x ≤ 1,000 | Scanner blur the deconvolution undoes (Gaussian sigma), as measured on the scan's bone edges. *When to change it:* Set it to another scanner's blur; the result holds with a value 20 % off. |
+| `iterations` | `3` | integer, 1 ≤ x ≤ 100 | Richardson-Lucy iterations: more sharpens more, and amplifies the noise. *When to change it:* Rarely: 3 was the best trade-off on the phantom; more finds more and invents more. |
+| `min_volume_um3` | `540.0` | 0 ≤ x ≤ 1e18 | Smaller added pieces are noise. *When to change it:* Raise it if specks of noise are added on a noisier scan. |
+| `max_half_thickness_um` | `6.0` | 0 ≤ x ≤ 1,000,000 | A piece holding a ball of this radius is not thin: it is not added. *When to change it:* Lower it if dense bone is added; raise it to add slightly thicker vessels. |
+| `block_slices` | `64` | integer, 1 ≤ x ≤ 100,000 | Slices of a deconvolution block: larger blocks repeat their margins less (faster) and take more memory per worker. *When to change it:* Lower it if memory runs short. *A change affects no result (speed, memory, progress or file names).* |
+| `block_px` | `128` | integer, 1 ≤ x ≤ 100,000 | In-plane side of a deconvolution block, in pixels (same trade-off). *When to change it:* Lower it if memory runs short. *A change affects no result (speed, memory, progress or file names).* |
 
 ### `mesh`
 
 Surface extraction and mesh files.
+
+A change here affects the meshes only.
 
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
 | `downsample` | `{"bone": 2, "vessel": 2, "burst": 2}` | integer, 1 ≤ x ≤ 40, for each of `bone`, `vessel`, `burst` | Grid of the surface, per label: 2 averages 2x2x2 voxel blocks (details smaller than a block are smoothed); 1 is full resolution, about 4 times more triangles. |
 | `step_size` | `1` | integer, 1 ≤ x ≤ 50 | Marching-cubes step (coarser if larger). |
 | `iso_level` | `0.5` | 0 < x < 1 | Occupancy level of the surface. |
-| `chunk_faces` | `1048576` | integer, 1,024 ≤ x ≤ 1,000,000,000 | Triangles per write chunk. |
+| `chunk_faces` | `1048576` | integer, 1,024 ≤ x ≤ 1,000,000,000 | Triangles per write chunk. *A change affects no result (speed, memory, progress or file names).* |
 | `glb_position_bits` | `16` | `16` / `32` | GLB positions: 16-bit integers over the bounding box (error <= half of its size / 65535, 8-bit normals) or 32-bit floats. STL is always 32-bit. |
-| `stage_weights` | `{"occupancy": 0.3, "surface": 0.09, "smoothing": 0.53, "writing": 0.08}` | 0 < x ≤ 1, for each of `occupancy`, `surface`, `smoothing`, `writing` | Relative duration of each meshing stage, for the progress of a mesh job (measured on the vessels and the bone of the reference stack). |
+| `stage_weights` | `{"occupancy": 0.3, "surface": 0.09, "smoothing": 0.53, "writing": 0.08}` | 0 < x ≤ 1, for each of `occupancy`, `surface`, `smoothing`, `writing` | Relative duration of each meshing stage, for the progress of a mesh job (measured on the vessels and the bone of the reference stack). *A change affects no result (speed, memory, progress or file names).* |
 
 ### `mesh.taubin`
 
 Taubin λ|μ smoothing of extracted surfaces (removes the voxel staircase).
+
+A change here affects the meshes only.
 
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
@@ -241,10 +281,12 @@ Taubin λ|μ smoothing of extracted surfaces (removes the voxel staircase).
 
 Vascular quantification: centrelines, network, per-branch measures.
 
+A change here affects the measured network only.
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
 | `anchor_margin_um` | `3.0` | 0 ≤ x ≤ 1,000,000 | An end this much beyond its own radius from a face of the stack, or from a burst, continues there (it is not a free end). |
-| `stage_weights` | `{"cavities": 0.33, "skeleton": 0.56, "calibre": 0.05, "network": 0.06}` | 0 < x ≤ 1, for each of `cavities`, `skeleton`, `calibre`, `network` | Relative duration of each quantification stage (progress bar). |
+| `stage_weights` | `{"cavities": 0.33, "skeleton": 0.56, "calibre": 0.05, "network": 0.06}` | 0 < x ≤ 1, for each of `cavities`, `skeleton`, `calibre`, `network` | Relative duration of each quantification stage (progress bar). *A change affects no result (speed, memory, progress or file names).* |
 | `max_radius_um` | `60.0` | 0 < x ≤ 1,000,000 | Largest vessel radius measured (distances are capped there). |
 | `distance_tile_slices` | `32` | integer, 1 ≤ x ≤ 10,000 | Depth of a tile of the scipy distance backend (memory). |
 | `distance_tile_pixels` | `256` | integer, 8 ≤ x ≤ 100,000 | In-plane side of a tile of the scipy distance backend. |
@@ -252,6 +294,8 @@ Vascular quantification: centrelines, network, per-branch measures.
 ### `quantification.backends`
 
 Implementation of each step of the quantification (interchangeable, same results).
+
+A change here affects no result (speed, memory, progress or file names).
 
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
@@ -262,6 +306,8 @@ Implementation of each step of the quantification (interchangeable, same results
 ### `quantification.pruning`
 
 When a piece of the centreline network is an artefact (see quantification.pruning).
+
+A change here affects the measured network only.
 
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
@@ -275,6 +321,8 @@ When a piece of the centreline network is an artefact (see quantification.prunin
 
 Files the quantification writes into the segmentation folder.
 
+A change here affects no result (speed, memory, progress or file names).
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
 | `network_file` | `"network.json"` | text | Summary and node table. |
@@ -284,6 +332,8 @@ Files the quantification writes into the segmentation folder.
 ### `render`
 
 2D overlays.
+
+A change here affects the preview images only.
 
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
@@ -304,6 +354,8 @@ reproducibility information.
 
 Address of the web server (local by default: no authentication).
 
+A change here affects no result (speed, memory, progress or file names).
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
 | `host` | `"127.0.0.1"` | non-empty text | Interface to listen on. |
@@ -314,6 +366,8 @@ Address of the web server (local by default: no authentication).
 
 Folders the web server reads stacks from and writes segmentations to.
 
+A change here affects no result (speed, memory, progress or file names).
+
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
 | `data_dir` | `"data"` | non-empty text | Folder of the slice stacks (directories or zip archives). |
@@ -323,6 +377,8 @@ Folders the web server reads stacks from and writes segmentations to.
 ### `api`
 
 Limits and timings of the web API.
+
+A change here affects no result (speed, memory, progress or file names).
 
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|

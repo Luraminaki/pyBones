@@ -202,7 +202,12 @@ def test_every_figure_step_runs_on_the_extracts(repo: "Path") -> None:
     assert "\\pbValueMeshErrorVoxelRatio" in values
     with (ctx.data / STAGE_WEIGHTS_CSV).open() as fh:
         rows = list(csv.DictReader(fh))
-    assert {r["operation"] for r in rows} == {"segmentation", "mesh", "quantification"}
+    assert {r["operation"] for r in rows} == {
+        "segmentation",
+        "segmentation, thin vessels",
+        "mesh",
+        "quantification",
+    }
     for operation in {r["operation"] for r in rows}:
         shares = [float(r["measured"]) for r in rows if r["operation"] == operation]
         assert sum(shares) == pytest.approx(1.0, abs=0.01)

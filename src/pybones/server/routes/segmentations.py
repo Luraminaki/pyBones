@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Annotated, cast
 import cv2
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import FileResponse, Response
+from pydantic import ValidationError
 
 from pybones.api.operations import preview
 from pybones.meshing.formats import MeshFormat
@@ -38,6 +39,8 @@ ETAG_HEADER = "ETag"
 IF_NONE_MATCH_HEADER = "if-none-match"
 #: Centreline points: raw little-endian float32 ``(x, y, z)`` triples in µm.
 CENTRELINES_MEDIA_TYPE = "application/octet-stream"
+#: First element of the location of an invalid setting in a 422 detail (then its path).
+CONFIG_LOCATION = "config"
 #: Media type of each mesh format.
 MESH_MEDIA_TYPES = {MeshFormat.STL: "model/stl", MeshFormat.GLB: "model/gltf-binary"}
 #: Query parameter choosing the mesh format.
@@ -142,11 +145,18 @@ def create_segmentation(context: Context, request: SegmentationRequest) -> JobVi
         The queued job.
 
     Raises:
-        HTTPException: 422 if an override names an unknown key or an invalid value.
+        HTTPException: 422 if an override names an unknown key (a sentence) or an invalid
+            value (a list of ``{loc, msg}``, ``loc`` starting with ``"config"`` then the
+            setting's path, as FastAPI reports its own validation errors).
     """
     try:
         return context.start_segmentation(request)
-    except ValueError as exc:  # pydantic's ValidationError included
+    except ValidationError as exc:
+        detail = [
+            {"loc": [CONFIG_LOCATION, *error["loc"]], "msg": error["msg"]} for error in exc.errors()
+        ]
+        raise HTTPException(HTTPStatus.UNPROCESSABLE_ENTITY, detail) from None
+    except ValueError as exc:  # a malformed override, or an unknown key
         raise HTTPException(HTTPStatus.UNPROCESSABLE_ENTITY, str(exc)) from None
 
 

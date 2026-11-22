@@ -6,7 +6,7 @@ import { cssColor, cssPercent, el, LABELS, percent, toast } from './ui.js';
 
 const STACK_SUFFIX = /\.zip$/i;
 
-let state; // {server, colors, summaries}
+let state; // {server, colors, settings, summaries}
 
 /**
  * Build the card of a segmentation: its name, size, version and label fractions.
@@ -89,40 +89,17 @@ function suggestName() {
 }
 
 /**
- * List the settings of `used` that differ from `base`, as `section.key=value` lines (the
- * form's syntax), within the sections a run may override. Lists count as single values.
- * @param {object} base The server's configuration.
- * @param {object} used The configuration of a segmentation.
- * @param {string[]} sections Sections a request may override.
- * @returns {string[]} One override line per differing value.
- */
-export function settingsDiff(base, used, sections) {
-  const lines = [];
-  const isSection = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
-  const walk = (a, b, path) => {
-    if (isSection(a) && isSection(b)) {
-      for (const key of Object.keys(b)) walk(a[key], b[key], [...path, key]);
-    } else if (JSON.stringify(a) !== JSON.stringify(b)) {
-      lines.push(`${path.join('.')}=${JSON.stringify(b)}`);
-    }
-  };
-  for (const section of sections) walk(base[section], used[section], [section]);
-  return lines;
-}
-
-/**
  * Fill in the form for another run: same stack (if still in the data folder), same settings.
  * @param {string} datasetId Stack of the run.
- * @param {string[]} overrides Its settings, as override lines.
+ * @param {object} config Its configuration.
+ * @param {string} runName Its name.
  * @returns {boolean} Whether the stack is still offered.
  */
-export function prefill(datasetId, overrides) {
+export function prefill(datasetId, config, runName) {
   const select = document.getElementById('dataset');
   const known = [...select.options].some((o) => o.value === datasetId);
   if (known) select.value = datasetId;
-  const textarea = document.getElementById('overrides');
-  textarea.value = overrides.join('\n');
-  textarea.closest('details').open = overrides.length > 0;
+  state.settings.startFrom(config, runName);
   const name = document.getElementById('seg-name');
   name.dataset.edited = 'false';
   suggestName();
@@ -151,9 +128,10 @@ export async function reloadLists(selectedId, onSelect) {
  * Wire the form: name suggestions, and starting a segmentation job on submit.
  * @param {{data_dir: string, output_dir: string}} server What the server describes of itself.
  * @param {Object<string, number[]>} colors BGR colour per label.
+ * @param {import('./settings_form.js').SettingsForm} settings The run's settings form.
  */
-export function initLibrary(server, colors) {
-  state = { server, colors, summaries: [] };
+export function initLibrary(server, colors, settings) {
+  state = { server, colors, settings, summaries: [] };
   const form = document.getElementById('segment-form');
   const name = document.getElementById('seg-name');
   name.addEventListener('input', () => { name.dataset.edited = 'true'; });
@@ -162,8 +140,12 @@ export function initLibrary(server, colors) {
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!form.reportValidity()) return;
-    const overrides = document.getElementById('overrides').value
-      .split('\n').map((line) => line.trim()).filter(Boolean);
+    if (!settings.valid()) {
+      settings.open();
+      toast('Some settings are not valid: they are marked in red', { error: true });
+      return;
+    }
+    const overrides = settings.overrides();
     const submit = document.getElementById('segment-submit');
     const dataset = document.getElementById('dataset').value;
     submit.disabled = true;
@@ -171,6 +153,7 @@ export function initLibrary(server, colors) {
     try {
       job = await api.createSegmentation(dataset, name.value, overrides);
     } catch (err) {
+      if (settings.showErrors(err.detail)) settings.open();
       toast(`Could not start: ${err.message}`, { error: true });
       return;
     } finally {

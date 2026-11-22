@@ -21,8 +21,12 @@ from pybones.api.job_status import (
     QUANTIFICATION_JOB,
     SEGMENTATION_JOB,
 )
+from pybones.config.fields import Effect, Level
+from pybones.config.schema import PyBonesConfig
 from pybones.segmentation.labels import FINAL_LABELS, Label
 from pybones.server.app import STATIC_DIR
+from pybones.server.schemas import OVERRIDABLE_SECTIONS
+from tests.config.test_effects import settings
 
 NODE = shutil.which("node")
 needs_node = pytest.mark.skipif(NODE is None, reason="Node.js is not installed")
@@ -116,6 +120,41 @@ def test_the_page_knows_when_a_job_is_over() -> None:
     states = js_value(JS_DIR / "api.js", "FINISHED_STATES")
     assert isinstance(states, list)
     assert set(states) == {str(state) for state in FINISHED_STATES}
+
+
+@needs_node
+def test_the_page_names_effects_and_levels_like_python() -> None:
+    """The settings form knows the same effects (widest first) and levels as the schemas."""
+    assert js_value(JS_DIR / "settings_model.js", "EFFECT_ORDER") == [e.value for e in Effect]
+    levels = js_value(JS_DIR / "settings_model.js", "LEVELS")
+    assert isinstance(levels, dict)
+    assert set(levels.values()) == {level.value for level in Level}
+
+
+@needs_node
+def test_the_form_reads_every_setting_a_run_may_change(tmp_path: Path) -> None:
+    """On the real schema, the form finds exactly the settings a run may change, rightly."""
+    schema_file = tmp_path / "schema.json"
+    _ = schema_file.write_text(json.dumps(PyBonesConfig.model_json_schema()))
+    roots = sorted(OVERRIDABLE_SECTIONS)
+    script = (
+        f"const m = await import({json.dumps((JS_DIR / 'settings_model.js').as_uri())});"
+        + "const fs = await import('node:fs');"
+        + f"const schema = JSON.parse(fs.readFileSync({json.dumps(str(schema_file))}, 'utf8'));"
+        + f"const fields = m.readSections(schema, {json.dumps(roots)}).flatMap((s) => s.fields);"
+        + "console.log(JSON.stringify(fields.map((f) => [f.path, f.kind, f.effect])));"
+    )
+    result = node("--input-type=module", "-e", script)
+    assert result.returncode == 0, result.stderr
+    read = {path: (kind, effect) for path, kind, effect in json.loads(result.stdout)}
+    expected = {
+        path: effect for path, _, effect in settings(PyBonesConfig) if path.split(".")[0] in roots
+    }
+    assert {path: effect for path, (_, effect) in read.items()} == expected
+    assert {kind for kind, _ in read.values()} <= {"boolean", "integer", "number", "choice", "json"}
+    assert read["thin_vessels.enabled"][0] == "boolean"
+    assert read["segmentation.connectivity"][0] == "choice"
+    assert read["acquisition.voxel_size_um"][0] == "json"
 
 
 @needs_node

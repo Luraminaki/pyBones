@@ -95,7 +95,8 @@ have to:
 | No function only forwards its parameters to another; no two functions share a body; no run of logic (3 statements) or of JavaScript (4 lines) is repeated, variable names aside | `tests/test_duplication.py` |
 | No dead code: every function, class, method and constant of `src/` and `tools/` is used by them (not by the tests alone), every test helper by a test, every JavaScript export by another module | `tests/test_unused.py` |
 | Every JavaScript function of both pages has a JSDoc comment; no `var`, loose equality, `innerHTML` or `eval`; every module parses | `tests/server/test_page_js.py` |
-| The labels, job states and job kinds the page knows match Python's | `tests/server/test_page_js.py` |
+| The labels, job states, job kinds, effects and levels the page knows match Python's; the settings form reads every setting a run may change | `tests/server/test_page_js.py` |
+| Every section says what a change affects and how prominently forms show it; every setting of the form says when to change it | `tests/config/test_effects.py` |
 | The vendored three.js matches its manifest; every import of the page resolves | `tests/server/test_page.py` |
 | The phantom's scores do not move unnoticed | `tests/regression/test_golden.py` |
 | Every setting has a description, and docs/CONFIGURATION.md matches the code | `tests/docs_tool/test_configuration.py` |
@@ -112,13 +113,21 @@ schemas hold no defaults. Sizes are physical (`_um`, `_um2`, `_um3` keys), conve
 A new setting takes, together:
 
 1. a schema field with its bounds and a `description` (the reference and its test need it);
-2. its value in the JSON file;
-3. a validation test in `tests/config/` (an out-of-range value is rejected);
-4. `uv run python -m tools.docs`, which rewrites [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+2. in a section the web page's form shows (those a run may change), *advice*: when to change it,
+   `json_schema_extra=advice("...")`; with `advice("...", Effect.NONE)` (or `affects(...)`
+   elsewhere) when a change affects something else than its section says;
+3. its value in the JSON file;
+4. a validation test in `tests/config/` (an out-of-range value is rejected);
+5. `uv run python -m tools.docs`, which rewrites [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
+
+A new section declares what a change of it affects and how prominently the form shows it:
+`model_config = section_config(Effect.LABELS, Level.ADVANCED)` (effects: labels, meshes, network,
+previews, none; levels: common, advanced, experimental). `tests/config/test_effects.py` refuses a
+section or a form setting without them.
 
 Every segmentation records its configuration, and a new key makes the outputs written before it
-unreadable (segment them again); it also changes the golden baseline's fingerprint (record it again,
-[above](#running-the-tests)).
+unreadable (segment them again). A key in a section whose effect is the labels also changes the
+golden baseline's fingerprint (record it again, [above](#running-the-tests)).
 
 ## VS CODE AND THE WEB PAGE
 

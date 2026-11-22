@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
+from pybones.config.fields import ADVICE_KEY, EFFECT_KEY, EFFECT_TEXT, LEVEL_KEY, Effect, Level
 from pybones.config.loader import load_config, load_server_config
 from pybones.config.schema import PyBonesConfig
 from pybones.config.server import ServerConfig
@@ -41,7 +42,13 @@ ways, each taking only the values it changes:
 - a JSON file of your own, `pybones --config my_config.json ...` (`pybones config` prints the
   effective configuration, a good start);
 - `--set section.key=value` on the command line, repeated as needed (the value is JSON);
-- one `section.key=value` per line under *Settings for this run* on the web page.
+- the settings form of the web page (*Settings for this run*), for the sections a run may
+  change, with the same explanations as here.
+
+Each section says what a change affects, so what must be computed again: the labels (and with
+them the meshes and the network), the meshes only, the network only, the previews only, or no
+result at all. A setting that differs from its section says so in its row. The settings of the
+web page's form also say when to change them.
 
 Sizes are physical: `_um` in micrometres, `_um2` in µm², `_um3` in µm³; change
 `acquisition.voxel_size_um` and every kernel follows. Every segmentation records its full
@@ -225,6 +232,7 @@ def _settings_table(
         ValueError: If a setting has no description.
     """
     properties = section.model_json_schema(ref_template=_REF_TEMPLATE)["properties"]
+    section_effect = _section_extra(section).get(EFFECT_KEY)
     rows: list[str] = []
     for name, field in section.model_fields.items():
         if section_of(field) is not None:
@@ -236,10 +244,72 @@ def _settings_table(
             f"`{name}`",
             f"`{json.dumps(default, ensure_ascii=False)}`",
             accepts(properties[name], defs, default),
-            field.description,
+            _meaning(field, section_effect),
         )
         rows.append("| " + " | ".join(_cell(c) for c in cells) + " |")
     return [*_TABLE_HEADER, *rows] if rows else []
+
+
+def _extra(declared: object) -> Mapping[str, Json]:
+    """Read what a section or a setting declares for the forms (``json_schema_extra``).
+
+    Args:
+        declared: A section's ``model_config["json_schema_extra"]`` or a field's.
+
+    Returns:
+        The declared keys (empty if none).
+    """
+    return declared if isinstance(declared, Mapping) else {}
+
+
+def _section_extra(section: type[BaseModel]) -> Mapping[str, Json]:
+    """Read what a section declares about itself (its effect, its level).
+
+    Args:
+        section: The section.
+
+    Returns:
+        Its declared keys.
+    """
+    return _extra(section.model_config.get("json_schema_extra"))
+
+
+def _meaning(field: "FieldInfo", section_effect: str | None) -> str:
+    """Write a setting's meaning: its description, when to change it, and its own effect.
+
+    Args:
+        field: The setting.
+        section_effect: What a change of its section affects.
+
+    Returns:
+        The text of the Meaning cell.
+    """
+    extra = _extra(field.json_schema_extra)
+    text = field.description or ""
+    if ADVICE_KEY in extra:
+        text += f" *When to change it:* {extra[ADVICE_KEY]}"
+    effect = extra.get(EFFECT_KEY)
+    if effect is not None and effect != section_effect:
+        text += f" *A change affects {EFFECT_TEXT[Effect(effect)]}.*"
+    return text
+
+
+def _section_note(section: type[BaseModel]) -> list[str]:
+    """Write what a change of a section's settings affects, and if it is experimental.
+
+    Args:
+        section: The section.
+
+    Returns:
+        The note's paragraph (none if the section declares nothing).
+    """
+    extra = _section_extra(section)
+    if EFFECT_KEY not in extra:
+        return []
+    note = f"A change here affects {EFFECT_TEXT[Effect(extra[EFFECT_KEY])]}."
+    if extra.get(LEVEL_KEY) == Level.EXPERIMENTAL:
+        note = f"**Experimental, off by default.** {note}"
+    return ["", note]
 
 
 def _value_at(values: Mapping[str, Json], path: str) -> Mapping[str, Json]:
@@ -276,7 +346,7 @@ def render_configuration() -> str:
         for path, section in iter_sections(root):
             title = f"`{path}`"
             toc.append(f"  - [{title}](#{_anchor(title)})")
-            body += ["", f"### {title}", "", _prose(section.__doc__)]
+            body += ["", f"### {title}", "", _prose(section.__doc__), *_section_note(section)]
             table = _settings_table(section, path, _value_at(values, path), defs)
             body += ["", *table] if table else []
     lines = [

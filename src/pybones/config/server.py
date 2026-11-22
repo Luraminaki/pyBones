@@ -1,15 +1,17 @@
 """Schema of the web server configuration (``server.json``), kept apart from the results'."""
 
-from typing import Annotated
+from typing import Annotated, ClassVar
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 
-from pybones.config.fields import FileName, Section
+from pybones.config.fields import Effect, FileName, Level, Section, section_config
 from pybones.meshing.formats import MeshFormat
 
 
 class HttpConfig(Section):
     """Address of the web server (local by default: no authentication)."""
+
+    model_config: ClassVar[ConfigDict] = section_config(Effect.NONE, Level.ADVANCED)
 
     host: Annotated[str, Field(min_length=1)] = Field(description="Interface to listen on.")
     port: int = Field(ge=1, le=65535, description="TCP port.")
@@ -20,6 +22,8 @@ class HttpConfig(Section):
 
 class LibraryConfig(Section):
     """Folders the web server reads stacks from and writes segmentations to."""
+
+    model_config: ClassVar[ConfigDict] = section_config(Effect.NONE, Level.ADVANCED)
 
     data_dir: Annotated[str, Field(min_length=1)] = Field(
         description="Folder of the slice stacks (directories or zip archives)."
@@ -35,6 +39,8 @@ class LibraryConfig(Section):
 
 class ApiConfig(Section):
     """Limits and timings of the web API."""
+
+    model_config: ClassVar[ConfigDict] = section_config(Effect.NONE, Level.ADVANCED)
 
     max_preview_scale: float = Field(
         gt=0.0,
@@ -57,6 +63,8 @@ class ServerConfig(Section):
     :class:`PyBonesConfig`, and deployment settings are neither results nor
     reproducibility information.
     """
+
+    model_config: ClassVar[ConfigDict] = section_config(Effect.NONE, Level.ADVANCED)
 
     http: HttpConfig
     library: LibraryConfig

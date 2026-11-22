@@ -2,8 +2,10 @@
 
 import { api, JOB_KINDS } from './api.js';
 import { initJobs, JOB_FINISHED } from './jobs.js';
-import { initLibrary, prefill, reloadLists, renderSegmentations, settingsDiff } from './library.js';
+import { initLibrary, prefill, reloadLists, renderSegmentations } from './library.js';
 import { initNetwork, showSegmentation as showNetwork } from './network.js';
+import { initSettingsForm } from './settings_form.js';
+import { settingsDiff } from './settings_model.js';
 import { initSlices, showSegmentation as showSlices } from './slices.js';
 import { initTheme } from './theme.js';
 import { baseName, LABELS, percent, recall, remember, toast } from './ui.js';
@@ -77,7 +79,7 @@ async function segmentAgain() {
   }
   const overrides = settingsDiff(baseConfig, meta.config, serverInfo.overridable_sections);
   const dataset = baseName(meta.source);
-  if (!prefill(dataset, overrides)) {
+  if (!prefill(dataset, meta.config, selected)) {
     toast(`${dataset} is no longer in ${serverInfo.data_dir}: pick a stack`, { error: true });
   } else {
     const changed = overrides.length ? `${overrides.length} setting(s) as in ${selected}` : 'default settings';
@@ -114,8 +116,9 @@ async function main() {
   initTheme(document.getElementById('theme-toggle'));
   let server;
   let config;
+  let schema;
   try {
-    [server, config] = await Promise.all([api.server(), api.config()]);
+    [server, config, schema] = await Promise.all([api.server(), api.config(), api.configSchema()]);
   } catch (err) {
     toast(`pyBones cannot be reached: ${err.message}`, { error: true });
     return;
@@ -124,7 +127,7 @@ async function main() {
   baseConfig = config;
   serverInfo = server;
   document.getElementById('version').textContent = `v${server.version}`;
-  initLibrary(server, colors);
+  initLibrary(server, colors, initSettingsForm(schema, config, server.overridable_sections));
   initSlices(server, colors);
   initNetwork();
   document.getElementById('refresh').addEventListener('click', refresh);

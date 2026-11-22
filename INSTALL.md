@@ -210,8 +210,12 @@ The page, in a few steps:
 1. **New segmentation**: pick a stack of `data/`, keep or change the suggested name, and press
    *Segment*. Each run gets its own name; to run the segmentation you are looking at again (e.g. with
    one setting changed), press *Segment again…* under its title: the form is filled with its stack
-   and its settings. Under *Settings for this run*, one `section.key=value` per line changes the
-   configuration for this run only, e.g. `refinement.enabled=false`. The *Jobs* panel shows the stage,
+   and its settings. *Edit settings…* opens the settings a run may change: each one says what it
+   is, when to change it and what a change affects; values are checked as you type, changed ones
+   are marked, and a line under the form sums up what differs (from the defaults, or from the run
+   it started from). *Experimental* settings come first, off by default; *Show advanced
+   settings* reveals the rest. Only the changed values are sent, and recorded with the run. The
+   *Jobs* panel shows the stage,
    the progress, the time elapsed and the time left (~<!-- pb:Seconds -->24<!-- /pb --> s in all on
    the sample); *Cancel* stops the run and removes its partial files.
 2. **Slices**: when the run ends, the new segmentation opens. Drag the slider to move through the

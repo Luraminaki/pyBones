@@ -11,6 +11,29 @@ from package metadata at runtime; every segmentation records it in its
 
 ## Unreleased
 
+- Web page: a settings form for a new run, built from the configuration's schema (the free-text
+  box of overrides is gone):
+  - Every setting a run may change shows what it is, *when to change it* (new advice on each
+    one, also in docs/CONFIGURATION.md) and, where it differs from its section, what a change
+    affects.
+  - Sections are grouped: *Experimental* first (`bone_side`, thin vessels), the common ones,
+    then *Advanced* behind a switch.
+  - Values are checked as typed (type, bounds); changes are marked, with a reset per setting
+    and for all.
+  - A summary says what the changes affect, against the defaults or, after *Segment again…*,
+    against the run the form started from.
+  - Only changed values are sent, so the API is unchanged. Invalid values the server refuses
+    come back per setting (`{loc: ["config", ...path], msg}`) and are shown next to it.
+- Configuration: every section declares what a change of it affects (the labels, the meshes,
+  the network, the previews, or no result) and its level (common, advanced, experimental).
+  Settings that differ say so: threads, deconvolution blocks and progress weights affect no
+  result, and neither do the quantification backends (same results). `tests/config/test_effects.py`
+  refuses a section or a form setting without them. The segmentation sections moved to
+  `config/segmentation.py` (`schema.py` would have passed 500 lines).
+- The golden baseline's fingerprint covers every section whose effect is the labels, so
+  `thin_vessels` too (it was a fixed list without it); scores unchanged.
+- `thin_vessels` can be set from the web page (it was missing from the sections a run may
+  override).
 - Thin vessels the blur hides, an optional last pass (`thin_vessels.enabled`, **off by default**):
   - What it does: the stack is deconvolved (Richardson-Lucy with the measured blur, σ 4.4 µm,
     3 iterations). Voxels labelled background or bone that then reach the vessel-core threshold
@@ -29,6 +52,9 @@ from package metadata at runtime; every segmentation records it in its
     slice. Pieces are linked across slices as the refinement does.
   - New stages `sharpen` and `thin`, with measured progress weights. `meta.json` records what
     the pass added (`thin_vessels`).
+  - `python -m tools.report figures` also times a segmentation with the pass on, so its stage
+    weights are checked like the others (it warns when one drifts). `bone_side` adds no stage
+    and barely moves the others (classify 0.615 -> 0.63 of the run).
   - New modules: `imaging/deconvolution.py` and `segmentation/thin_vessels.py`.
   - The configuration gains a section: outputs of 0.7.0 must be segmented again.
 - INSTALL: a LABELLING CROPS section for whoever labels the real scan. It covers starting the

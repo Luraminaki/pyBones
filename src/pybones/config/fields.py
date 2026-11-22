@@ -1,10 +1,14 @@
 """Field types shared by the configuration schemas: physical ranges, file names, sections."""
 
-from typing import Annotated, ClassVar
+from enum import StrEnum
+from typing import TYPE_CHECKING, Annotated, ClassVar
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
 from pybones.utils.constants import UINT8_MAX
+
+if TYPE_CHECKING:
+    from pydantic.config import JsonDict
 
 #: Physical quantities: generous but finite ranges (1 m, 1 m², 1 m³ as upper bounds).
 Micrometres = Annotated[float, Field(gt=0.0, le=1e6)]
@@ -39,6 +43,83 @@ def _plain_name(name: str) -> str:
 
 
 FileName = Annotated[str, AfterValidator(_plain_name)]
+
+
+class Effect(StrEnum):
+    """What a change of a setting affects: what must be computed again after it."""
+
+    LABELS = "labels"
+    MESHES = "meshes"
+    NETWORK = "network"
+    PREVIEWS = "previews"
+    NONE = "none"
+
+
+#: What each effect means, for the forms and the reference (written once, here).
+EFFECT_TEXT = {
+    Effect.LABELS: "the segmentation's labels, and so its meshes and its network",
+    Effect.MESHES: "the meshes only",
+    Effect.NETWORK: "the measured network only",
+    Effect.PREVIEWS: "the preview images only",
+    Effect.NONE: "no result (speed, memory, progress or file names)",
+}
+
+
+class Level(StrEnum):
+    """How prominently a form shows a section."""
+
+    COMMON = "common"
+    ADVANCED = "advanced"
+    EXPERIMENTAL = "experimental"
+
+
+#: Keys the schemas add to the JSON schema (``json_schema_extra``) for the forms.
+EFFECT_KEY, ADVICE_KEY, LEVEL_KEY, EFFECTS_KEY = "effect", "advice", "level", "effects"
+
+
+def section_config(effect: Effect, level: Level = Level.COMMON) -> ConfigDict:
+    """Build a section's pydantic configuration: strict, immutable, and what it affects.
+
+    Args:
+        effect: What a change of its settings affects (a setting may say otherwise).
+        level: How prominently a form shows it.
+
+    Returns:
+        The ``model_config`` of the section.
+    """
+    return ConfigDict(
+        extra="forbid",
+        frozen=True,
+        json_schema_extra={EFFECT_KEY: effect.value, LEVEL_KEY: level.value},
+    )
+
+
+def advice(text: str, effect: Effect | None = None) -> "JsonDict":
+    """Describe when to change a setting, and what it affects if not its section's effect.
+
+    Args:
+        text: When to change it (the description says what it is).
+        effect: What a change affects, when it differs from its section's.
+
+    Returns:
+        The field's ``json_schema_extra``.
+    """
+    extra: JsonDict = {ADVICE_KEY: text}
+    if effect is not None:
+        extra[EFFECT_KEY] = effect.value
+    return extra
+
+
+def affects(effect: Effect) -> "JsonDict":
+    """Say what a change of a setting affects, when it differs from its section's.
+
+    Args:
+        effect: What a change affects.
+
+    Returns:
+        The field's ``json_schema_extra``.
+    """
+    return {EFFECT_KEY: effect.value}
 
 
 class Section(BaseModel):

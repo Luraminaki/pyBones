@@ -19,12 +19,15 @@ import json
 import math
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import numpy as np
 import pytest
+from pydantic import BaseModel
 
+from pybones.config.fields import EFFECT_KEY, Effect
 from pybones.config.loader import load_config
+from pybones.config.schema import PyBonesConfig
 from pybones.segmentation.pipeline import run_segmentation
 from pybones.segmentation.results import load_labels
 from pybones.utils.constants import JSON_INDENT
@@ -33,9 +36,6 @@ from tools.phantom.scoring import score_phantom
 from tools.phantom.settings import PhantomSettings, load_settings
 from tools.phantom.storage import save_phantom
 from tools.report.history import score_columns
-
-if TYPE_CHECKING:
-    from pybones.config.schema import PyBonesConfig
 
 GOLDEN_FILE = Path(__file__).with_name("golden_phantom.json")
 #: Set to 1 to rewrite the golden file from the current scores.
@@ -50,14 +50,27 @@ COUNTS = {
     "vessels": {"count": 25},
     "bursts": {"count": 1, "radius_um": [110, 150]},
 }
-#: Configuration sections that change the segmentation (logging, rendering... do not).
-SEGMENTATION_SECTIONS = (
-    "acquisition",
-    "thresholds",
-    "segmentation",
-    "tubularity",
-    "z_smoothing",
-    "refinement",
+#: Configuration sections that change the segmentation: those whose declared effect is the
+#: labels (logging, meshing, rendering... are not), so a new one cannot be forgotten.
+
+
+def changes_labels(section: object) -> bool:
+    """Tell whether a root section declares that a change of it changes the labels.
+
+    Args:
+        section: A field's annotation.
+
+    Returns:
+        Whether it is a section whose declared effect is :attr:`Effect.LABELS`.
+    """
+    if not (isinstance(section, type) and issubclass(section, BaseModel)):
+        return False
+    extra = section.model_config.get("json_schema_extra")
+    return isinstance(extra, dict) and extra.get(EFFECT_KEY) == Effect.LABELS
+
+
+SEGMENTATION_SECTIONS = tuple(
+    name for name, field in PyBonesConfig.model_fields.items() if changes_labels(field.annotation)
 )
 _SCORES_KEY = "scores"
 _PHANTOM_KEY = "phantom_digest"

@@ -103,7 +103,7 @@ button.small { padding: 0.2rem 0.6rem; font-size: 0.85rem; }
 button.danger { background: transparent; color: var(--danger); border-color: var(--border); }
 
 label { display: block; font-size: 0.86rem; color: var(--muted); margin: 0.6rem 0 0.25rem; }
-select, input[type="text"], input:not([type]), textarea {
+select, input[type="text"], input[type="number"], input:not([type]), textarea {
   width: 100%; padding: 0.4rem 0.55rem; border: 1px solid var(--border); border-radius: 7px;
   background: var(--surface);
 }
@@ -229,3 +229,36 @@ progress { width: 100%; height: 6px; accent-color: var(--accent); }
 .stats { display: grid; grid-template-columns: max-content 1fr; gap: 0.35rem 1.2rem; margin: 0 0 1rem; }
 .stats dt { color: var(--muted); }
 .stats dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+/* Settings of a new run (dialog) */
+.settings-line { display: flex; align-items: center; gap: 0.6rem; margin-top: 0.7rem; }
+.settings-line .hint { flex: 1; margin: 0; }
+.settings-dialog {
+  width: min(900px, 95vw); max-height: 90vh; padding: 0; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface); color: var(--text);
+}
+.settings-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.settings-frame { display: flex; flex-direction: column; max-height: 90vh; }
+.settings-head, .settings-foot { display: flex; align-items: center; gap: 0.8rem; padding: 0.8rem 1.1rem; }
+.settings-head { border-bottom: 1px solid var(--border); justify-content: space-between; }
+.settings-head h2 { margin: 0; font-size: 1.1rem; }
+.settings-frame > .hint { padding: 0 1.1rem; }
+.settings-foot { border-top: 1px solid var(--border); }
+.settings-foot .hint { flex: 1; margin: 0; }
+.settings-foot button[type] { width: auto; margin-top: 0; }
+.settings-body { overflow-y: auto; padding: 0.4rem 1.1rem 1rem; }
+.settings-group h3 { font-size: 0.95rem; margin: 1rem 0 0.2rem; }
+.settings-section { border-top: 1px solid var(--border); padding: 0.4rem 0; }
+.settings-section summary { color: var(--text); }
+.section-changes { color: var(--accent); }
+.setting { padding: 0.5rem 0 0.5rem 0.7rem; border-left: 3px solid transparent; }
+.setting.changed { border-left-color: var(--accent); }
+.setting.invalid { border-left-color: var(--danger); }
+.setting label { margin: 0 0 0.25rem; color: var(--text); }
+.changed-mark { display: none; margin-left: 0.5rem; color: var(--accent); font-size: 0.8rem; }
+.setting.changed .changed-mark { display: inline; }
+.setting-input { display: flex; gap: 0.5rem; align-items: center; max-width: 28rem; }
+.setting-input input[type="number"], .setting-input input[type="text"], .setting-input select { flex: 1; }
+.setting .advice { font-style: italic; }
+.setting-error { color: var(--danger); font-size: 0.86rem; margin: 0.3rem 0 0; }
+label.switch { display: flex; gap: 0.4rem; align-items: center; margin: 0; }
