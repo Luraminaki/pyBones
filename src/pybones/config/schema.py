@@ -62,13 +62,33 @@ def _keyed_by(labels: tuple[Label, ...]) -> AfterValidator:
 class IOConfig(Section):
     """File names and slice discovery rules."""
 
-    slice_extensions: tuple[Annotated[str, Field(pattern=r"^\.\w+$")], ...] = Field(min_length=1)
-    ignored_name_prefixes: tuple[Annotated[str, Field(min_length=1)], ...]
-    ignored_directories: tuple[Annotated[str, Field(min_length=1)], ...]
-    labels_file: Annotated[FileName, Field(pattern=r"\.npy$")]
-    meta_file: Annotated[FileName, Field(pattern=r"\.json$")]
-    scratch_file_template: Annotated[FileName, Field(pattern=r"\{stage\}.*\.npy$")]
-    mask_png_template: Annotated[FileName, Field(pattern=r"\{label\}.*\{index[^}]*\}.*\.png$")]
+    slice_extensions: tuple[Annotated[str, Field(pattern=r"^\.\w+$")], ...] = Field(
+        min_length=1, description="Slice file extensions, in lower case (files may use upper case)."
+    )
+    ignored_name_prefixes: tuple[Annotated[str, Field(min_length=1)], ...] = Field(
+        description="Files whose name starts with one of these are skipped (e.g. macOS `._`)."
+    )
+    ignored_directories: tuple[Annotated[str, Field(min_length=1)], ...] = Field(
+        description="Folders skipped inside a stack (e.g. `__MACOSX` in a zip)."
+    )
+    labels_file: Annotated[FileName, Field(pattern=r"\.npy$")] = Field(
+        description="Label volume of a segmentation (uint8 NumPy array): a file name ending "
+        + "in `.npy`."
+    )
+    meta_file: Annotated[FileName, Field(pattern=r"\.json$")] = Field(
+        description="Metadata of a segmentation (source, thresholds, timings, configuration): a "
+        + "file name ending in `.json`."
+    )
+    scratch_file_template: Annotated[FileName, Field(pattern=r"\{stage\}.*\.npy$")] = Field(
+        description="Intermediate volumes of a run, one per `{stage}` (deleted at the end): a file "
+        + "name ending in `.npy`."
+    )
+    mask_png_template: Annotated[FileName, Field(pattern=r"\{label\}.*\{index[^}]*\}.*\.png$")] = (
+        Field(
+            description="Image sequence written by `pybones export`, one PNG per slice: a file "
+            + "name with `{label}` and `{index}` (a format, e.g. `{index:04d}`), ending in `.png`."
+        )
+    )
 
 
 class PipelineConfig(Section):
@@ -107,8 +127,8 @@ class LoggingConfig(Section):
     directory: Annotated[str, Field(min_length=1)] = Field(
         description="Directory of the log files (relative to the working directory)."
     )
-    file_level: LogLevel
-    console_level: LogLevel
+    file_level: LogLevel = Field(description="Lowest level written to the log file.")
+    console_level: LogLevel = Field(description="Lowest level shown in the terminal.")
     max_bytes: int = Field(ge=1024, le=1 << 30, description="Size at which a log file rotates.")
     backup_count: int = Field(ge=0, le=100, description="Rotated files kept per process.")
     max_files: int = Field(
@@ -218,7 +238,9 @@ class SegmentationConfig(Section):
 class TubularityConfig(Section):
     """Multi-scale 3D Hessian tube-vs-plate ratio, used to veto plate-like vessels."""
 
-    enabled: bool
+    enabled: bool = Field(
+        description="Compute it (only with the refinement; off: no plate veto, faster)."
+    )
     scales_um: tuple[Annotated[float, Field(gt=0.0, le=1e4)], ...] = Field(
         min_length=1, description="Gaussian scales (about structure radius / sqrt 2)."
     )
@@ -233,7 +255,9 @@ class ZSmoothingConfig(Section):
 class RefinementConfig(Section):
     """3D connectivity refinement (physical units)."""
 
-    enabled: bool
+    enabled: bool = Field(
+        description="Decide the ambiguous blobs in 3D (off: they become bone, slice by slice)."
+    )
     vessel_contact_ratio: float = Field(
         gt=0.0,
         le=1000.0,
@@ -274,17 +298,15 @@ class TaubinConfig(Section):
 
 
 class MeshConfig(Section):
-    """Surface extraction and mesh files.
-
-    ``downsample`` sets the grid the surface is built on: a factor of 2 averages blocks
-    of 2x2x2 voxels (a 6 µm grid at 3 µm voxels), so details smaller than a block are
-    smoothed; 1 is full resolution, with about 4 times more triangles.
-    """
+    """Surface extraction and mesh files."""
 
     downsample: Annotated[
         dict[str, Annotated[int, Field(ge=1, le=_MAX_DOWNSAMPLE)]],
         _keyed_by(FOREGROUND_LABELS),
-    ]
+    ] = Field(
+        description="Grid of the surface, per label: 2 averages 2x2x2 voxel blocks (details "
+        + "smaller than a block are smoothed); 1 is full resolution, about 4 times more triangles."
+    )
     step_size: int = Field(ge=1, le=50, description="Marching-cubes step (coarser if larger).")
     iso_level: float = Field(gt=0.0, lt=1.0, description="Occupancy level of the surface.")
     chunk_faces: int = Field(ge=1024, le=10**9, description="Triangles per write chunk.")
@@ -330,10 +352,16 @@ class MeshConfig(Section):
 class RenderConfig(Section):
     """2D overlays."""
 
-    alpha: Fraction
-    low_percentile: float = Field(ge=0.0, le=100.0)
-    high_percentile: float = Field(ge=0.0, le=100.0)
-    colors_bgr: Annotated[dict[str, ColorBGR], _keyed_by(_COLORED_LABELS)]
+    alpha: Fraction = Field(description="Opacity of the label colours over the slice.")
+    low_percentile: float = Field(
+        ge=0.0, le=100.0, description="Intensity percentile shown black (contrast stretch)."
+    )
+    high_percentile: float = Field(
+        ge=0.0, le=100.0, description="Intensity percentile shown white (above low_percentile)."
+    )
+    colors_bgr: Annotated[dict[str, ColorBGR], _keyed_by(_COLORED_LABELS)] = Field(
+        description="Colour of each label, as (blue, green, red) 0-255."
+    )
 
     @model_validator(mode="after")
     def _ordered_percentiles(self) -> Self:
@@ -351,7 +379,7 @@ class RenderConfig(Section):
 
 
 class PyBonesConfig(Section):
-    """Root of the configuration file."""
+    """Root of the configuration (``default.json``), recorded by every segmentation."""
 
     io: IOConfig
     logging: LoggingConfig
