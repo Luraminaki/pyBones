@@ -42,13 +42,14 @@ ways, each taking only the values it changes:
 - a JSON file of your own, `pybones --config my_config.json ...` (`pybones config` prints the
   effective configuration, a good start);
 - `--set section.key=value` on the command line, repeated as needed (the value is JSON);
-- the settings form of the web page (*Settings for this run*), for the sections a run may
-  change, with the same explanations as here.
+- the web page's settings forms, with the same explanations as here: a new run's (the sections
+  a segmentation may change), the 3D tab's (`mesh`) and the Network tab's (`quantification`,
+  file names aside); each job records the settings it used.
 
 Each section says what a change affects, so what must be computed again: the labels (and with
 them the meshes and the network), the meshes only, the network only, the previews only, or no
 result at all. A setting that differs from its section says so in its row. The settings of the
-web page's form also say when to change them.
+web page's forms also say when to change them.
 
 Sizes are physical: `_um` in micrometres, `_um2` in µm², `_um3` in µm³; change
 `acquisition.voxel_size_um` and every kernel follows. Every segmentation records its full

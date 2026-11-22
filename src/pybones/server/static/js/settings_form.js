@@ -1,6 +1,7 @@
-// Settings form of a new run, built from the configuration's JSON schema: every setting a run
-// may change, with what it is, when to change it and what a change affects. Values are checked
-// as typed, changes are marked, and the server's own checks come back next to their setting.
+// Settings forms of the jobs (a new run, a mesh, a quantification), built from the
+// configuration's JSON schema: every setting a job may change, with what it is, when to change
+// it and what a change affects. Values are checked as typed, changes are marked, and the
+// server's own checks come back next to their setting. Each form lives in a dialog of its own.
 
 import { el } from './ui.js';
 import {
@@ -16,6 +17,8 @@ const GROUPS = [
 // First element of an invalid setting's location in the server's answer (then its path).
 const CONFIG_LOCATION = 'config';
 const DEFAULTS = 'the defaults';
+const INTRO = 'Each setting says what it is, when to change it and what a change affects. Only the '
+  + 'settings that differ from the defaults are sent with the job, and recorded with its result.';
 
 /**
  * @typedef {object} SettingsForm
@@ -23,6 +26,10 @@ const DEFAULTS = 'the defaults';
  * @property {function(): boolean} valid Whether every typed value is acceptable.
  * @property {function(object, string): void} startFrom Fill in a run's settings.
  * @property {function(*): boolean} showErrors Show the server's errors next to their settings.
+ * @property {function(object): string} describe Say how a configuration (or a record of one
+ *   section) differs from the defaults.
+ * @property {function(object): string[]} differences The settings whose value in a configuration
+ *   (or a record of one section) differs from the form's.
  * @property {function(): void} open Open the form.
  */
 
@@ -67,19 +74,45 @@ function inputFor(field, id, onChange) {
 }
 
 /**
- * Build the settings form into its dialog.
- * @param {object} schema The configuration's JSON schema.
- * @param {object} base The server's configuration (the defaults of a new run).
- * @param {string[]} roots Sections a run may change.
+ * Build the frame of a settings dialog: title, advanced switch, body, summary and buttons.
+ * @param {string} title Its title.
+ * @param {string} key A short name, unique on the page (ids of its elements).
+ * @returns {{dialog: HTMLDialogElement, body: HTMLElement, advanced: HTMLInputElement,
+ *   effect: HTMLElement, reset: HTMLButtonElement}} The dialog and the parts the form fills.
+ */
+function frame(title, key) {
+  const advanced = el('input', { type: 'checkbox', id: `${key}-advanced` });
+  const body = el('div', { class: 'settings-body' });
+  const effect = el('p', { class: 'hint', 'aria-live': 'polite' });
+  const reset = el('button', { type: 'button', class: 'ghost' }, 'Back to the defaults');
+  const dialog = el('dialog', { class: 'settings-dialog', 'aria-labelledby': `${key}-title` },
+    el('form', { method: 'dialog', class: 'settings-frame' },
+      el('header', { class: 'settings-head' },
+        el('h2', { id: `${key}-title` }, title),
+        el('label', { class: 'switch' }, advanced, ' Show advanced settings')),
+      el('p', { class: 'hint' }, INTRO),
+      body,
+      el('footer', { class: 'settings-foot' }, effect, reset, el('button', { type: 'submit' }, 'Done'))));
+  document.body.append(dialog);
+  return { dialog, body, advanced, effect, reset };
+}
+
+/**
+ * Build a settings form, in a dialog of its own.
+ * @param {object} options What the form shows.
+ * @param {object} options.schema The configuration's JSON schema.
+ * @param {object} options.base The server's configuration (the defaults).
+ * @param {string[]} options.roots Sections the form shows (those its kind of job may change).
+ * @param {string[]} options.kept Paths inside them that stay the server's (not shown).
+ * @param {string} options.title The dialog's title.
+ * @param {string} options.key A short name, unique on the page (ids of its elements).
+ * @param {HTMLElement[]} options.summaries Elements outside the dialog showing its summary.
  * @returns {SettingsForm} The form.
  */
-export function initSettingsForm(schema, base, roots) {
-  const dialog = document.getElementById('settings-dialog');
-  const body = document.getElementById('settings-body');
-  const summaries = [document.getElementById('settings-summary'), document.getElementById('settings-effect')];
-  const advanced = document.getElementById('settings-advanced');
+export function createSettingsForm({ schema, base, roots, kept, title, key, summaries }) {
+  const { dialog, body, advanced, effect, reset } = frame(title, key);
   const texts = schema.effects;
-  const sections = readSections(schema, roots);
+  const sections = readSections(schema, roots, kept);
   const fields = sections.flatMap((s) => s.fields);
   const rows = new Map(); // setting path -> {row, input, error}
   const counters = new Map(); // section path -> its count of changes
@@ -99,7 +132,7 @@ export function initSettingsForm(schema, base, roots) {
     }
     const against = reference ?? { name: DEFAULTS, config: base };
     const text = describeChanges(changedFields(fields, against.config, current), against.name, texts);
-    for (const node of summaries) node.textContent = text;
+    for (const node of [...summaries, effect]) node.textContent = text;
   };
 
   const showError = (field, message) => {
@@ -118,7 +151,7 @@ export function initSettingsForm(schema, base, roots) {
   };
 
   const fieldRow = (field, section) => {
-    const id = `setting-${field.path}`;
+    const id = `${key}-${field.path}`;
     const input = inputFor(field, id, () => {
       const result = checkValue(field, field.kind === 'boolean' ? input.checked : input.value);
       if ('error' in result) {
@@ -129,7 +162,7 @@ export function initSettingsForm(schema, base, roots) {
       setValue(current, field.path, result.value);
       refresh();
     });
-    const reset = () => {
+    const resetField = () => {
       setValue(current, field.path, structuredClone(valueAt(base, field.path)));
       display(field, input, valueAt(current, field.path));
       showError(field, '');
@@ -142,7 +175,7 @@ export function initSettingsForm(schema, base, roots) {
     const row = el('div', { class: 'setting' },
       el('label', { for: id }, el('code', {}, field.name), el('span', { class: 'changed-mark' }, 'changed')),
       el('div', { class: 'setting-input' }, input,
-        el('button', { type: 'button', class: 'ghost small', title: 'Back to the default', onclick: reset }, 'Reset')),
+        el('button', { type: 'button', class: 'ghost small', title: 'Back to the default', onclick: resetField }, 'Reset')),
       help, error);
     rows.set(field.path, { row, input, error });
     return row;
@@ -163,6 +196,7 @@ export function initSettingsForm(schema, base, roots) {
     body.append(group);
   }
   const advancedGroup = body.querySelector(`[data-level="${LEVELS.ADVANCED}"]`);
+  advanced.closest('label').hidden = advancedGroup === null;
   advanced.addEventListener('change', () => { if (advancedGroup) advancedGroup.hidden = !advanced.checked; });
   advanced.dispatchEvent(new Event('change'));
 
@@ -171,13 +205,19 @@ export function initSettingsForm(schema, base, roots) {
     for (const field of fields) showError(field, '');
     refresh();
   };
-  document.getElementById('settings-reset').addEventListener('click', () => {
+  reset.addEventListener('click', () => {
     current = structuredClone(base);
     reference = null;
     fill();
   });
-  document.getElementById('settings-open').addEventListener('click', () => dialog.showModal());
   fill();
+
+  /**
+   * Fill a configuration's missing sections from the defaults (a record holds one section).
+   * @param {object} config A configuration, whole or in part.
+   * @returns {object} A whole configuration.
+   */
+  const whole = (config) => ({ ...base, ...config });
 
   return {
     overrides: () => settingsDiff(base, current, roots),
@@ -205,6 +245,8 @@ export function initSettingsForm(schema, base, roots) {
       }
       return located > 0;
     },
+    describe: (config) => describeChanges(changedFields(fields, base, whole(config)), DEFAULTS, texts),
+    differences: (config) => changedFields(fields, whole(config), current).map((field) => field.path),
     open: () => dialog.showModal(),
   };
 }

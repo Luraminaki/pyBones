@@ -73,11 +73,14 @@ function kindOf(definition) {
  * Read the sections a form shows, depth first, in the schema's order.
  * @param {object} schema The configuration's JSON schema (`GET /api/config/schema`).
  * @param {string[]} roots Top-level sections to read, in the schema's order.
+ * @param {string[]} [kept] Paths that stay the server's: left out, with what lies below them.
  * @returns {Section[]} Every section below them, each with its own settings.
  */
-export function readSections(schema, roots) {
+export function readSections(schema, roots, kept = []) {
   const sections = [];
+  const isKept = (path) => kept.some((k) => path === k || path.startsWith(`${k}.`));
   const walk = (definition, path, inherited) => {
+    if (isKept(path)) return;
     const section = {
       path,
       description: definition.description ?? '',
@@ -93,6 +96,7 @@ export function readSections(schema, roots) {
         walk(target, fieldPath, section.effect);
         continue;
       }
+      if (isKept(fieldPath)) continue;
       section.fields.push({
         path: fieldPath,
         name,
@@ -167,26 +171,48 @@ export function checkValue(field, raw) {
 }
 
 /**
+ * @typedef {object} Difference
+ * @property {string} path Dotted path of the setting.
+ * @property {*} a Its value in the first configuration (undefined if absent).
+ * @property {*} b Its value in the second.
+ */
+
+/**
+ * List the settings whose values differ between two configurations (or two sections), walking
+ * both; lists count as single values.
+ * @param {*} a One configuration, or one section of it.
+ * @param {*} b The other.
+ * @param {string} [prefix] Path of what is compared (empty for a whole configuration).
+ * @returns {Difference[]} One entry per differing value, in the order met.
+ */
+export function settingDifferences(a, b, prefix = '') {
+  const differences = [];
+  const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const walk = (x, y, path) => {
+    if (isObject(x) && isObject(y)) {
+      for (const key of new Set([...Object.keys(x), ...Object.keys(y)])) {
+        walk(x[key], y[key], path ? `${path}.${key}` : key);
+      }
+    } else if (JSON.stringify(x) !== JSON.stringify(y)) {
+      differences.push({ path, a: x, b: y });
+    }
+  };
+  walk(a, b, prefix);
+  return differences;
+}
+
+/**
  * List the settings of `used` that differ from `base`, as `section.key=value` lines (the
- * overrides a run request takes), within the sections a run may override. Lists count as
- * single values.
+ * overrides a job request takes), within the sections it may override.
  * @param {object} base The server's configuration.
  * @param {object} used Another configuration.
  * @param {string[]} sections Sections a request may override.
  * @returns {string[]} One override line per differing value.
  */
 export function settingsDiff(base, used, sections) {
-  const lines = [];
-  const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
-  const walk = (a, b, path) => {
-    if (isObject(a) && isObject(b)) {
-      for (const key of Object.keys(b)) walk(a[key], b[key], [...path, key]);
-    } else if (JSON.stringify(a) !== JSON.stringify(b)) {
-      lines.push(`${path.join('.')}=${JSON.stringify(b)}`);
-    }
-  };
-  for (const section of sections) walk(base[section], used[section], [section]);
-  return lines;
+  return sections
+    .flatMap((section) => settingDifferences(base[section], used[section], section))
+    .map(({ path, b }) => `${path}=${JSON.stringify(b)}`);
 }
 
 /**

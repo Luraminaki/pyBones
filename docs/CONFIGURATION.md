@@ -9,13 +9,14 @@ ways, each taking only the values it changes:
 - a JSON file of your own, `pybones --config my_config.json ...` (`pybones config` prints the
   effective configuration, a good start);
 - `--set section.key=value` on the command line, repeated as needed (the value is JSON);
-- the settings form of the web page (*Settings for this run*), for the sections a run may
-  change, with the same explanations as here.
+- the web page's settings forms, with the same explanations as here: a new run's (the sections
+  a segmentation may change), the 3D tab's (`mesh`) and the Network tab's (`quantification`,
+  file names aside); each job records the settings it used.
 
 Each section says what a change affects, so what must be computed again: the labels (and with
 them the meshes and the network), the meshes only, the network only, the previews only, or no
 result at all. A setting that differs from its section says so in its row. The settings of the
-web page's form also say when to change them.
+web page's forms also say when to change them.
 
 Sizes are physical: `_um` in micrometres, `_um2` in µm², `_um3` in µm³; change
 `acquisition.voxel_size_um` and every kernel follows. Every segmentation records its full
@@ -258,12 +259,12 @@ A change here affects the meshes only.
 
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `downsample` | `{"bone": 2, "vessel": 2, "burst": 2}` | integer, 1 ≤ x ≤ 40, for each of `bone`, `vessel`, `burst` | Grid of the surface, per label: 2 averages 2x2x2 voxel blocks (details smaller than a block are smoothed); 1 is full resolution, about 4 times more triangles. |
-| `step_size` | `1` | integer, 1 ≤ x ≤ 50 | Marching-cubes step (coarser if larger). |
-| `iso_level` | `0.5` | 0 < x < 1 | Occupancy level of the surface. |
-| `chunk_faces` | `1048576` | integer, 1,024 ≤ x ≤ 1,000,000,000 | Triangles per write chunk. *A change affects no result (speed, memory, progress or file names).* |
-| `glb_position_bits` | `16` | `16` / `32` | GLB positions: 16-bit integers over the bounding box (error <= half of its size / 65535, 8-bit normals) or 32-bit floats. STL is always 32-bit. |
-| `stage_weights` | `{"occupancy": 0.3, "surface": 0.09, "smoothing": 0.53, "writing": 0.08}` | 0 < x ≤ 1, for each of `occupancy`, `surface`, `smoothing`, `writing` | Relative duration of each meshing stage, for the progress of a mesh job (measured on the vessels and the bone of the reference stack). *A change affects no result (speed, memory, progress or file names).* |
+| `downsample` | `{"bone": 2, "vessel": 2, "burst": 2}` | integer, 1 ≤ x ≤ 40, for each of `bone`, `vessel`, `burst` | Grid of the surface, per label: 2 averages 2x2x2 voxel blocks (details smaller than a block are smoothed); 1 is full resolution, about 4 times more triangles. *When to change it:* 1 for the finest surface of one label (files 4 times larger, a slower browser); 3 or 4 for a quick look at the bone. |
+| `step_size` | `1` | integer, 1 ≤ x ≤ 50 | Marching-cubes step (coarser if larger). *When to change it:* Rarely: the grid above coarsens more smoothly. |
+| `iso_level` | `0.5` | 0 < x < 1 | Occupancy level of the surface. *When to change it:* Rarely: 0.5 puts the surface halfway between label and background; lower draws the surface outside, higher inside. |
+| `chunk_faces` | `1048576` | integer, 1,024 ≤ x ≤ 1,000,000,000 | Triangles per write chunk. *When to change it:* Lower it if writing a large STL runs short of memory. *A change affects no result (speed, memory, progress or file names).* |
+| `glb_position_bits` | `16` | `16` / `32` | GLB positions: 16-bit integers over the bounding box (error <= half of its size / 65535, 8-bit normals) or 32-bit floats. STL is always 32-bit. *When to change it:* 32 for exact positions in other software (files a third larger); 16 is far below a voxel. |
+| `stage_weights` | `{"occupancy": 0.3, "surface": 0.09, "smoothing": 0.53, "writing": 0.08}` | 0 < x ≤ 1, for each of `occupancy`, `surface`, `smoothing`, `writing` | Relative duration of each meshing stage, for the progress of a mesh job (measured on the vessels and the bone of the reference stack). *When to change it:* Only if the progress bar runs unevenly; `python -m tools.report figures` measures them. *A change affects no result (speed, memory, progress or file names).* |
 
 ### `mesh.taubin`
 
@@ -273,9 +274,9 @@ A change here affects the meshes only.
 
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `iterations` | `10` | integer, 0 ≤ x ≤ 1,000 | λ\|μ passes (0 = no smoothing). |
-| `lambda_factor` | `0.5` | 0 < x ≤ 1 | Shrinking step (λ > 0). |
-| `mu_factor` | `-0.53` | -1 ≤ x < 0 | Inflating step (μ < -λ). |
+| `iterations` | `10` | integer, 0 ≤ x ≤ 1,000 | λ\|μ passes (0 = no smoothing). *When to change it:* 0 shows the raw voxel staircase; more smooths more, and rounds small details. |
+| `lambda_factor` | `0.5` | 0 < x ≤ 1 | Shrinking step (λ > 0). *When to change it:* Rarely: λ and μ together keep the volume (Taubin). |
+| `mu_factor` | `-0.53` | -1 ≤ x < 0 | Inflating step (μ < -λ). *When to change it:* Rarely: keep it slightly beyond -λ. |
 
 ### `quantification`
 
@@ -285,11 +286,11 @@ A change here affects the measured network only.
 
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `anchor_margin_um` | `3.0` | 0 ≤ x ≤ 1,000,000 | An end this much beyond its own radius from a face of the stack, or from a burst, continues there (it is not a free end). |
-| `stage_weights` | `{"cavities": 0.33, "skeleton": 0.56, "calibre": 0.05, "network": 0.06}` | 0 < x ≤ 1, for each of `cavities`, `skeleton`, `calibre`, `network` | Relative duration of each quantification stage (progress bar). *A change affects no result (speed, memory, progress or file names).* |
-| `max_radius_um` | `60.0` | 0 < x ≤ 1,000,000 | Largest vessel radius measured (distances are capped there). |
-| `distance_tile_slices` | `32` | integer, 1 ≤ x ≤ 10,000 | Depth of a tile of the scipy distance backend (memory). |
-| `distance_tile_pixels` | `256` | integer, 8 ≤ x ≤ 100,000 | In-plane side of a tile of the scipy distance backend. |
+| `anchor_margin_um` | `3.0` | 0 ≤ x ≤ 1,000,000 | An end this much beyond its own radius from a face of the stack, or from a burst, continues there (it is not a free end). *When to change it:* Raise it if ends just short of a face are counted as free. |
+| `stage_weights` | `{"cavities": 0.33, "skeleton": 0.56, "calibre": 0.05, "network": 0.06}` | 0 < x ≤ 1, for each of `cavities`, `skeleton`, `calibre`, `network` | Relative duration of each quantification stage (progress bar). *When to change it:* Only if the progress bar runs unevenly; `python -m tools.report figures` measures them. *A change affects no result (speed, memory, progress or file names).* |
+| `max_radius_um` | `60.0` | 0 < x ≤ 1,000,000 | Largest vessel radius measured (distances are capped there). *When to change it:* Raise it for a scan with thicker vessels than this one. |
+| `distance_tile_slices` | `32` | integer, 1 ≤ x ≤ 10,000 | Depth of a tile of the scipy distance backend (memory). *When to change it:* Lower it if the `scipy` backend runs out of memory. *A change affects no result (speed, memory, progress or file names).* |
+| `distance_tile_pixels` | `256` | integer, 8 ≤ x ≤ 100,000 | In-plane side of a tile of the scipy distance backend. *When to change it:* Lower it if the `scipy` backend runs out of memory. *A change affects no result (speed, memory, progress or file names).* |
 
 ### `quantification.backends`
 
@@ -299,9 +300,9 @@ A change here affects no result (speed, memory, progress or file names).
 
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `cavities` | `"pybones"` | `"pybones"` / `"scipy"` | Filling the cavities of the vessel mask. |
-| `skeleton` | `"scikit-image"` | `"scikit-image"` | Thinning the vessels to centrelines. |
-| `distances` | `"pybones"` | `"pybones"` / `"scipy"` | Distance to the wall (the calibre). |
+| `cavities` | `"pybones"` | `"pybones"` / `"scipy"` | Filling the cavities of the vessel mask. *When to change it:* Rarely: both give the same result; `scipy` cross-checks. |
+| `skeleton` | `"scikit-image"` | `"scikit-image"` | Thinning the vessels to centrelines. *When to change it:* Rarely: one backend today. |
+| `distances` | `"pybones"` | `"pybones"` / `"scipy"` | Distance to the wall (the calibre). *When to change it:* Use `scipy` for voxels that are not square in-plane, or to cross-check (much slower). |
 
 ### `quantification.pruning`
 
@@ -311,11 +312,11 @@ A change here affects the measured network only.
 
 | Setting | Default | Accepts | Meaning |
 |---|---|---|---|
-| `spur_radius_factor` | `2.0` | 0 ≤ x ≤ 100 | A free-end branch shorter than this many vessel radii at its fork is a bump of the surface. |
-| `min_spur_um` | `6.0` | 0 ≤ x ≤ 1,000,000 | ... and never shorter than this. |
-| `min_fragment_um` | `15.0` | 0 ≤ x ≤ 1,000,000 | Isolated branches shorter than this are specks. |
-| `loop_factor` | `1.5` | 0 ≤ x ≤ 100 | A loop shorter than this many vessel circumferences is a hole or a fold of the vessel mask: its longest branch is removed (0: loops kept). |
-| `junction_merge_factor` | `1.0` | 0 ≤ x ≤ 100 | Two forks joined by a branch shorter than this many times their radii together are one fork. |
+| `spur_radius_factor` | `2.0` | 0 ≤ x ≤ 100 | A free-end branch shorter than this many vessel radii at its fork is a bump of the surface. *When to change it:* Raise it if bumps of thick vessels count as branches; lower it to keep short real side branches. |
+| `min_spur_um` | `6.0` | 0 ≤ x ≤ 1,000,000 | ... and never shorter than this. *When to change it:* Raise it on a noisier mask, where thin vessels have bumps too. |
+| `min_fragment_um` | `15.0` | 0 ≤ x ≤ 1,000,000 | Isolated branches shorter than this are specks. *When to change it:* Lower it to count short isolated pieces (vessels cut by clots). |
+| `loop_factor` | `1.5` | 0 ≤ x ≤ 100 | A loop shorter than this many vessel circumferences is a hole or a fold of the vessel mask: its longest branch is removed (0: loops kept). *When to change it:* Raise it if junctions that are not forks remain around holes; 0 shows the raw loops. |
+| `junction_merge_factor` | `1.0` | 0 ≤ x ≤ 100 | Two forks joined by a branch shorter than this many times their radii together are one fork. *When to change it:* Raise it to merge more close forks (fewer false junctions, but real forks merged too); lower it to keep close forks apart. |
 
 ### `quantification.files`
 

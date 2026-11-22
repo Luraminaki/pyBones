@@ -16,9 +16,10 @@ from typing import TYPE_CHECKING
 import numpy as np
 from pydantic import ValidationError
 
+from pybones.api.operations import MeshRecord
 from pybones.io.slices import SliceStack
 from pybones.meshing.formats import MeshFormat
-from pybones.quantification.measures import NetworkSummary
+from pybones.quantification.pipeline import POINTS_KEY, SETTINGS_KEY, SUMMARY_KEY
 from pybones.segmentation.labels import FOREGROUND_LABELS
 from pybones.segmentation.results import IncompatibleOutputError, load_meta
 from pybones.server.schemas import (
@@ -26,6 +27,7 @@ from pybones.server.schemas import (
     MAX_ID_LENGTH,
     DatasetInfo,
     DatasetKind,
+    NetworkView,
     SegmentationSummary,
 )
 
@@ -39,9 +41,8 @@ if TYPE_CHECKING:
     from pybones.segmentation.results import SegmentationMeta
 
 _ID_RE = re.compile(ID_PATTERN)
-#: Keys of the quantification files read here (see :mod:`pybones.quantification.pipeline`).
-_SUMMARY_KEY = "summary"
-_POINTS_KEY = "points"
+#: Appended to a cached mesh's file name to name the record of its settings.
+MESH_SETTINGS_SUFFIX = ".json"
 
 logger = logging.getLogger(__name__)
 
@@ -245,6 +246,48 @@ class Library:
         name = self.mesh_file_template.format(label=label.key, format=mesh_format.value)
         return self.segmentation_path(segmentation_id) / name
 
+    def mesh_settings_path(
+        self, segmentation_id: str, label: "Label", mesh_format: MeshFormat
+    ) -> Path:
+        """Locate the record of the settings a cached mesh was built with (next to it).
+
+        Args:
+            segmentation_id: Segmentation id.
+            label: Foreground label.
+            mesh_format: File format.
+
+        Returns:
+            Path of the record: the mesh's file name plus :data:`MESH_SETTINGS_SUFFIX`.
+        """
+        mesh = self.mesh_path(segmentation_id, label, mesh_format)
+        return mesh.with_name(mesh.name + MESH_SETTINGS_SUFFIX)
+
+    def mesh_settings(
+        self, segmentation_id: str, label: "Label", mesh_format: MeshFormat
+    ) -> MeshRecord:
+        """Read the settings a cached mesh was built with.
+
+        Args:
+            segmentation_id: Segmentation id.
+            label: Foreground label.
+            mesh_format: File format.
+
+        Returns:
+            The record.
+
+        Raises:
+            NotFoundError: If the mesh has no record (not built, or built before 0.8.1).
+            IncompatibleOutputError: If the record is damaged or in another format.
+        """
+        path = self.mesh_settings_path(segmentation_id, label, mesh_format)
+        if not path.is_file():
+            raise NotFoundError(f"no record of the {label.key} {mesh_format.value} mesh settings")
+        try:  # file content: damaged, or written by another version's settings format
+            return MeshRecord.model_validate_json(path.read_text())
+        except ValidationError as exc:
+            what = f"the {label.key} mesh settings of {segmentation_id!r}"
+            raise IncompatibleOutputError(f"{what} cannot be read: build it again") from exc
+
     def summary(self, segmentation_id: str) -> SegmentationSummary:
         """Describe a segmentation.
 
@@ -294,14 +337,14 @@ class Library:
             raise NotFoundError(f"{segmentation_id!r} is not quantified yet")
         return path
 
-    def network(self, segmentation_id: str) -> NetworkSummary:
-        """Read the summary of a segmentation's vessel network.
+    def network(self, segmentation_id: str) -> NetworkView:
+        """Read the summary of a segmentation's vessel network, and the settings it used.
 
         Args:
             segmentation_id: Segmentation id.
 
         Returns:
-            The summary written by its last quantification.
+            The summary and settings written by its last quantification.
 
         Raises:
             NotFoundError: If the segmentation was not quantified.
@@ -310,8 +353,11 @@ class Library:
         path = self._quantification_file(segmentation_id, self.network_files.network_file)
         try:  # file content: damaged, or written by an older quantification
             record = json.loads(path.read_text())
-            summary = record.get(_SUMMARY_KEY) if isinstance(record, dict) else None
-            return NetworkSummary.model_validate(summary)
+            if not isinstance(record, dict):
+                record = {}
+            return NetworkView.model_validate(
+                {key: record.get(key) for key in (SUMMARY_KEY, SETTINGS_KEY)}
+            )
         except (json.JSONDecodeError, ValidationError) as exc:
             raise IncompatibleOutputError(
                 f"the network of {segmentation_id!r} cannot be read: quantify again"
@@ -343,7 +389,7 @@ class Library:
         path = self.centreline_path(segmentation_id)
         voxel = np.asarray(self.meta(segmentation_id).config.acquisition.voxel_size_um)
         with np.load(path) as data:
-            points = data[_POINTS_KEY]
+            points = data[POINTS_KEY]
         return (points * voxel)[:, ::-1].astype(np.float32)
 
     def segmentations(self) -> list[SegmentationSummary]:

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from pybones.config.fields import ADVICE_KEY, EFFECT_KEY, EFFECTS_KEY, LEVEL_KEY, Effect, Level
 from pybones.config.schema import PyBonesConfig
 from pybones.config.server import ServerConfig
-from pybones.server.schemas import OVERRIDABLE_SECTIONS
+from pybones.server.schemas import SETTINGS_REQUESTS, is_kept
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Mapping
@@ -82,12 +82,15 @@ def test_every_setting_resolves_to_a_known_effect() -> None:
         assert effect in set(Effect), path
 
 
-def test_every_setting_of_the_form_says_when_to_change_it() -> None:
-    """The settings a run may change (the web page's form) all carry advice."""
+def test_every_setting_of_a_form_says_when_to_change_it() -> None:
+    """The settings a job may change (the web page's forms) all carry advice, kept ones aside."""
+    sections = {section for request in SETTINGS_REQUESTS.values() for section in request.SECTIONS}
+    kept = {path for request in SETTINGS_REQUESTS.values() for path in request.KEPT}
     missing = [
         path
         for path, field, _ in settings(PyBonesConfig)
-        if path.split(".")[0] in OVERRIDABLE_SECTIONS
+        if path.split(".")[0] in sections
+        and not is_kept(path, kept)
         and not (
             isinstance(field.json_schema_extra, dict) and field.json_schema_extra.get(ADVICE_KEY)
         )

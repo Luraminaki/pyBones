@@ -8,8 +8,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from pybones.api.job_record import put_latest
 from pybones.api.job_status import MESH_JOB, QUANTIFICATION_JOB, JobState, UnknownJobError
-from pybones.api.jobs import JobManager, put_latest
+from pybones.api.jobs import JobManager
 from pybones.api.operations import MeshFile
 from pybones.config.loader import load_config
 from pybones.quantification.measures import NetworkSummary

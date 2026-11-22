@@ -16,7 +16,7 @@ import json
 import logging
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -57,6 +57,10 @@ BRANCH_COLUMNS = (
     "truncated",
     "at_burst",
 )
+#: Keys of ``network.json``: the summary, and the quantification settings it was measured with.
+SUMMARY_KEY, SETTINGS_KEY = "summary", "settings"
+#: Array of the centreline voxels in ``centrelines.npz``.
+POINTS_KEY = "points"
 #: Decimals written for µm values and ratios.
 _DECIMALS = 3
 
@@ -132,8 +136,8 @@ def _write_files(
     with complete_files(*finals) as (network_path, branches_path, centrelines_path):
         record = {
             "pybones_version": __version__,
-            "summary": summary.model_dump(mode="json"),
-            "settings": config.model_dump(mode="json"),
+            SUMMARY_KEY: summary.model_dump(mode="json"),
+            SETTINGS_KEY: config.model_dump(mode="json"),
             "nodes": {
                 "position_um": network.node_position_um.round(_DECIMALS).tolist(),
                 "kind": network.node_kind.tolist(),
@@ -144,13 +148,13 @@ def _write_files(
         _ = network_path.write_text(json.dumps(record, indent=JSON_INDENT))
         _write_branches(branches_path, network, measures)
         with centrelines_path.open("wb") as fh:
-            np.savez_compressed(
-                fh,
-                points=network.points,
-                point_branch=network.point_branch,
-                point_node=network.point_node,
-                distance_um=distances_um,
-            )
+            arrays: dict[str, Any] = {
+                POINTS_KEY: network.points,
+                "point_branch": network.point_branch,
+                "point_node": network.point_node,
+                "distance_um": distances_um,
+            }
+            np.savez_compressed(fh, **arrays)
         progress(Stage.NETWORK, 1, 1)  # the last moment a cancellation leaves nothing behind
 
 

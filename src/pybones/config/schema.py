@@ -20,7 +20,6 @@ from pybones.config.fields import (
     Micrometres,
     Section,
     advice,
-    affects,
     section_config,
 )
 from pybones.config.quantification import QuantificationConfig
@@ -227,9 +226,26 @@ class TaubinConfig(Section):
 
     model_config: ClassVar[ConfigDict] = section_config(Effect.MESHES)
 
-    iterations: int = Field(ge=0, le=1000, description="λ|μ passes (0 = no smoothing).")
-    lambda_factor: float = Field(gt=0.0, le=1.0, description="Shrinking step (λ > 0).")
-    mu_factor: float = Field(ge=-1.0, lt=0.0, description="Inflating step (μ < -λ).")
+    iterations: int = Field(
+        ge=0,
+        le=1000,
+        description="λ|μ passes (0 = no smoothing).",
+        json_schema_extra=advice(
+            "0 shows the raw voxel staircase; more smooths more, and rounds small details."
+        ),
+    )
+    lambda_factor: float = Field(
+        gt=0.0,
+        le=1.0,
+        description="Shrinking step (λ > 0).",
+        json_schema_extra=advice("Rarely: λ and μ together keep the volume (Taubin)."),
+    )
+    mu_factor: float = Field(
+        ge=-1.0,
+        lt=0.0,
+        description="Inflating step (μ < -λ).",
+        json_schema_extra=advice("Rarely: keep it slightly beyond -λ."),
+    )
 
     @model_validator(mode="after")
     def _taubin_condition(self) -> Self:
@@ -256,24 +272,51 @@ class MeshConfig(Section):
         _keyed_by(FOREGROUND_LABELS),
     ] = Field(
         description="Grid of the surface, per label: 2 averages 2x2x2 voxel blocks (details "
-        + "smaller than a block are smoothed); 1 is full resolution, about 4 times more triangles."
+        + "smaller than a block are smoothed); 1 is full resolution, about 4 times more triangles.",
+        json_schema_extra=advice(
+            "1 for the finest surface of one label (files 4 times larger, a slower browser); 3 "
+            + "or 4 for a quick look at the bone."
+        ),
     )
-    step_size: int = Field(ge=1, le=50, description="Marching-cubes step (coarser if larger).")
-    iso_level: float = Field(gt=0.0, lt=1.0, description="Occupancy level of the surface.")
+    step_size: int = Field(
+        ge=1,
+        le=50,
+        description="Marching-cubes step (coarser if larger).",
+        json_schema_extra=advice("Rarely: the grid above coarsens more smoothly."),
+    )
+    iso_level: float = Field(
+        gt=0.0,
+        lt=1.0,
+        description="Occupancy level of the surface.",
+        json_schema_extra=advice(
+            "Rarely: 0.5 puts the surface halfway between label and background; lower draws "
+            + "the surface outside, higher inside."
+        ),
+    )
     chunk_faces: int = Field(
         ge=1024,
         le=10**9,
         description="Triangles per write chunk.",
-        json_schema_extra=affects(Effect.NONE),
+        json_schema_extra=advice(
+            "Lower it if writing a large STL runs short of memory.", Effect.NONE
+        ),
     )
     glb_position_bits: Literal[16, 32] = Field(
         description="GLB positions: 16-bit integers over the bounding box (error <= half of "
-        + "its size / 65535, 8-bit normals) or 32-bit floats. STL is always 32-bit."
+        + "its size / 65535, 8-bit normals) or 32-bit floats. STL is always 32-bit.",
+        json_schema_extra=advice(
+            "32 for exact positions in other software (files a third larger); 16 is far below "
+            + "a voxel."
+        ),
     )
     stage_weights: dict[Stage, Annotated[float, Field(gt=0.0, le=1.0)]] = Field(
         description="Relative duration of each meshing stage, for the progress of a mesh job "
         + "(measured on the vessels and the bone of the reference stack).",
-        json_schema_extra=affects(Effect.NONE),
+        json_schema_extra=advice(
+            "Only if the progress bar runs unevenly; `python -m tools.report figures` measures "
+            + "them.",
+            Effect.NONE,
+        ),
     )
     taubin: TaubinConfig
 

@@ -106,6 +106,7 @@
             <button type="button" role="tab" id="tab-slices" aria-controls="panel-slices" aria-selected="true">Slices</button>
             <button type="button" role="tab" id="tab-3d" aria-controls="panel-3d" aria-selected="false">3D</button>
             <button type="button" role="tab" id="tab-network" aria-controls="panel-network" aria-selected="false">Network</button>
+            <button type="button" role="tab" id="tab-compare" aria-controls="panel-compare" aria-selected="false">Compare</button>
           </div>
         </div>
 
@@ -126,6 +127,12 @@
 
         <div id="panel-3d" role="tabpanel" aria-labelledby="tab-3d" class="tab-panel" hidden>
           <div id="mesh-controls" class="mesh-controls"></div>
+          <div class="settings-line">
+            <p id="mesh-settings-summary" class="hint" aria-live="polite"></p>
+            <button type="button" id="mesh-settings-open" class="ghost small">Edit mesh settings…</button>
+            <button type="button" id="mesh-rebuild" class="ghost small"
+                    title="Build the meshes shown again, with the settings of the form">Rebuild shown meshes</button>
+          </div>
           <div id="scene" class="scene">
             <p id="scene-message" class="scene-message muted">Choose the labels to show.</p>
           </div>
@@ -142,6 +149,11 @@
             <button id="quantify" type="button">Quantify</button>
             <span id="network-status" class="job-detail" role="status"></span>
           </div>
+          <div class="settings-line">
+            <p id="network-settings-summary" class="hint" aria-live="polite"></p>
+            <button type="button" id="network-settings-open" class="ghost small">Edit settings…</button>
+          </div>
+          <p id="network-measured" class="hint" hidden></p>
           <dl id="network-stats" class="stats" hidden></dl>
           <p class="hint">
             The vessels are thinned to their centrelines, which become a network of branches between
@@ -154,28 +166,42 @@
             draws the centrelines.
           </p>
         </div>
+
+        <div id="panel-compare" role="tabpanel" aria-labelledby="tab-compare" class="tab-panel" hidden>
+          <div class="compare-head">
+            <label for="compare-other">Compare with</label>
+            <select id="compare-other"></select>
+          </div>
+          <p id="compare-empty" class="hint">
+            Pick another segmentation to see the settings that differ, the results side by side and
+            the same slice of both.
+          </p>
+          <div id="compare-body" hidden>
+            <h3>Settings that differ</h3>
+            <div id="compare-settings" class="table-wrap"></div>
+            <p class="hint">
+              The settings a run may change, from each segmentation's record; once both networks
+              are measured, also the settings they were measured with.
+            </p>
+            <h3>Results</h3>
+            <div id="compare-results" class="table-wrap"></div>
+            <h3>The same slice</h3>
+            <p id="compare-stacks" class="hint">These segmentations come from different stacks.</p>
+            <div class="slice-controls">
+              <label for="compare-slider">Slice</label>
+              <input id="compare-slider" type="range" min="0" max="0" value="0">
+              <output id="compare-value" for="compare-slider"></output>
+              <div id="compare-loading" class="spinner" hidden></div>
+            </div>
+            <div class="compare-slices">
+              <figure><figcaption id="compare-a-name"></figcaption><img id="compare-a" alt=""></figure>
+              <figure><figcaption id="compare-b-name"></figcaption><img id="compare-b" alt=""></figure>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   </main>
-
-  <dialog id="settings-dialog" class="settings-dialog" aria-labelledby="settings-title">
-    <form method="dialog" class="settings-frame">
-      <header class="settings-head">
-        <h2 id="settings-title">Settings for this run</h2>
-        <label class="switch"><input type="checkbox" id="settings-advanced"> Show advanced settings</label>
-      </header>
-      <p class="hint">
-        Each setting says what it is, when to change it and what a change affects. Only the
-        settings that differ from the defaults are sent with the run, and recorded with it.
-      </p>
-      <div id="settings-body" class="settings-body"></div>
-      <footer class="settings-foot">
-        <p id="settings-effect" class="hint" aria-live="polite"></p>
-        <button type="button" id="settings-reset" class="ghost">Back to the defaults</button>
-        <button type="submit" id="settings-done">Done</button>
-      </footer>
-    </form>
-  </dialog>
 
   <div id="toasts" class="toasts" aria-live="assertive"></div>
 

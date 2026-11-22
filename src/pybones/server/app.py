@@ -11,8 +11,14 @@ Routes (all under ``/api``; interactive documentation at ``/docs``)::
     POST   /segmentations                         segment a dataset (202 + job)
     GET    /segmentations/{id}                    full metadata
     GET    /segmentations/{id}/slices/{z}         slice with its labels overlaid (PNG)
-    POST   /segmentations/{id}/meshes/{label}     build a label's mesh (202 + job), ?format=glb|stl
+    POST   /segmentations/{id}/meshes/{label}     build a label's mesh (202 + job), ?format=glb|stl,
+                                                  optional body {"overrides": ["mesh.key=value"]}
     GET    /segmentations/{id}/meshes/{label}     download it (µm), ?format=glb|stl
+    GET    /segmentations/{id}/meshes/{label}/settings   the mesh settings it was built with
+    POST   /segmentations/{id}/quantification     measure the vessel network (202 + job), optional
+                                                  body {"overrides": ["quantification.key=value"]}
+    GET    /segmentations/{id}/quantification     its summary and the settings it was measured with
+    GET    /segmentations/{id}/centrelines        its centreline points (float32 x, y, z in µm)
     GET    /jobs                                  remembered jobs
     GET    /jobs/{id}                             one job
     GET    /jobs/{id}/events                      follow it (Server-Sent Events)

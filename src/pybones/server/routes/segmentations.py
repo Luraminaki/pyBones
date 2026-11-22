@@ -8,22 +8,29 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import ValidationError
 
-from pybones.api.operations import preview
+from pybones.api.operations import MeshRecord, preview
 from pybones.meshing.formats import MeshFormat
-from pybones.quantification.measures import NetworkSummary
 from pybones.segmentation.labels import (
     FOREGROUND_LABELS,
     Label,
     foreground_from_key,
     label_keys,
 )
-from pybones.segmentation.results import SegmentationMeta
+from pybones.segmentation.results import IncompatibleOutputError, SegmentationMeta
 from pybones.server.context import Context
 from pybones.server.library import NotFoundError
-from pybones.server.schemas import JobView, SegmentationRequest, SegmentationSummary
+from pybones.server.schemas import (
+    JobView,
+    MeshRequest,
+    NetworkView,
+    QuantificationRequest,
+    SegmentationRequest,
+    SegmentationSummary,
+)
 
 if TYPE_CHECKING:
     import pathlib
+    from collections.abc import Callable
 
     import numpy as np
 
@@ -120,6 +127,35 @@ def mesh_format(
 RequestedFormat = Annotated[MeshFormat, Depends(mesh_format)]
 
 
+def _started(start: "Callable[[], JobView]") -> JobView:
+    """Start a job, turning invalid settings into the API's 422 answers.
+
+    Args:
+        start: Starts the job (applying its settings first).
+
+    Returns:
+        The job.
+
+    Raises:
+        HTTPException: 422 if an override names an unknown key (a sentence) or an invalid
+            value (a list of ``{loc, msg}``, ``loc`` starting with ``"config"`` then the
+            setting's path, as FastAPI reports its own validation errors).
+        IncompatibleOutputError: Re-raised as is (a 409 from the application's handler): a
+            ``ValueError`` too, but about the stored output, not the settings.
+    """
+    try:
+        return start()
+    except ValidationError as exc:
+        detail = [
+            {"loc": [CONFIG_LOCATION, *error["loc"]], "msg": error["msg"]} for error in exc.errors()
+        ]
+        raise HTTPException(HTTPStatus.UNPROCESSABLE_ENTITY, detail) from None
+    except IncompatibleOutputError:
+        raise
+    except ValueError as exc:  # a malformed override, or an unknown key
+        raise HTTPException(HTTPStatus.UNPROCESSABLE_ENTITY, str(exc)) from None
+
+
 @router.get("")
 def list_segmentations(context: Context) -> list[SegmentationSummary]:
     """List the finished segmentations of the output folder.
@@ -145,19 +181,9 @@ def create_segmentation(context: Context, request: SegmentationRequest) -> JobVi
         The queued job.
 
     Raises:
-        HTTPException: 422 if an override names an unknown key (a sentence) or an invalid
-            value (a list of ``{loc, msg}``, ``loc`` starting with ``"config"`` then the
-            setting's path, as FastAPI reports its own validation errors).
+        HTTPException: 422 for invalid settings (see :func:`_started`).
     """
-    try:
-        return context.start_segmentation(request)
-    except ValidationError as exc:
-        detail = [
-            {"loc": [CONFIG_LOCATION, *error["loc"]], "msg": error["msg"]} for error in exc.errors()
-        ]
-        raise HTTPException(HTTPStatus.UNPROCESSABLE_ENTITY, detail) from None
-    except ValueError as exc:  # a malformed override, or an unknown key
-        raise HTTPException(HTTPStatus.UNPROCESSABLE_ENTITY, str(exc)) from None
+    return _started(lambda: context.start_segmentation(request))
 
 
 @router.get("/{segmentation_id}")
@@ -222,23 +248,33 @@ def get_slice(
 
 @router.post("/{segmentation_id}/meshes/{label}", status_code=HTTPStatus.ACCEPTED)
 def create_mesh(
-    context: Context, segmentation_id: str, label: ForegroundLabel, fmt: RequestedFormat
+    context: Context,
+    segmentation_id: str,
+    label: ForegroundLabel,
+    fmt: RequestedFormat,
+    request: MeshRequest | None = None,
 ) -> JobView:
     """Start meshing a label (or return the job already doing it); follow the returned job.
 
     ``?format=glb`` (for the browser) or ``?format=stl`` (for other software); the
-    default is the server's ``api.default_mesh_format``. Asking again rebuilds the mesh.
+    default is the server's ``api.default_mesh_format``. Asking again rebuilds the mesh. An
+    optional body changes mesh settings for this mesh only; they are recorded next to it.
 
     Args:
         context: Server state.
         segmentation_id: Segmentation id.
         label: Foreground label.
         fmt: File format.
+        request: ``{"overrides": ["mesh.key=value", ...]}``, if any.
 
     Returns:
         The meshing job.
+
+    Raises:
+        HTTPException: 422 for invalid settings (see :func:`_started`).
     """
-    return context.start_mesh(segmentation_id, label, fmt)
+    overrides = request.overrides if request is not None else ()
+    return _started(lambda: context.start_mesh(segmentation_id, label, fmt, overrides))
 
 
 @router.get(
@@ -281,32 +317,62 @@ def get_mesh(
     return FileResponse(path, media_type=MESH_MEDIA_TYPES[fmt], filename=path.name, headers=headers)
 
 
-@router.post("/{segmentation_id}/quantification", status_code=HTTPStatus.ACCEPTED)
-def create_quantification(context: Context, segmentation_id: str) -> JobView:
-    """Start measuring the vessel network (or return the job doing it); follow the returned job.
-
-    Asking again measures it again, e.g. after changing the server's quantification settings.
+@router.get("/{segmentation_id}/meshes/{label}/settings")
+def get_mesh_settings(
+    context: Context, segmentation_id: str, label: ForegroundLabel, fmt: RequestedFormat
+) -> MeshRecord:
+    """Return the settings a cached mesh was built with (``?format=`` as for the mesh).
 
     Args:
         context: Server state.
         segmentation_id: Segmentation id.
+        label: Foreground label.
+        fmt: File format.
+
+    Returns:
+        Its mesh settings and the version that built it.
+
+    Raises:
+        NotFoundError: If the mesh has no record (not built, or built before 0.8.1).
+    """
+    return context.library.mesh_settings(segmentation_id, label, fmt)
+
+
+@router.post("/{segmentation_id}/quantification", status_code=HTTPStatus.ACCEPTED)
+def create_quantification(
+    context: Context, segmentation_id: str, request: QuantificationRequest | None = None
+) -> JobView:
+    """Start measuring the vessel network (or return the job doing it); follow the returned job.
+
+    Asking again measures it again. An optional body changes quantification settings for this
+    measurement only; the network file records the settings it was measured with.
+
+    Args:
+        context: Server state.
+        segmentation_id: Segmentation id.
+        request: ``{"overrides": ["quantification.key=value", ...]}``, if any.
 
     Returns:
         The quantification job.
+
+    Raises:
+        HTTPException: 422 for invalid settings (see :func:`_started`).
     """
-    return context.start_quantification(segmentation_id)
+    overrides = request.overrides if request is not None else ()
+    return _started(lambda: context.start_quantification(segmentation_id, overrides))
 
 
 @router.get("/{segmentation_id}/quantification")
-def get_quantification(context: Context, segmentation_id: str) -> NetworkSummary:
-    """Return the summary of the vessel network, once measured.
+def get_quantification(context: Context, segmentation_id: str) -> NetworkView:
+    """Return the summary of the vessel network, once measured, and its settings.
 
     Args:
         context: Server state.
         segmentation_id: Segmentation id.
 
     Returns:
-        Branches, junctions, ends, lengths and medians for the whole stack.
+        Branches, junctions, ends, lengths and medians for the whole stack, and the
+        quantification settings they were measured with.
 
     Raises:
         NotFoundError: If it was not quantified yet (``POST`` the same path first).

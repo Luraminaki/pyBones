@@ -1,12 +1,17 @@
 """Request and response bodies of the HTTP API (JSON, validated by pydantic)."""
 
 from enum import StrEnum
-from typing import Annotated, ClassVar
+from typing import TYPE_CHECKING, Annotated, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from pybones.api.job_status import JobStatus
-from pybones.config.loader import override_section
+from pybones.api.job_status import MESH_JOB, QUANTIFICATION_JOB, SEGMENTATION_JOB, JobStatus
+from pybones.config.loader import override_path, override_section
+from pybones.config.quantification import QuantificationConfig
+from pybones.quantification.measures import NetworkSummary
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 #: Ids of datasets and segmentations: the name of an entry directly inside the data or
 #: output folder. No separator and no leading dot, so an id can never leave its folder.
@@ -28,6 +33,9 @@ OVERRIDABLE_SECTIONS = frozenset(
         "thin_vessels",
     }
 )
+#: The section a mesh job may change, and the one a quantification job may change.
+MESH_SECTIONS = frozenset({"mesh"})
+QUANTIFICATION_SECTIONS = frozenset({"quantification"})
 
 
 class Body(BaseModel):
@@ -55,7 +63,10 @@ class ServerInfo(Body):
         output_dir: Absolute folder the segmentations are written to.
         max_preview_scale: Largest slice image scale.
         default_mesh_format: Mesh format when a request names none.
-        overridable_sections: Configuration sections a segmentation request may override.
+        settings_sections: Configuration sections each kind of job may change, by job kind
+            (the sections of its settings form).
+        settings_kept: Paths inside those sections that stay the server's (left out of the
+            forms).
     """
 
     version: str
@@ -63,7 +74,8 @@ class ServerInfo(Body):
     output_dir: str
     max_preview_scale: float
     default_mesh_format: str
-    overridable_sections: list[str]
+    settings_sections: dict[str, list[str]]
+    settings_kept: list[str]
 
 
 class DatasetKind(StrEnum):
@@ -115,24 +127,25 @@ class SegmentationSummary(Body):
     quantified: bool
 
 
-class SegmentationRequest(Body):
-    """``POST /api/segmentations``: segment a dataset into a new segmentation.
+class SettingsRequest(Body):
+    """Base of the requests that may change settings for one job.
 
     Attributes:
-        dataset: Id of the stack to segment.
-        name: Id of the new segmentation (must not exist yet).
-        overrides: ``section.key=value`` changes to the server's configuration, limited
-            to :data:`OVERRIDABLE_SECTIONS`.
+        overrides: ``section.key=value`` changes to the server's configuration, limited to
+            :attr:`SECTIONS`, outside :attr:`KEPT`.
     """
 
-    dataset: EntryId
-    name: EntryId
+    #: Configuration sections this kind of job may change.
+    SECTIONS: ClassVar[frozenset[str]] = frozenset()
+    #: Paths inside them that stay the server's (file names the server must find again).
+    KEPT: ClassVar[frozenset[str]] = frozenset()
+
     overrides: tuple[str, ...] = ()
 
     @field_validator("overrides")
     @classmethod
     def _overridable(cls, overrides: tuple[str, ...]) -> tuple[str, ...]:
-        """Refuse overrides of sections that are the server's own.
+        """Refuse overrides of sections this kind of job does not use, or of kept paths.
 
         Args:
             overrides: Requested overrides.
@@ -141,12 +154,75 @@ class SegmentationRequest(Body):
             ``overrides``, unchanged.
 
         Raises:
-            ValueError: If an override targets another section.
+            ValueError: If an override targets another section, or a kept path.
         """
-        refused = [item for item in overrides if override_section(item) not in OVERRIDABLE_SECTIONS]
+        refused = [item for item in overrides if override_section(item) not in cls.SECTIONS]
         if refused:
-            raise ValueError(f"only {sorted(OVERRIDABLE_SECTIONS)} can be overridden: {refused}")
+            raise ValueError(f"only {sorted(cls.SECTIONS)} can be overridden: {refused}")
+        kept = [item for item in overrides if is_kept(override_path(item), cls.KEPT)]
+        if kept:
+            raise ValueError(f"{sorted(cls.KEPT)} stay the server's: {kept}")
         return overrides
+
+
+def is_kept(path: str, kept: "Iterable[str]") -> bool:
+    """Tell whether a setting is, or lies inside, a kept path.
+
+    Args:
+        path: Dotted path of a setting.
+        kept: Kept dotted paths.
+
+    Returns:
+        Whether it is one of them or below one.
+    """
+    return any(path == k or path.startswith(f"{k}.") for k in kept)
+
+
+class SegmentationRequest(SettingsRequest):
+    """``POST /api/segmentations``: segment a dataset into a new segmentation.
+
+    Attributes:
+        dataset: Id of the stack to segment.
+        name: Id of the new segmentation (must not exist yet).
+    """
+
+    SECTIONS: ClassVar[frozenset[str]] = OVERRIDABLE_SECTIONS
+
+    dataset: EntryId
+    name: EntryId
+
+
+class MeshRequest(SettingsRequest):
+    """``POST .../meshes/{label}`` (optional body): mesh settings for this mesh only."""
+
+    SECTIONS: ClassVar[frozenset[str]] = MESH_SECTIONS
+
+
+class QuantificationRequest(SettingsRequest):
+    """``POST .../quantification`` (optional body): quantification settings for this run only."""
+
+    SECTIONS: ClassVar[frozenset[str]] = QUANTIFICATION_SECTIONS
+    KEPT: ClassVar[frozenset[str]] = frozenset({"quantification.files"})
+
+
+#: The request of each kind of job (``GET /api/server`` describes their sections).
+SETTINGS_REQUESTS: dict[str, type[SettingsRequest]] = {
+    SEGMENTATION_JOB: SegmentationRequest,
+    MESH_JOB: MeshRequest,
+    QUANTIFICATION_JOB: QuantificationRequest,
+}
+
+
+class NetworkView(Body):
+    """``GET .../quantification``: the network's summary and the settings it was measured with.
+
+    Attributes:
+        summary: Branches, junctions, ends, lengths and medians for the whole stack.
+        settings: The quantification settings of that measurement.
+    """
+
+    summary: NetworkSummary
+    settings: QuantificationConfig
 
 
 class JobView(JobStatus):

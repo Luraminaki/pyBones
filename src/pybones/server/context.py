@@ -26,6 +26,8 @@ from pybones.server.library import ConflictError
 from pybones.server.schemas import JobView
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from pybones.api.job_status import JobStatus
     from pybones.api.jobs import JobManager
     from pybones.config.schema import PyBonesConfig
@@ -180,52 +182,72 @@ class ServerContext:
         return self.job(job_id)
 
     def start_mesh(
-        self, segmentation_id: str, label: "Label", mesh_format: "MeshFormat"
+        self,
+        segmentation_id: str,
+        label: "Label",
+        mesh_format: "MeshFormat",
+        overrides: "Sequence[str]" = (),
     ) -> JobView:
         """Queue the meshing of a label in one format, or return the job already doing it.
 
         The geometry (voxel size) is the one the segmentation was made with; the mesh
-        settings (grid, smoothing, GLB precision) are the server's. Asking again once a mesh
-        exists rebuilds it, e.g. after changing those settings.
+        settings (grid, smoothing, GLB precision) are the server's, with ``overrides``. Asking
+        again once a mesh exists rebuilds it; a running job is joined, whatever its settings.
 
         Args:
             segmentation_id: Segmentation id.
             label: Foreground label.
             mesh_format: File format.
+            overrides: ``mesh.key=value`` changes for this mesh only.
 
         Returns:
             The queued (or already running) job.
+
+        Raises:
+            ValueError: If an override is malformed or names an unknown key.
+            pydantic.ValidationError: If a value is invalid.
         """
         path = self.library.mesh_path(segmentation_id, label, mesh_format)
         stored = self.library.meta(segmentation_id).config
-        config = stored.model_copy(update={"mesh": self.config.mesh})
+        mesh = apply_overrides(self.config, overrides).mesh
+        config = stored.model_copy(update={"mesh": mesh})
         segmentation = self.library.segmentation_path(segmentation_id)
         target = JobTarget(MESH_JOB, segmentation_id, label, mesh_format)
         with self.submit_lock:
             if (current := self.active_job(target)) is not None:
                 return current
-            job_id = self.jobs.submit_mesh(segmentation, label, path, config)
+            record = self.library.mesh_settings_path(segmentation_id, label, mesh_format)
+            job_id = self.jobs.submit_mesh(segmentation, label, path, config, record)
             self._record(job_id, target)
         return self.job(job_id)
 
-    def start_quantification(self, segmentation_id: str) -> JobView:
+    def start_quantification(
+        self, segmentation_id: str, overrides: "Sequence[str]" = ()
+    ) -> JobView:
         """Queue the quantification of a segmentation, or return the job already doing it.
 
         The voxel size is the one the segmentation was made with; the quantification
-        settings are the server's. Asking again replaces the network files.
+        settings are the server's, with ``overrides`` (recorded in the network file). Asking
+        again replaces the network files; a running job is joined, whatever its settings.
 
         Args:
             segmentation_id: Segmentation id.
+            overrides: ``quantification.key=value`` changes for this measurement only.
 
         Returns:
             The queued (or already running) job.
+
+        Raises:
+            ValueError: If an override is malformed or names an unknown key.
+            pydantic.ValidationError: If a value is invalid.
         """
+        config = apply_overrides(self.config, overrides)
         segmentation = self.library.segmentation_path(segmentation_id)
         target = JobTarget(QUANTIFICATION_JOB, segmentation_id, None, None)
         with self.submit_lock:
             if (current := self.active_job(target)) is not None:
                 return current
-            job_id = self.jobs.submit_quantification(segmentation, self.config)
+            job_id = self.jobs.submit_quantification(segmentation, config)
             self._record(job_id, target)
         return self.job(job_id)
 

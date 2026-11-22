@@ -1,4 +1,5 @@
-// Network tab: measure the vessel network of the shown segmentation (a job) and show its summary.
+// Network tab: measure the vessel network of the shown segmentation (a job, with the settings of
+// its form) and show its summary and the settings it was measured with.
 
 import { api, JOB_KINDS } from './api.js';
 import { activeJob, JOB_FINISHED, JOB_UPDATED, startOrJoin } from './jobs.js';
@@ -26,39 +27,49 @@ let current = null; // the shown segmentation's summary
 const nodes = {};
 
 /**
- * Show the measures of a network, or say there are none yet.
- * @param {?import('./api.js').NetworkSummary} summary The measures (`null`: not measured).
+ * Show the measures of a network and the settings it was measured with, or say there are none.
+ * @param {?import('./api.js').NetworkView} view The measures (`null`: not measured).
  */
-function render(summary) {
+function render(view) {
+  const summary = view?.summary ?? null;
   nodes.stats.hidden = summary === null;
+  nodes.measured.hidden = summary === null;
   nodes.button.textContent = summary === null ? 'Quantify' : 'Quantify again';
   if (summary === null) {
     nodes.status.textContent = 'Not measured yet.';
     return;
   }
   nodes.status.textContent = '';
+  nodes.measured.textContent = `Measured with: ${nodes.form.describe({ quantification: view.settings })}`;
   nodes.stats.replaceChildren(...ROWS.flatMap(([label, read]) => [el('dt', {}, label), el('dd', {}, read(summary))]));
 }
 
 /** Read the shown segmentation's measures from the server and show them. */
 async function load() {
   const id = current.id;
-  let summary;
+  let view;
   try {
-    summary = await api.network(id);
+    view = await api.network(id);
   } catch (err) {
     toast(`Could not read the network of ${id}: ${err.message}`, { error: true });
     return;
   }
-  if (current?.id === id) render(summary);
+  if (current?.id === id) render(view);
 }
 
-/** Start measuring the shown segmentation (or join the job already doing it). */
+/** Start measuring the shown segmentation with the form's settings (or join the job doing it). */
 async function quantify() {
   const id = current.id;
+  const { form } = nodes;
+  if (!form.valid()) {
+    form.open();
+    toast('Some settings are not valid: they are marked in red', { error: true });
+    return;
+  }
   try {
-    await startOrJoin(() => api.quantify(id), JOB_KINDS.QUANTIFICATION, id);
+    await startOrJoin(() => api.quantify(id, form.overrides()), JOB_KINDS.QUANTIFICATION, id);
   } catch (err) {
+    if (form.showErrors(err.detail)) form.open();
     toast(`Could not quantify ${id}: ${err.message}`, { error: true });
   }
 }
@@ -99,8 +110,13 @@ export function showSegmentation(summary) {
   if (summary.quantified) void load();
 }
 
-/** Wire the tab: its button and the job events. */
-export function initNetwork() {
+/**
+ * Wire the tab: its buttons and the job events.
+ * @param {import('./settings_form.js').SettingsForm} form Settings of the next measurement.
+ */
+export function initNetwork(form) {
+  nodes.form = form;
+  nodes.measured = document.getElementById('network-measured');
   nodes.button = document.getElementById('quantify');
   nodes.status = document.getElementById('network-status');
   nodes.stats = document.getElementById('network-stats');

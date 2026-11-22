@@ -45,6 +45,19 @@ def _deep_merge(base: dict[str, Any], update: dict[str, Any]) -> None:
             base[key] = value
 
 
+def override_path(item: str) -> str:
+    """Name the setting an override changes, as a dotted path.
+
+    Args:
+        item: Override such as ``"pipeline.workers=1"``.
+
+    Returns:
+        Its path, e.g. ``"pipeline.workers"``.
+    """
+    dotted, _, _ = item.partition(_ASSIGNMENT)
+    return dotted
+
+
 def override_section(item: str) -> str:
     """Name the top-level section an override changes.
 
@@ -54,8 +67,7 @@ def override_section(item: str) -> str:
     Returns:
         Its first key, e.g. ``"pipeline"``.
     """
-    dotted, _, _ = item.partition(_ASSIGNMENT)
-    return dotted.split(_KEY_SEPARATOR, 1)[0]
+    return override_path(item).split(_KEY_SEPARATOR, 1)[0]
 
 
 def _apply_override(data: dict[str, Any], item: str) -> None:

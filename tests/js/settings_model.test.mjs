@@ -135,3 +135,9 @@ test('changes are summed up by their widest effect', () => {
   assert.equal(describeChanges(changedFields(fields, base, base), 'run1', SCHEMA.effects),
     'Same settings as run1.');
 });
+
+test('kept paths are left out, with what lies below them', () => {
+  const sections = readSections(SCHEMA, ['segmentation'], ['segmentation.thin', 'segmentation.sigma_um']);
+  assert.deepEqual(sections.map((s) => s.path), ['segmentation']);
+  assert.deepEqual(sections[0].fields.map((f) => f.name), ['connectivity', 'voxel_um']);
+});

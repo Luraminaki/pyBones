@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from pybones import __version__
 from pybones.config.schema import PyBonesConfig
 from pybones.server.context import Context
-from pybones.server.schemas import OVERRIDABLE_SECTIONS, ServerInfo, VersionInfo
+from pybones.server.schemas import SETTINGS_REQUESTS, ServerInfo, VersionInfo
 
 router = APIRouter(tags=["system"])
 
@@ -38,7 +38,8 @@ def get_server(context: Context) -> ServerInfo:
         output_dir=str(context.library.output_dir),
         max_preview_scale=context.server.api.max_preview_scale,
         default_mesh_format=context.server.api.default_mesh_format.value,
-        overridable_sections=sorted(OVERRIDABLE_SECTIONS),
+        settings_sections={kind: sorted(r.SECTIONS) for kind, r in SETTINGS_REQUESTS.items()},
+        settings_kept=sorted({path for r in SETTINGS_REQUESTS.values() for path in r.KEPT}),
     )
 
 

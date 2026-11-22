@@ -9,12 +9,15 @@ them in the background, see :class:`pybones.api.jobs.JobManager`.
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 import cv2
 import numpy as np
+from pydantic import BaseModel, ConfigDict
 
+from pybones import __version__
 from pybones.analysis.metrics import compare_stacks
+from pybones.config.schema import MeshConfig
 from pybones.io.export import export_mask_sequence
 from pybones.io.slices import SliceStack
 from pybones.meshing.formats import MeshFormat
@@ -23,7 +26,7 @@ from pybones.meshing.marching import extract_surface
 from pybones.meshing.stl import write_stl
 from pybones.segmentation.results import load_labels, load_meta
 from pybones.segmentation.stages import Stage, no_progress
-from pybones.utils.constants import UM_PER_MM
+from pybones.utils.constants import JSON_INDENT, UM_PER_MM
 from pybones.utils.files import complete_files
 from pybones.visualization.overlay import overlay
 
@@ -165,12 +168,27 @@ class MeshFile:
     volume_mm3: float
 
 
+class MeshRecord(BaseModel):
+    """The settings a cached mesh was built with, recorded next to it.
+
+    Attributes:
+        pybones_version: Version of pyBones that built it.
+        settings: Its mesh settings (grid, smoothing, precision...).
+    """
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", frozen=True)
+
+    pybones_version: str
+    settings: MeshConfig
+
+
 def write_mesh_file(
     segmentation: Path,
     label: "Label",
     path: Path,
     config: "PyBonesConfig",
     progress: "ProgressCallback" = no_progress,
+    settings_path: Path | None = None,
 ) -> MeshFile:
     """Mesh one label and write it as a mesh file, which appears only once complete.
 
@@ -185,6 +203,8 @@ def write_mesh_file(
         progress: Progress callback, reported through the meshing stages
             (:data:`~pybones.segmentation.stages.MESH_STAGES`); a cancelled tracker stops the
             job at its next update, up to the end of :attr:`Stage.WRITING`.
+        settings_path: Where to record the mesh settings used (:class:`MeshRecord`, JSON),
+            written and renamed together with the mesh; ``None`` records nothing.
 
     Returns:
         The written file and what it holds.
@@ -192,7 +212,12 @@ def write_mesh_file(
     mesh_format = MeshFormat.from_path(path)  # an unsupported extension fails before the work
     result = mesh_label(segmentation, label, config, progress)
     progress(Stage.WRITING, 0, 1)
-    with complete_files(path) as (partial,):
+    finals = (path,) if settings_path is None else (path, settings_path)
+    with complete_files(*finals) as partials:
+        partial = partials[0]
+        if settings_path is not None:
+            record = MeshRecord(pybones_version=__version__, settings=config.mesh)
+            _ = partials[1].write_text(record.model_dump_json(indent=JSON_INDENT))
         _ = save_mesh(result, label, partial, config, mesh_format)
         # Last cancellation point: once renamed, the file is there to stay.
         progress(Stage.WRITING, 1, 1)

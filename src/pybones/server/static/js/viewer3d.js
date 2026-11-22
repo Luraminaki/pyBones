@@ -28,6 +28,8 @@ const FAR_RATIO = 50;
 const SKY_LIGHT = 1.4;
 const KEY_LIGHT = 1.6;
 const MEGA = 1e6;
+// HTTP status of a mesh without a record of its settings (built before they were recorded).
+const NOT_FOUND = 404;
 // One click on + / − moves the camera this much closer / farther.
 const ZOOM_STEP = 1.3;
 // Image rows go down the screen, as in the slice viewer: "up" is -y.
@@ -47,6 +49,7 @@ let message;
 let colors;
 let current = null; // {summary, labels: Map(label -> {checkbox, status, object, loading})}
 let fitted = false;
+let meshForm = null; // settings of the next meshes (the page's form)
 
 /** Draw the scene once (there is no animation loop: only changes redraw). */
 function render() {
@@ -196,6 +199,7 @@ function load(label) {
       entry.object.visible = entry.checkbox.checked;
       scene.add(entry.object);
       entry.status.textContent = `${(triangles(entry.object) / MEGA).toFixed(2)} M triangles`;
+      void noteSettings(entry, id, label);
       if (!fitted) fitView();
       updateMessage();
       render();
@@ -215,22 +219,54 @@ function load(label) {
 }
 
 /**
- * Have the server build a label's mesh (or join the job already doing it); onJob() loads it.
+ * Say next to a loaded mesh whether it was built with the mesh form's settings.
+ * @param {object} entry The label's entry (its status line).
+ * @param {string} id Segmentation id.
+ * @param {string} label Label key.
+ */
+async function noteSettings(entry, id, label) {
+  let note;
+  try {
+    const record = await api.meshSettings(id, label, FORMAT);
+    note = meshForm.differences({ mesh: record.settings }).length ? ' · built with other settings' : '';
+  } catch (err) {
+    note = err.status === NOT_FOUND ? ' · settings not recorded' : '';
+  }
+  if (current?.summary.id === id && current.labels.get(label) === entry) entry.status.append(note);
+}
+
+/**
+ * Have the server build a label's mesh with the form's settings (or join the job already doing
+ * it); onJob() loads it.
  * @param {string} label Label key.
  */
 async function build(label) {
   const entry = current.labels.get(label);
   const id = current.summary.id;
+  if (!meshForm.valid()) {
+    meshForm.open();
+    toast('Some mesh settings are not valid: they are marked in red', { error: true });
+    return;
+  }
   entry.loading = true;
   entry.status.textContent = 'Building the mesh…';
   updateMessage();
   try {
-    await startOrJoin(() => api.buildMesh(id, label, FORMAT), JOB_KINDS.MESH, id, label, FORMAT);
+    const start = () => api.buildMesh(id, label, FORMAT, meshForm.overrides());
+    await startOrJoin(start, JOB_KINDS.MESH, id, label, FORMAT);
   } catch (err) {
     entry.loading = false;
     entry.status.textContent = 'Could not build';
+    if (meshForm.showErrors(err.detail)) meshForm.open();
     toast(`The ${label} mesh could not be built: ${err.message}`, { error: true });
     updateMessage();
+  }
+}
+
+/** Build the meshes shown again, with the form's settings (each replaces its old one). */
+function rebuildShown() {
+  for (const [label, entry] of current?.labels ?? []) {
+    if (entry.checkbox.checked && !entry.loading) void build(label);
   }
 }
 
@@ -326,10 +362,13 @@ export function showSegmentation(summary) {
 /**
  * Set up the scene once: renderer, camera, lights, controls and listeners.
  * @param {Object<string, number[]>} configColors BGR colour per label.
+ * @param {import('./settings_form.js').SettingsForm} form Settings of the next meshes.
  * @returns {boolean} False if this browser cannot draw WebGL.
  */
-export function initViewer(configColors) {
+export function initViewer(configColors, form) {
   colors = configColors;
+  meshForm = form;
+  document.getElementById('mesh-rebuild').addEventListener('click', rebuildShown);
   const container = document.getElementById('scene');
   message = document.getElementById('scene-message');
   try {

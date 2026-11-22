@@ -11,9 +11,10 @@ import numpy as np
 import pytest
 
 from pybones import __version__
-from pybones.api.job_status import QUANTIFICATION_JOB, JobState
+from pybones.api.job_status import MESH_JOB, QUANTIFICATION_JOB, SEGMENTATION_JOB, JobState
 from pybones.meshing.formats import MeshFormat
 from pybones.meshing.gltf import read_glb
+from pybones.quantification.pipeline import POINTS_KEY, SETTINGS_KEY, SUMMARY_KEY
 from pybones.segmentation.stages import STAGES_2D, Stage
 from pybones.server.context import ServerContext
 from pybones.server.routes.jobs import SSE_MEDIA_TYPE
@@ -49,8 +50,7 @@ STL_HEADER_BYTES, STL_COUNT_FORMAT, STL_TRIANGLE_BYTES = 80, "<I", 50
 WEIGHTS = dict.fromkeys(Stage, 1.0)
 FILES = small_config().quantification.files
 VOXEL_ZYX = small_config().acquisition.voxel_size_um
-#: Array of the centreline voxels in the centreline file, and the served point type.
-POINTS_KEY = "points"
+#: The served point type.
 POINT_DTYPE = "<f4"
 
 
@@ -127,8 +127,12 @@ def test_version_and_configuration(client: "TestClient") -> None:
     assert server["version"] == __version__
     assert server["output_dir"] == str(context_of(client).library.output_dir)
     assert server["default_mesh_format"] == "glb"
-    assert "refinement" in server["overridable_sections"]
-    assert "io" not in server["overridable_sections"]
+    sections = server["settings_sections"]
+    assert "refinement" in sections[SEGMENTATION_JOB]
+    assert "io" not in sections[SEGMENTATION_JOB]
+    assert sections[MESH_JOB] == ["mesh"]
+    assert sections[QUANTIFICATION_JOB] == ["quantification"]
+    assert server["settings_kept"] == ["quantification.files"]  # names the server finds again
 
 
 def test_datasets_and_segmentations_are_listed(client: "TestClient") -> None:
@@ -345,9 +349,9 @@ def test_quantification_is_measured_by_a_job_then_read(
     assert (job.json()["kind"], job.json()["segmentation"]) == (QUANTIFICATION_JOB, SEGMENTATION)
     assert follow(client, job.json()["job_id"])[-1]["state"] == JobState.SUCCEEDED
 
-    summary = client.get(f"{base}/quantification").json()
+    view = client.get(f"{base}/quantification").json()
     record = json.loads((folders.output / SEGMENTATION / FILES.network_file).read_text())
-    assert summary == record["summary"]
+    assert view == {"summary": record[SUMMARY_KEY], "settings": record[SETTINGS_KEY]}
     assert client.get(base.removesuffix(f"/{SEGMENTATION}")).json()[0]["quantified"] is True
 
     response = client.get(f"{base}/centrelines")

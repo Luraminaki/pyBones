@@ -58,6 +58,13 @@
  * @property {number} median_tortuosity Median length / chord of the open branches.
  */
 
+/**
+ * A measured network (`GET .../quantification`).
+ * @typedef {object} NetworkView
+ * @property {NetworkSummary} summary Its measures.
+ * @property {object} settings The quantification settings it was measured with.
+ */
+
 const BASE = '/api';
 // Listing stacks opens each archive; generous, but never stuck forever.
 const REQUEST_TIMEOUT_MS = 30000;
@@ -203,9 +210,13 @@ export const api = {
   segmentation: (segmentation) => request('GET', `/segmentations/${id(segmentation)}`),
   createSegmentation: (dataset, name, overrides) =>
     request('POST', '/segmentations', { dataset, name, overrides }),
-  buildMesh: (segmentation, label, format) => request('POST', meshPath(segmentation, label, format)),
+  buildMesh: (segmentation, label, format, overrides = []) =>
+    request('POST', meshPath(segmentation, label, format), { overrides }),
+  meshSettings: (segmentation, label, format) =>
+    request('GET', meshPath(segmentation, label, format).replace('?', '/settings?')),
   network: (segmentation) => request('GET', `/segmentations/${id(segmentation)}/quantification`),
-  quantify: (segmentation) => request('POST', `/segmentations/${id(segmentation)}/quantification`),
+  quantify: (segmentation, overrides = []) =>
+    request('POST', `/segmentations/${id(segmentation)}/quantification`, { overrides }),
   jobs: () => request('GET', '/jobs'),
   cancelJob: (jobId) => request('DELETE', `/jobs/${id(jobId)}`),
 };

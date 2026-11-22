@@ -1,10 +1,11 @@
 // Entry point: loads the server description and configuration, wires the panels together.
 
 import { api, JOB_KINDS } from './api.js';
+import { initCompare, showSegmentation as showCompare } from './compare.js';
 import { initJobs, JOB_FINISHED } from './jobs.js';
 import { initLibrary, prefill, reloadLists, renderSegmentations } from './library.js';
 import { initNetwork, showSegmentation as showNetwork } from './network.js';
-import { initSettingsForm } from './settings_form.js';
+import { createSettingsForm } from './settings_form.js';
 import { settingsDiff } from './settings_model.js';
 import { initSlices, showSegmentation as showSlices } from './slices.js';
 import { initTheme } from './theme.js';
@@ -13,7 +14,7 @@ import { baseName, LABELS, percent, recall, remember, toast } from './ui.js';
 // Remembered per browser: the last segmentation looked at.
 const SELECTION_KEY = 'pybones.selection';
 // The viewer's tabs, as named in the ids of their buttons and panels.
-const TABS = ['slices', '3d', 'network'];
+const TABS = ['slices', '3d', 'network', 'compare'];
 
 let summaries = [];
 let selected = null;
@@ -21,6 +22,7 @@ let viewer = null; // the 3D module, imported when the 3D tab first opens (three
 let colors = null;
 let baseConfig = null;
 let serverInfo = null;
+let meshForm = null; // settings of the next meshes (the 3D module is loaded later)
 
 /**
  * Describe a segmentation in one line: stack, voxel size, label fractions.
@@ -51,6 +53,7 @@ function select(id) {
   document.getElementById('viewer-meta').textContent = describe(summary);
   showSlices(summary);
   showNetwork(summary);
+  showCompare(summary, summaries);
   if (viewer) viewer.showSegmentation(summary);
 }
 
@@ -77,7 +80,8 @@ async function segmentAgain() {
     toast(`Could not read ${selected}: ${err.message}`, { error: true });
     return;
   }
-  const overrides = settingsDiff(baseConfig, meta.config, serverInfo.overridable_sections);
+  const sections = serverInfo.settings_sections[JOB_KINDS.SEGMENTATION];
+  const overrides = settingsDiff(baseConfig, meta.config, sections);
   const dataset = baseName(meta.source);
   if (!prefill(dataset, meta.config, selected)) {
     toast(`${dataset} is no longer in ${serverInfo.data_dir}: pick a stack`, { error: true });
@@ -88,7 +92,7 @@ async function segmentAgain() {
 }
 
 /**
- * Switch between the slice and 3D views; the 3D module is loaded the first time.
+ * Switch between the tabs; the 3D module is loaded the first time its tab opens.
  * @param {string} name One of TABS.
  */
 async function openTab(name) {
@@ -105,7 +109,7 @@ async function openTab(name) {
     toast(`The 3D viewer could not be loaded: ${err.message}`, { error: true });
     return;
   }
-  if (!module.initViewer(colors)) return;
+  if (!module.initViewer(colors, meshForm)) return;
   viewer = module;
   const summary = summaries.find((s) => s.id === selected);
   if (summary) viewer.showSegmentation(summary);
@@ -127,9 +131,25 @@ async function main() {
   baseConfig = config;
   serverInfo = server;
   document.getElementById('version').textContent = `v${server.version}`;
-  initLibrary(server, colors, initSettingsForm(schema, config, server.overridable_sections));
+  const form = (kind, title, key) => {
+    const summary = document.getElementById(`${key}-summary`);
+    const made = createSettingsForm({
+      schema,
+      base: config,
+      roots: server.settings_sections[kind],
+      kept: server.settings_kept,
+      title,
+      key,
+      summaries: [summary],
+    });
+    document.getElementById(`${key}-open`).addEventListener('click', made.open);
+    return made;
+  };
+  meshForm = form(JOB_KINDS.MESH, 'Settings of the next meshes', 'mesh-settings');
+  initLibrary(server, colors, form(JOB_KINDS.SEGMENTATION, 'Settings for this run', 'settings'));
   initSlices(server, colors);
-  initNetwork();
+  initNetwork(form(JOB_KINDS.QUANTIFICATION, 'Settings of the next measurement', 'network-settings'));
+  initCompare(server);
   document.getElementById('refresh').addEventListener('click', refresh);
   document.getElementById('segment-again').addEventListener('click', segmentAgain);
   for (const tab of TABS) {

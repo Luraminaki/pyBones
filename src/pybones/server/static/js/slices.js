@@ -1,7 +1,7 @@
 // Slice viewer: one slice of the stack with its labels overlaid (rendered by the server).
 
-import { fetchSlice } from './api.js';
-import { cssColor, el, LABELS, percent, toast } from './ui.js';
+import { sliceLoader } from './slice_loader.js';
+import { cssColor, el, LABELS, percent } from './ui.js';
 
 // Image sizes offered, as fractions of the full slice (capped by the server's limit).
 const SCALES = [0.25, 0.5, 1];
@@ -11,10 +11,6 @@ const DEBOUNCE_MS = 120;
 
 let segmentation = null;
 let timer = null;
-// One slice request at a time: a position asked for meanwhile is loaded right after
-// (latest wins), so dragging the slider never piles renders up on the server.
-let inFlight = false;
-let pending = false;
 let voxelZ = 0;
 const nodes = {};
 
@@ -24,58 +20,11 @@ function showPosition() {
   nodes.value.textContent = `${z} / ${nodes.slider.max} · ${(z * voxelZ).toFixed(0)} µm`;
 }
 
-/**
- * Point the image at a URL and wait until it has loaded. The load event fires whether the
- * image is displayed or not (`decode()` refuses an image in a hidden tab).
- * @param {HTMLImageElement} image The slice image.
- * @param {string} url Its new address.
- * @returns {Promise<void>} Resolved once loaded.
- * @throws {Error} If the image cannot be read.
- */
-function loaded(image, url) {
-  return new Promise((resolve, reject) => {
-    image.onload = () => resolve();
-    image.onerror = () => reject(new Error('the image could not be read'));
-    image.src = url;
-  });
-}
-
-/**
- * Show the slice at the slider's position, without letting the browser keep it: fetch it
- * ourselves (`no-store`), show it through a temporary blob: URL, and revoke that URL once
- * the image has loaded. The <img> keeps the picture on screen; nothing else holds the data,
- * so scrolling through a stack never accumulates slices in memory, however long the page
- * stays open.
- */
-async function load() {
+/** Show the slice at the slider's position (the loader keeps one request at a time). */
+function load() {
   if (!segmentation) return;
   showPosition();
-  if (inFlight) {
-    pending = true;
-    return;
-  }
-  inFlight = true;
-  const id = segmentation;
-  const z = Number(nodes.slider.value);
-  nodes.loading.hidden = false;
-  let url = null;
-  try {
-    url = URL.createObjectURL(await fetchSlice(id, z, nodes.scale.value));
-    nodes.image.alt = `Slice ${z} of ${id} with its labels overlaid`;
-    await loaded(nodes.image, url);
-  } catch (err) {
-    // A newer position is waiting: this one no longer matters.
-    if (!pending) toast(`Slice ${z} could not be shown: ${err.message}`, { error: true });
-  } finally {
-    if (url) URL.revokeObjectURL(url);
-    inFlight = false;
-    if (pending) {
-      pending = false;
-      void load();
-    } else {
-      nodes.loading.hidden = true;
-    }
-  }
+  nodes.show(segmentation, Number(nodes.slider.value), nodes.scale.value);
 }
 
 /**
@@ -90,7 +39,7 @@ export function showSegmentation(summary) {
   [voxelZ] = summary.voxel_size_um; // (z, y, x) µm
   nodes.slider.max = String(depth - 1);
   nodes.slider.value = String(Math.floor(depth / 2));
-  void load();
+  load();
 }
 
 /**
@@ -102,8 +51,8 @@ export function initSlices(server, colors) {
   nodes.slider = document.getElementById('slice-z');
   nodes.value = document.getElementById('slice-z-value');
   nodes.scale = document.getElementById('slice-scale');
-  nodes.image = document.getElementById('slice-image');
-  nodes.loading = document.getElementById('slice-loading');
+  const loading = document.getElementById('slice-loading');
+  nodes.show = sliceLoader(document.getElementById('slice-image'), (busy) => { loading.hidden = !busy; });
 
   const scales = SCALES.filter((s) => s <= server.max_preview_scale);
   nodes.scale.replaceChildren(
@@ -120,5 +69,5 @@ export function initSlices(server, colors) {
     clearTimeout(timer);
     timer = setTimeout(load, DEBOUNCE_MS);
   });
-  nodes.scale.addEventListener('change', () => void load());
+  nodes.scale.addEventListener('change', load);
 }
