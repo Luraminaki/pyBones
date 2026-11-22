@@ -33,7 +33,9 @@
       "classify": 0.65,
       "analyse": 0.11,
       "resolve": 0.17,
-      "clean": 0.05
+      "clean": 0.05,
+      "sharpen": 0.68,
+      "thin": 0.03
     }
   },
   "thresholds": {
@@ -80,6 +82,15 @@
     "min_isolated_vessel_um3": 810,
     "min_vessel_um3": 810,
     "min_bone_um3": 27000
+  },
+  "thin_vessels": {
+    "enabled": false,
+    "psf_sigma_um": 4.4,
+    "iterations": 3,
+    "min_volume_um3": 540,
+    "max_half_thickness_um": 6.0,
+    "block_slices": 64,
+    "block_px": 128
   },
   "mesh": {
     "downsample": {"bone": 2, "vessel": 2, "burst": 2},

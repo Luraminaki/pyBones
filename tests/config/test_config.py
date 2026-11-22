@@ -15,7 +15,7 @@ from pybones.config.loader import (
     packaged_text,
 )
 from pybones.segmentation.labels import Label
-from pybones.segmentation.stages import MESH_STAGES, STAGES_3D
+from pybones.segmentation.stages import MESH_STAGES, STAGES_3D, THIN_STAGES
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -65,6 +65,10 @@ def test_overrides_parse_json_values() -> None:
         'io.mask_png_template="png/{label}_{index:04d}.png"',  # a path, not a file name
         "mesh.taubin.mu_factor=-0.4",  # Taubin needs mu < -lambda
         "mesh.glb_position_bits=24",  # 16 or 32
+        "thin_vessels.psf_sigma_um=0",  # a blur to undo must be > 0
+        "thin_vessels.iterations=0",  # at least one correction
+        "thin_vessels.max_half_thickness_um=-1",  # a radius cannot be negative
+        "thin_vessels.block_px=0",  # a block holds at least one pixel
     ],
 )
 def test_out_of_range_values_are_rejected(override: str) -> None:
@@ -86,7 +90,7 @@ def test_unknown_keys_are_rejected(tmp_path: "Path") -> None:
 def test_stage_weights_cover_the_segmentation_stages_only() -> None:
     """Segmentation and meshing weigh their own stages (mesh jobs have their own weights)."""
     weights = load_config().pipeline.stage_weights
-    assert set(weights) == set(STAGES_3D)
+    assert set(weights) == {*STAGES_3D, *THIN_STAGES}
     assert not set(weights) & set(MESH_STAGES)
     assert set(load_config().mesh.stage_weights) == set(MESH_STAGES)
     with pytest.raises(ValidationError, match="weight exactly"):

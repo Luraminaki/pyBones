@@ -28,6 +28,10 @@ class Stage(StrEnum):
     ANALYSE = "analyse"
     RESOLVE = "resolve"
     CLEAN = "clean"
+    #: Optional thin-vessel pass after the others: deconvolution and thin pieces, then the
+    #: labels rewritten with the pieces kept.
+    SHARPEN = "sharpen"
+    THIN = "thin"
     #: Meshing one label (a job of its own, after a segmentation): block occupancy,
     #: marching cubes, Taubin smoothing, file writing.
     OCCUPANCY = "occupancy"
@@ -45,6 +49,8 @@ class Stage(StrEnum):
 #: Stages of a run without / with the 3D refinement.
 STAGES_2D = (Stage.THRESHOLDS, Stage.CLASSIFY)
 STAGES_3D = (*STAGES_2D, Stage.ANALYSE, Stage.RESOLVE, Stage.CLEAN)
+#: Stages the thin-vessel pass adds after either.
+THIN_STAGES = (Stage.SHARPEN, Stage.THIN)
 #: Stages of a mesh job.
 MESH_STAGES = (Stage.OCCUPANCY, Stage.SURFACE, Stage.SMOOTHING, Stage.WRITING)
 #: Stages of a quantification job.

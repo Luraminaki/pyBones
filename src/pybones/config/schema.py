@@ -21,7 +21,7 @@ from pybones.config.fields import (
 )
 from pybones.config.quantification import QuantificationConfig
 from pybones.segmentation.labels import FOREGROUND_LABELS, Label, label_keys
-from pybones.segmentation.stages import MESH_STAGES, STAGES_3D, Stage
+from pybones.segmentation.stages import MESH_STAGES, STAGES_3D, THIN_STAGES, Stage
 
 #: Largest mesh downsampling factor: factor³ must fit the uint16 block counters of the
 #: occupancy grid.
@@ -111,7 +111,7 @@ class PipelineConfig(Section):
         Raises:
             ValueError: If a segmentation stage has no weight.
         """
-        missing = sorted(set(STAGES_3D) - set(self.stage_weights))
+        missing = sorted({*STAGES_3D, *THIN_STAGES} - set(self.stage_weights))
         if missing:
             raise ValueError(f"stage_weights misses {missing}")
         return self
@@ -275,6 +275,41 @@ class RefinementConfig(Section):
     min_bone_um3: Volume = Field(description="Smaller 3D bone pieces are noise.")
 
 
+class ThinVesselsConfig(Section):
+    """Thin vessels the blur hides, found on a deconvolved image (off by default: unconfirmed)."""
+
+    enabled: bool = Field(
+        description="After the other stages, deconvolve the stack and turn thin bright pieces "
+        + "labelled background or bone into vessel. Finds about half of the thin vessels the "
+        + "blur hides on the phantom; on a real scan the pieces it adds sit in or along bone, "
+        + "where only an expert can tell a vessel from dense bone."
+    )
+    psf_sigma_um: Annotated[float, Field(gt=0.0, le=1000.0)] = Field(
+        description="Scanner blur the deconvolution undoes (Gaussian sigma), as measured on the "
+        + "scan's bone edges."
+    )
+    iterations: int = Field(
+        ge=1,
+        le=100,
+        description="Richardson-Lucy iterations: more sharpens more, and amplifies the noise.",
+    )
+    min_volume_um3: Volume = Field(description="Smaller added pieces are noise.")
+    max_half_thickness_um: Length = Field(
+        description="A piece holding a ball of this radius is not thin: it is not added."
+    )
+    block_slices: int = Field(
+        ge=1,
+        le=100_000,
+        description="Slices of a deconvolution block: larger blocks repeat their margins less "
+        + "(faster) and take more memory per worker.",
+    )
+    block_px: int = Field(
+        ge=1,
+        le=100_000,
+        description="In-plane side of a deconvolution block, in pixels (same trade-off).",
+    )
+
+
 class TaubinConfig(Section):
     """Taubin λ|μ smoothing of extracted surfaces (removes the voxel staircase)."""
 
@@ -391,6 +426,7 @@ class PyBonesConfig(Section):
     tubularity: TubularityConfig
     z_smoothing: ZSmoothingConfig
     refinement: RefinementConfig
+    thin_vessels: ThinVesselsConfig
     mesh: MeshConfig
     quantification: QuantificationConfig
     render: RenderConfig

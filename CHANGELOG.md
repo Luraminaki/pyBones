@@ -11,6 +11,26 @@ from package metadata at runtime; every segmentation records it in its
 
 ## Unreleased
 
+- Thin vessels the blur hides, an optional last pass (`thin_vessels.enabled`, **off by default**):
+  - What it does: the stack is deconvolved (Richardson-Lucy with the measured blur, σ 4.4 µm,
+    3 iterations). Voxels labelled background or bone that then reach the vessel-core threshold
+    are candidates, linked into 3D pieces. Pieces of at least 540 µm³ in which no ball of 6 µm
+    fits become vessel.
+  - Phantom (measured before the stage was built, as a post-process): thin vessels found under
+    6 µm radius 43 % -> 61 %; nothing else worse (vessel precision unchanged, 50 false
+    junctions instead of 49); network length -8 % -> -3 %. The result holds with the blur wrong
+    by ±20 %.
+  - Real stack: +96,173 voxels (+1.3 % vessel), 96 % of them labelled bone before; 1,595 pieces.
+    Up close they are bright spots and short bars in or along bone, where only an expert can
+    tell a vessel from dense bone: hence off by default, like `bone_side`.
+  - Cost on the real stack: +17 s (segmentation 24 -> 41 s); peak memory 1.64 -> 2.53 GB.
+  - How it streams: the deconvolution runs in blocks whose margins make them equal to the whole
+    volume (tested), on the worker threads. The thin test is an erosion by the ball, slice by
+    slice. Pieces are linked across slices as the refinement does.
+  - New stages `sharpen` and `thin`, with measured progress weights. `meta.json` records what
+    the pass added (`thin_vessels`).
+  - New modules: `imaging/deconvolution.py` and `segmentation/thin_vessels.py`.
+  - The configuration gains a section: outputs of 0.7.0 must be segmented again.
 - INSTALL: a LABELLING CROPS section for whoever labels the real scan. It covers starting the
   annotation page (regenerate, serve), painting and the *unsure* label, the neighbouring slices,
   correcting rather than trusting the pre-fill, where the labels are saved, and scoring. The

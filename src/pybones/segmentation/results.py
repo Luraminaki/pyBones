@@ -10,6 +10,7 @@ from pybones.config.schema import PyBonesConfig
 from pybones.io.volume_store import open_volume
 from pybones.segmentation.classifier import Thresholds
 from pybones.segmentation.refinement import RefinementStats
+from pybones.segmentation.thin_vessels import ThinVesselStats
 from pybones.utils.constants import JSON_INDENT
 
 if TYPE_CHECKING:
@@ -35,6 +36,7 @@ class SegmentationMeta(BaseModel):
         thresholds: Global thresholds and class means.
         label_fractions: Fraction of the volume per final label key.
         refinement: What the 3D refinement changed (``None`` if disabled).
+        thin_vessels: What the thin-vessel pass added (``None`` if disabled).
         timing_s: Duration of each stage, in seconds.
         config: Full effective configuration.
     """
@@ -47,6 +49,7 @@ class SegmentationMeta(BaseModel):
     thresholds: Thresholds
     label_fractions: dict[str, float]
     refinement: RefinementStats | None
+    thin_vessels: ThinVesselStats | None
     timing_s: dict[str, float]
     config: PyBonesConfig
 

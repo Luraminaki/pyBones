@@ -35,6 +35,7 @@ configuration in its `meta.json`. The server's own settings are apart, in `serve
   - [`tubularity`](#tubularity)
   - [`z_smoothing`](#z_smoothing)
   - [`refinement`](#refinement)
+  - [`thin_vessels`](#thin_vessels)
   - [`mesh`](#mesh)
   - [`mesh.taubin`](#meshtaubin)
   - [`quantification`](#quantification)
@@ -107,7 +108,7 @@ Parallelism of the per-slice stage, and progress estimation.
 |---|---|---|---|
 | `workers` | `4` | integer, 1 ≤ x ≤ 256 | Threads (1 = sequential). |
 | `extra_in_flight` | `2` | integer, 0 ≤ x ≤ 256 | Queued slices beyond `workers`. |
-| `stage_weights` | `{"thresholds": 0.02, "classify": 0.65, "analyse": 0.11, "resolve": 0.17, "clean": 0.05}` | 0 < x ≤ 1, for each of `thresholds`, `classify`, `analyse`, `resolve`, `clean` | Relative duration of each stage, for the overall progress fraction (measured on the reference stack; normalised over the stages that run). |
+| `stage_weights` | `{"thresholds": 0.02, "classify": 0.65, "analyse": 0.11, "resolve": 0.17, "clean": 0.05, "sharpen": 0.68, "thin": 0.03}` | 0 < x ≤ 1, for each of `thresholds`, `classify`, `analyse`, `resolve`, `clean`, `sharpen`, `thin` | Relative duration of each stage, for the overall progress fraction (measured on the reference stack; normalised over the stages that run). |
 
 ### `thresholds`
 
@@ -198,6 +199,20 @@ Sliding majority vote along z.
 | `min_isolated_vessel_um3` | `810.0` | 0 ≤ x ≤ 1e18 | Isolated ambiguous components smaller than this are noise. |
 | `min_vessel_um3` | `810.0` | 0 ≤ x ≤ 1e18 | Smaller 3D vessels are noise. |
 | `min_bone_um3` | `27000.0` | 0 ≤ x ≤ 1e18 | Smaller 3D bone pieces are noise. |
+
+### `thin_vessels`
+
+Thin vessels the blur hides, found on a deconvolved image (off by default: unconfirmed).
+
+| Setting | Default | Accepts | Meaning |
+|---|---|---|---|
+| `enabled` | `false` | `true` / `false` | After the other stages, deconvolve the stack and turn thin bright pieces labelled background or bone into vessel. Finds about half of the thin vessels the blur hides on the phantom; on a real scan the pieces it adds sit in or along bone, where only an expert can tell a vessel from dense bone. |
+| `psf_sigma_um` | `4.4` | 0 < x ≤ 1,000 | Scanner blur the deconvolution undoes (Gaussian sigma), as measured on the scan's bone edges. |
+| `iterations` | `3` | integer, 1 ≤ x ≤ 100 | Richardson-Lucy iterations: more sharpens more, and amplifies the noise. |
+| `min_volume_um3` | `540.0` | 0 ≤ x ≤ 1e18 | Smaller added pieces are noise. |
+| `max_half_thickness_um` | `6.0` | 0 ≤ x ≤ 1,000,000 | A piece holding a ball of this radius is not thin: it is not added. |
+| `block_slices` | `64` | integer, 1 ≤ x ≤ 100,000 | Slices of a deconvolution block: larger blocks repeat their margins less (faster) and take more memory per worker. |
+| `block_px` | `128` | integer, 1 ≤ x ≤ 100,000 | In-plane side of a deconvolution block, in pixels (same trade-off). |
 
 ### `mesh`
 

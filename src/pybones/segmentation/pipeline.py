@@ -45,10 +45,12 @@ from pybones.segmentation.scales import resolve_pixel_params, resolve_tubularity
 from pybones.segmentation.stages import (
     STAGES_2D,
     STAGES_3D,
+    THIN_STAGES,
     CancelledError,
     Stage,
     no_progress,
 )
+from pybones.segmentation.thin_vessels import add_thin_vessels, resolve_thin_vessels, store_raw
 from pybones.segmentation.tubularity import quantize_tubularity, slice_tubularity
 from pybones.segmentation.zsmoothing import z_majority
 from pybones.utils.parallel import ordered_map
@@ -74,6 +76,9 @@ TUBULARITY_SCRATCH = "tubularity"
 
 #: Keys of ``meta.json``'s ``timing_s`` besides the stage names.
 REFINEMENT_TIMING = "refinement"
+THIN_TIMING = "thin_vessels"
+#: Scratch volumes of the thin-vessel pass: the labels before it, the raw stack, its candidates.
+UNTHINNED_SCRATCH, RAW_SCRATCH, CANDIDATES_SCRATCH = "unthinned", "raw", "candidates"
 TOTAL_TIMING = "total"
 
 
@@ -258,9 +263,11 @@ def planned_stages(config: "PyBonesConfig") -> tuple[Stage, ...]:
         config: Configuration (whether the 3D refinement runs).
 
     Returns:
-        :data:`STAGES_3D` with the refinement, :data:`STAGES_2D` without.
+        :data:`STAGES_3D` with the refinement, :data:`STAGES_2D` without; then
+        :data:`THIN_STAGES` with the thin-vessel pass.
     """
-    return STAGES_3D if config.refinement.enabled else STAGES_2D
+    stages = STAGES_3D if config.refinement.enabled else STAGES_2D
+    return (*stages, *THIN_STAGES) if config.thin_vessels.enabled else stages
 
 
 def _estimate_stack_thresholds(
@@ -335,8 +342,13 @@ def run_segmentation(
     final_path = labels_path(out_dir, io_cfg)
     refine = config.refinement.enabled
     use_tubes = refine and config.tubularity.enabled
+    thin = config.thin_vessels.enabled
+    # The thin-vessel pass rewrites the labels: the stages before it write a scratch file.
+    labelled_path = scratch_path(out_dir, io_cfg, UNTHINNED_SCRATCH) if thin else final_path
+    raw_path = scratch_path(out_dir, io_cfg, RAW_SCRATCH)
+    candidates_path = scratch_path(out_dir, io_cfg, CANDIDATES_SCRATCH)
     # With the refinement, the classified volume is a scratch file it reads back.
-    classified_path = scratch_path(out_dir, io_cfg, Stage.CLASSIFY) if refine else final_path
+    classified_path = scratch_path(out_dir, io_cfg, Stage.CLASSIFY) if refine else labelled_path
     resolved_path = scratch_path(out_dir, io_cfg, Stage.RESOLVE)
     tubularity_path = scratch_path(out_dir, io_cfg, TUBULARITY_SCRATCH) if use_tubes else None
     timings: dict[str, float] = {}
@@ -373,10 +385,24 @@ def run_segmentation(
         if refine:
             t0 = time.perf_counter()
             stats, counts = refine_volume(
-                classified_path, resolved_path, final_path, params, progress, tubularity_path
+                classified_path, resolved_path, labelled_path, params, progress, tubularity_path
             )
             timings[REFINEMENT_TIMING] = time.perf_counter() - t0
             logger.info("Refined in %.1f s: %s", timings[REFINEMENT_TIMING], stats)
+        thin_stats = None
+        if thin:
+            t0 = time.perf_counter()
+            with SliceStack(source, io_cfg) as stack:
+                store_raw(stack, raw_path, progress)
+            thin_stats, counts = add_thin_vessels(
+                (raw_path, labelled_path, candidates_path, final_path),
+                thresholds.vessel,
+                resolve_thin_vessels(config),
+                config.pipeline.workers,
+                progress,
+            )
+            timings[THIN_TIMING] = time.perf_counter() - t0
+            logger.info("Thin vessels in %.1f s: %s", timings[THIN_TIMING], thin_stats)
     except BaseException as exc:
         failed = True
         if isinstance(exc, (CancelledError, KeyboardInterrupt)):
@@ -386,7 +412,14 @@ def run_segmentation(
         _remove_files((final_path,))
         raise
     finally:
-        _remove_files((classified_path if refine else None, resolved_path, tubularity_path))
+        _remove_files(
+            (
+                classified_path if refine else None,
+                resolved_path,
+                tubularity_path,
+                *((labelled_path, raw_path, candidates_path) if thin else ()),
+            )
+        )
         if failed and created:  # last, once the scratch files inside it are gone
             with contextlib.suppress(OSError):  # only if empty: never someone else's files
                 out_dir.rmdir()
@@ -399,6 +432,7 @@ def run_segmentation(
         thresholds=thresholds,
         label_fractions={lab.key: int(counts[lab]) / total for lab in FINAL_LABELS},
         refinement=stats,
+        thin_vessels=thin_stats,
         timing_s={**timings, TOTAL_TIMING: time.perf_counter() - t_start},
         config=config,
     )
