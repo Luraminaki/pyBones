@@ -95,12 +95,13 @@ To find which defect of the vessel mask costs what, I repaired one kind of defec
 truth and measured the network again, the quantification unchanged. The largest is the band of bone
 that joins a vessel where it touches bone (Section~\ref{sec:edges}): repairing it alone removes about
 half of the junctions that are not forks. The setting that measures each side of the contact against
-its own material removes most of those (about 40\,\% of all the junctions that are not forks), but is
-off by default, since the real scan cannot confirm it.
+its own material brings the junctions that are not forks from \pbValueExpDefaultSpurious{} to
+\pbValueExpBoneSideSpurious, but is off by default, since the real scan cannot confirm it.
 The bursts came second: their boundary followed vessels lying in the slice and hollowed them out,
 until it was measured in 3D (Section~\ref{sec:bursts}). What they still take now weighs about as much
 as the vessel drawn over soft tissue: repairing either removes about a sixth of the junctions that are
-not forks (I have not yet looked at what the latter is). Clotted segments cost forks instead: next to a
+not forks. The latter is a one-voxel rim of the vessel edge, which joins vessels passing closer than
+the blur's width (Section~\ref{sec:netlimits}). Clotted segments cost forks instead: next to a
 bright segment, the halo rule removes a dim segment's first voxels before the 3D refinement can join it
 to its neighbour. With every defect repaired, the network of the segmentation is nearly that of
 the exact mask: the quantification is sound, and the vessel mask decides. Fixes tried on

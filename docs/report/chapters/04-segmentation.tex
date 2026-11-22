@@ -74,7 +74,8 @@ A band of bone one to three voxels wide joins the vessel along the contact. On t
 setting, \texttt{segmentation.vessel.bone\_side}, measures each pixel against the material on its own
 side instead: the nearer of soft tissue and bone, both beyond the reach of every core, bone counting
 only where it is thick enough to hold a \pbValueExpBoneSideBarrier\um{} disk (a dim, partly filled vessel is foreground too,
-but thin). On both phantoms it raises the vessel scores (Table~\ref{tab:experimental}); on
+but thin). It raises the vessel scores of the phantom and removes many of the network's junctions that are not
+forks (Table~\ref{tab:experimental}); on
 the real scan, however, it also turns into bone networks of thin, dim structures next to bone that may
 be partly filled vessels (\pbValueExpRealBoneSideVesselPct\,\% of vessel), and neither the 2018 masks
 nor any annotation can tell which is right. It is therefore off by default
@@ -290,9 +291,9 @@ voxel depends only on the image within $2nr$ voxels ($r$ being the kernel's radi
 carrying that margin give exactly the whole-volume result in their core (a test checks it), and memory
 stays bounded. On the phantom it finds \pbValueExpThinThinRecall{} of the vessels thinner than 6\um{}
 instead of \pbValueExpDefaultThinRecall, the other scores unchanged (Table~\ref{tab:experimental}). On
-the real scan it changes the vessel volume by \pbValueExpRealThinVesselPct\,\%: bright spots and short bars in or
-along bone, where only an expert can tell a vessel from dense bone: like the bone-side edges, it is
-off by default (Section~\ref{sec:experimental}).
+the real scan it changes the vessel volume by \pbValueExpRealThinVesselPct\,\%, as bright spots and short bars in
+or along bone, where only an expert can tell a vessel from dense bone. Like the bone-side edges, it
+is therefore off by default (Section~\ref{sec:experimental}).
 
 \section{Meshing}
 \label{sec:meshing}

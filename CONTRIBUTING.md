@@ -266,5 +266,6 @@ is given, or unless a run's stored stats are outdated. Old worktrees can be remo
   (`rm output/report/runs/*/*/stats.json`) and run step 2 alone.
 - **After a change of the current code** (new version, new configuration key), its stored run is
   refused: `rm -rf output/report/runs/current` before step 2 re-runs it, past versions untouched.
-- **Screenshots 05 to 07** of the README (annotation page, web page, Network tab) are taken by hand
-  in a browser; the report includes them as they are.
+- **Screenshots 05 to 09** of the README (annotation page, web page, Network tab, Compare tab,
+  settings form) are taken from the running pages in a browser, not by the report tool; the report
+  includes some of them as they are.

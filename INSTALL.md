@@ -51,7 +51,8 @@ links to its details.
    ```
 
    or from the browser ([WEB SERVER](#web-server)): `uv run pybones serve`, then open
-   <http://127.0.0.1:8000>, pick the stack, *Segment*, and explore the Slices, 3D and Network tabs.
+   <http://127.0.0.1:8000>, pick the stack, *Segment*, and explore the Slices, 3D, Network and Compare
+   tabs.
 5. **Rebuild the report** (optional; the PDF is versioned): install
    [LaTeX](CONTRIBUTING.md#latex), then follow
    [Generating the report](CONTRIBUTING.md#generating-the-report): render the phantom, `history`,
@@ -183,8 +184,9 @@ both are in the `logging` section of the configuration (`console_level` `WARNING
 quiet). `pybones config` writes its JSON on stdout, so that it can be redirected to a file.
 
 (*) The sample takes ~<!-- pb:Seconds -->24<!-- /pb --> s, with a peak of
-~<!-- pb:PeakGB -->1.8<!-- /pb --> GB of memory, on an AMD Ryzen AI 9 HX 370 (24 logical cores, 4 worker
-threads), 24 GB RAM, Linux; the report lists the machine every timing was measured on.
+~<!-- pb:PeakGB -->1.8<!-- /pb --> GB of memory, on an AMD Ryzen AI 9 HX 370 (24 logical cores,
+4 worker threads), <!-- pb:MemoryGB -->23<!-- /pb --> GB of RAM, Linux; the report lists the machine
+every timing was measured on.
 
 Every setting, its default, the values it accepts and what it does are listed in
 [docs/CONFIGURATION.md](docs/CONFIGURATION.md), with the three ways to change them (a JSON file of
@@ -215,16 +217,16 @@ The page, in a few steps:
    are marked, and a line under the form sums up what differs (from the defaults, or from the run
    it started from). *Experimental* settings come first, off by default; *Show advanced
    settings* reveals the rest. Only the changed values are sent, and recorded with the run. The
-   *Jobs* panel shows the stage,
-   the progress, the time elapsed and the time left (~<!-- pb:Seconds -->24<!-- /pb --> s in all on
-   the sample); *Cancel* stops the run and removes its partial files.
+   *Jobs* panel shows the stage, the progress, the time elapsed and the time left
+   (~<!-- pb:Seconds -->24<!-- /pb --> s in all on the sample); *Cancel* stops the run and removes its
+   partial files.
 2. **Slices**: when the run ends, the new segmentation opens. Drag the slider to move through the
    stack; *Size* sets the image scale.
 3. **3D**: tick the labels to show. A mesh that does not exist yet is built first (a job,
    ~<!-- pb:MeshVesselSeconds -->6<!-- /pb --> s for the vessels of the sample,
-   ~<!-- pb:MeshBoneSeconds -->13<!-- /pb --> s for the bone), then loaded. Left-drag turns the view, or moves it
-   with the *Move* switch (Shift swaps the two); right-drag always moves it; the wheel, a two-finger
-   swipe or the + / − buttons zoom; *Reset view* looks down the stack again. *Edit mesh settings…*
+   ~<!-- pb:MeshBoneSeconds -->13<!-- /pb --> s for the bone), then loaded. Left-drag turns the view, or
+   moves it with the *Move* switch (Shift swaps the two); right-drag always moves it; the wheel, a
+   two-finger swipe or the + / − buttons zoom; *Reset view* looks down the stack again. *Edit mesh settings…*
    changes the settings of the next meshes (grid, smoothing, precision), and *Rebuild shown
    meshes* builds the shown ones again with them; a label says when its mesh was built with other
    settings than the form's.

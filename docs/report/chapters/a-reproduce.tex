@@ -29,13 +29,13 @@ uv run python -m tools.report history
 \begin{verbatim}
 uv run python -m tools.report figures
 \end{verbatim}
-  \item Build the PDF (XeLaTeX):
+  \item Build the PDF (XeLaTeX; settings in \code{docs/report/latexmkrc}):
 \begin{verbatim}
-cd docs/report && latexmk -xelatex report.tex
+cd docs/report && latexmk report.tex
 \end{verbatim}
 \end{enumerate}
 
 The 2018 images of Chapter~\ref{chap:legacy} and the 2018 masks used for the comparisons are stored
 in \code{docs/report/2018/}.
-The screenshots of the annotation page, of the web page and of its Network tab were captured from
-the running pages in a headless browser (Firefox).
+The screenshots of the annotation page and of the web page were taken from the running pages in a
+browser; the report tool does not produce them.

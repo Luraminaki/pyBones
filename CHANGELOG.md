@@ -9,6 +9,23 @@ The current version lives in [pyproject.toml](pyproject.toml) and is read
 from package metadata at runtime; every segmentation records it in its
 `meta.json`. The [report](docs/report/) measures what each step below changed.
 
+## Unreleased
+
+- Compare tab: the slider started at slice 0 instead of the middle one (its value was set before
+  its maximum, which clamped it).
+- Counts read with thousands separators on the Network and Compare tabs (`9,514`, not `9514`),
+  through one helper (`count` in `ui.js`); the Network tab's "Measured with" line has room.
+- Screenshots: 06 (web page) and 07 (Network tab and centrelines) retaken with 0.8.1; new 08
+  (Compare tab) and 09 (settings form), in the README; 08 also in report chapter 3.
+- Documentation, read through again before the expert's review:
+  - Report: the pipeline list and figure name the optional thin-vessel pass; chapter 3 lists
+    every check of the page; chapter 6 explains the vessel drawn over soft tissue (a rim that fuses
+    vessels closer than the blur), with the bone-side junction counts generated instead of typed;
+    one future-work item for expert labels; Table 7.1's caption, the Compare tab's memory, the
+    appendix's build command and how the screenshots are taken (also in CONTRIBUTING).
+  - README and INSTALL: the machine's memory comes from the report (23 GB, it said 24); the
+    optional pass appears in HOW IT WORKS; the Compare tab in the walkthrough; reflowed lines.
+
 ## 0.8.1-alpha
 
 Comparing runs, and settings for every job. The configuration format is unchanged: outputs of

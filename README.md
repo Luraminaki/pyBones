@@ -48,6 +48,16 @@ The Network tab after measuring the sample, and its centrelines (yellow) drawn o
 
 ![Vascular network](screenshots/07-network.png)
 
+The Compare tab: the sample segmented without and with the thin-vessel pass, side by side (the
+settings that differ, the results, the same slice of both):
+
+![Comparing two runs](screenshots/08-compare.png)
+
+The settings of a new run: each setting says what it is, when to change it and what a change
+affects (here the experimental thin-vessel pass, ticked):
+
+![Settings form](screenshots/09-settings.png)
+
 ## VERSION
 
 The current version lives in [pyproject.toml](pyproject.toml) and is read from package metadata at
@@ -120,7 +130,8 @@ tools, generated documentation, the report): [CONTRIBUTING.md](CONTRIBUTING.md).
    burst along it). Small bone-intensity blobs, undecidable in 2D, are marked ambiguous.
 3. **Tubularity**: a multi-scale 3D Hessian gives each ambiguous voxel a tube-vs-plate ratio.
 4. **3D refinement**: ambiguous blobs are decided by what they touch in 3D (vessel, bone, nothing) and
-   by their shape (a plate is never a vessel); 3D specks are removed.
+   by their shape (a plate is never a vessel); 3D specks are removed. An optional last pass adds the
+   thin vessels a deconvolved image shows (*Thin vessels*, below; off by default).
 5. **Meshing**: marching cubes, Taubin smoothing, STL or GLB files in µm.
 6. **Vascular network** (`pybones quantify`, or the page's Network tab): the vessel mask, its
    cavities filled, is thinned to one-voxel centrelines (scikit-image); touching centreline voxels
@@ -152,8 +163,9 @@ lists every setting, its default, the values it accepts and what it does.
 **Vessel edges against bone** (`segmentation.vessel.bone_side`, off by default). Where a vessel presses
 on bone, its half-maximum edge is measured against the soft tissue around it, so a band of bone one to
 three voxels wide joins the vessel. `enabled: true` measures each side of the contact against its own
-material instead (bone counts only where thicker than a disc of `barrier_um`). On the phantoms it
-raises the vessel scores and brings the network junctions that are not forks from
+material instead (bone counts only where thicker than a disc of `barrier_um`). On the standard
+phantom it raises the vessel scores; on the branching phantom it brings the junctions that are not
+forks from
 <!-- pb:ExpDefaultSpurious -->49<!-- /pb --> to <!-- pb:ExpBoneSideSpurious -->28<!-- /pb --> on the
 branching phantom; on the real scan it changes the vessel volume by
 <!-- pb:ExpRealBoneSideVesselPct -->-4.0<!-- /pb --> %, turning thin, dim structures next to bone
@@ -171,8 +183,8 @@ s to the segmentation.
 
 Both switches can be set per run: in the web page's settings form, where they come first under
 *Experimental*, or on the command line (`--set thin_vessels.enabled=true`). Chapter 8 of the report
-measures them, alone and together.
-They should become defaults once annotated crops of the real scan confirm them.
+measures them, alone and together. They should become defaults once annotated crops of the real
+scan confirm them.
 
 **Mesh files.** Two settings decide how fine a mesh is, and they are independent:
 
@@ -215,7 +227,7 @@ noisy like the real scan.
 
 Reference run on the real stack (100 x 2300 x 1487): segmentation in ~<!-- pb:Seconds -->24<!-- /pb --> s
 with ~<!-- pb:PeakGB -->1.8<!-- /pb --> GB peak, on an AMD
-Ryzen AI 9 HX 370 (24 logical cores, 4 worker threads), 24 GB RAM, Linux. Timings depend on the machine:
+Ryzen AI 9 HX 370 (24 logical cores, 4 worker threads), <!-- pb:MemoryGB -->23<!-- /pb --> GB of RAM, Linux. Timings depend on the machine:
 the report lists the one every timing was measured on.
 
 ## PROJECT LAYOUT
@@ -264,13 +276,13 @@ docs/             CONFIGURATION.md (every setting, written by tools.docs); repor
   vessel's circumference are removed (real loops are several times longer); on the network phantom,
   the measured junctions of the segmentation are still mostly not forks
   (<!-- pb:NetSegForks -->26<!-- /pb --> of <!-- pb:NetTrueForks -->53<!-- /pb --> true forks found,
-  <!-- pb:NetSegSpurious -->49<!-- /pb --> others; chapter 6 of the report). Repairing the mask from the truth one defect at a time shows
-  where they come from: mostly the band of bone that joins a vessel where it touches bone (see
-  *Vessel edges against bone* above), then, about equally, vessels closer than the blur's width
-  (~10 µm) that the image fuses into one, and what the bursts still take; clotted segments cost real
-  forks. Cutting fused vessels apart along the dimmest path between their cores was tried and
-  dropped: at this resolution it cut real vessels as often as fused ones. Counts of junctions and branches are therefore
-  upper bounds.
+  <!-- pb:NetSegSpurious -->49<!-- /pb --> others; chapter 6 of the report). Repairing the mask from
+  the truth one defect at a time shows where they come from: mostly the band of bone that joins a
+  vessel where it touches bone (see *Vessel edges against bone* above), then, about equally, vessels
+  closer than the blur's width (~10 µm) that the image fuses into one, and what the bursts still
+  take; clotted segments cost real forks. Cutting fused vessels apart along the dimmest path between
+  their cores was tried and dropped: at this resolution it cut real vessels as often as fused ones.
+  Counts of junctions and branches are therefore upper bounds.
 - **Lengths carry three errors**: the measure itself is off by
   <!-- pb:NetTrueLengthErrorPct -->+8.2<!-- /pb --> % even on the phantom's exact mask (a centreline
   of voxels zigzags, each step counted from centre to centre), thin vessels missed shorten it, strands
@@ -280,8 +292,7 @@ docs/             CONFIGURATION.md (every setting, written by tools.docs); repor
 - **Radius bias depends on the calibre**: the radius of thin vessels is off by
   <!-- pb:NetSegRadiusThin -->+0.8<!-- /pb --> µm (too wide), that of thick ones by
   <!-- pb:NetSegRadiusThick -->-1.5<!-- /pb --> µm (too narrow), so no single correction applies and
-  none is made. Radii also come in steps of
-  the voxel grid (√k × 3 µm).
+  none is made. Radii also come in steps of the voxel grid (√k × 3 µm).
 - **Crossings look like forks**: two vessels touching in the mask are joined in the network.
 - **Branches cut by the stack** are counted but truncated (flagged in `branches.csv`): on a 300 µm
   thick stack, many are.
@@ -352,9 +363,9 @@ docs/             CONFIGURATION.md (every setting, written by tools.docs); repor
 
 ## POSSIBLE FUTURE UPDATES
 
-- Vascular network: keeping clotted segments
-  joined to their vessel (the halo rule cuts them off before the 3D refinement can), a length that
-  follows the centreline instead of its voxel steps, and measures per region (cortex, marrow).
+- Vascular network: keeping clotted segments joined to their vessel (the halo rule cuts them off
+  before the 3D refinement can), a length that follows the centreline instead of its voxel steps,
+  and measures per region (cortex, marrow).
 - Bridging small vessel gaps (clots) along the vessel direction.
 - Web page: the raw slice without overlay, measurements in 3D (distances, a picked vessel's
   calibre), comparing meshes of two runs.
