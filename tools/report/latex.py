@@ -52,7 +52,7 @@ README_SCORES_START = "<!-- scores:start (written by python -m tools.report figu
 README_SCORES_END = "<!-- scores:end -->"
 _PROFILE_SUFFIX = "_vessel"
 #: Characters with a special meaning in LaTeX text, and their escaped form.
-_LATEX_SPECIAL = {
+LATEX_SPECIAL = {
     "\\": r"\textbackslash{}",
     "&": r"\&",
     "%": r"\%",
@@ -75,7 +75,7 @@ def latex_text(text: str) -> str:
     Returns:
         The text with LaTeX special characters escaped.
     """
-    return "".join(_LATEX_SPECIAL.get(c, c) for c in text)
+    return "".join(LATEX_SPECIAL.get(c, c) for c in text)
 
 
 def _write_csv(path: "Path", header: list[str], rows: "Iterable[Iterable[object]]") -> None:

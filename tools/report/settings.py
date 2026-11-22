@@ -210,6 +210,8 @@ class ReportSettings(_Section):
         figures_dir: Figures of the report.
         screenshots_dir: README screenshots.
         readme: README whose score table is kept up to date.
+        value_documents: Markdown files whose marked values (``<!-- pb:Name -->``) are
+            rewritten from the report's values (see :mod:`tools.report.markdown`).
         history_csv: Score table, in ``data_dir``.
         versions: Versions to benchmark, oldest first.
         figures: Figure settings.
@@ -230,6 +232,7 @@ class ReportSettings(_Section):
     figures_dir: NonEmpty
     screenshots_dir: NonEmpty
     readme: NonEmpty
+    value_documents: tuple[NonEmpty, ...] = Field(min_length=1)
     history_csv: Annotated[str, Field(pattern=r"\.csv$")]
     versions: tuple[Version, ...] = Field(min_length=1)
     figures: FigureSettings

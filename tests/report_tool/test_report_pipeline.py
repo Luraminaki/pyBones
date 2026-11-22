@@ -38,6 +38,9 @@ N_SLICES = 16
 CROP = {"z": 7, "y": 150, "x": 30, "size": 64}
 LEGACY_SERIES = ("travee", "vaisseaux")
 VOXEL = (3.0, 3.0, 3.0)
+#: A value marked for the report tool, before it is filled in (see tools.report.markdown).
+VALUE_OPEN, VALUE_CLOSE = "<!-- pb:VesselDice -->", "<!-- /pb -->"
+OLD_VALUE = f"{VALUE_OPEN}old{VALUE_CLOSE}"
 PHANTOM_SHAPE = (12, 96, 96)
 #: Rows of the network score table: the true mask and the segmentation.
 SCORED_ROWS = ("true mask", "segmentation")
@@ -135,9 +138,12 @@ def repo(tmp_path: "Path", monkeypatch: pytest.MonkeyPatch) -> "Path":
             mask = np.zeros((256, 256), np.uint8)
             mask[20:60] = 255 if name == LEGACY_SERIES[0] else 0
             _ = cv2.imwrite(str(masks / name / f"{name}_{z:03d}.png"), mask)
+    for name in settings.value_documents:
+        _ = (root / name).write_text(f"Vessel Dice {OLD_VALUE}.\n")
     _ = (root / settings.readme).write_text(
         f"# Scores\n{README_SCORES_START}\nold table\n{README_SCORES_END}\n"
-        + f"# Meshes\n{README_MESHES_START}\nold meshes\n{README_MESHES_END}\nafter\n"
+        + f"# Meshes\n{README_MESHES_START}\nold meshes\n{README_MESHES_END}\n"
+        + f"Vessel Dice {OLD_VALUE}.\nafter\n"
     )
     monkeypatch.setattr(runs_module, "segment", fake_segment)
     return root
@@ -211,6 +217,9 @@ def test_every_figure_step_runs_on_the_extracts(repo: "Path") -> None:
     assert "old meshes" not in readme
     assert "| GLB, 16-bit |" in readme
     assert readme.endswith("after\n")
+    for name in settings.value_documents:
+        value = (repo / name).read_text().split(VALUE_OPEN)[1].split(VALUE_CLOSE)[0]
+        assert 0.0 <= float(value) <= 1.0  # today's vessel Dice, not the old text
 
 
 def test_unavailable_versions_keep_their_archived_rows(

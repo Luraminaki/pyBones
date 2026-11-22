@@ -9,6 +9,25 @@ The current version lives in [pyproject.toml](pyproject.toml) and is read
 from package metadata at runtime; every segmentation records it in its
 `meta.json`. The [report](docs/report/) measures what each step below changed.
 
+## Unreleased
+
+- Documentation reorganised, each fact in one place:
+  - `CONTRIBUTING.md` (new): checking a change, the tests and the rules they enforce, adding a
+    setting, VS Code and the web page, the tools, the generated documentation, the report. `INSTALL.md`
+    keeps installing and running pyBones (command line, browser, and a FROM PYTHON section).
+  - `docs/CONFIGURATION.md` (new): every setting of `default.json` and `server.json`, its default,
+    the values it accepts and its meaning, written from the pydantic schemas by `python -m tools.docs`
+    (new tool). `tests/docs_tool` fails when the file is out of date or a setting has no description;
+    the 16 settings without one got one (the `io` file names, the logging levels, both `enabled`
+    switches, `mesh.downsample`, the `render` section).
+  - Measured numbers in README, INSTALL and CONTRIBUTING are marked with two comments naming a report
+    value, and rewritten by `python -m tools.report figures` (new step `markdown_values`, new setting
+    `value_documents`); a name the report does not know stops it. 22 numbers are marked: segmentation
+    time and peak memory, mesh and quantification times, the sample's network, the phantom's thin-vessel
+    recall and network scores.
+  - The bone-side setting's phantom numbers left the README (the 0.7.0 entry below records them); the
+    README's project layout no longer says `docs/report/2018/` holds the 2018 masks (gone since 0.4.0).
+
 ## 0.7.0-alpha
 
 Fewer false junctions in the vascular network: bursts no longer follow the vessels lying in a slice,

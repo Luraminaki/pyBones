@@ -21,6 +21,7 @@ from tools.report.figures import (
 )
 from tools.report.history import history_rows, write_csv
 from tools.report.latex import history_table, plot_data, readme_scores, values
+from tools.report.markdown import markdown_values
 from tools.report.meshes import mesh_files, readme_meshes
 from tools.report.network import network_files
 from tools.report.settings import DEFAULT_SETTINGS_PATH, load_settings
@@ -35,7 +36,8 @@ if TYPE_CHECKING:
 #: Program name of the log files.
 PROGRAM_NAME = "tools-report"
 
-#: Figure steps, in order (``values`` reads the profile written by ``plot_data``).
+#: Figure steps, in order (``values`` reads the profile written by ``plot_data``;
+#: ``markdown_values`` reads ``values.tex``).
 FIGURE_STEPS: "tuple[Callable[[Context], None], ...]" = (
     overview,
     comparisons,
@@ -48,6 +50,7 @@ FIGURE_STEPS: "tuple[Callable[[Context], None], ...]" = (
     network_files,
     stage_weights,
     values,
+    markdown_values,
     readme_scores,
     readme_meshes,
 )

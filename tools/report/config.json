@@ -11,6 +11,7 @@
   "figures_dir": "docs/report/figures",
   "screenshots_dir": "screenshots",
   "readme": "README.md",
+  "value_documents": ["README.md", "INSTALL.md", "CONTRIBUTING.md"],
   "history_csv": "history.csv",
   "versions": [
     {"key": "v01", "commit": "6e040e7", "title": "First Python port (2D, per-slice)", "real": true},

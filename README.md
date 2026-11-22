@@ -102,8 +102,10 @@ behind the page is documented, and can be tried request by request, at
 ## INSTALLATION
 
 Prerequisites per OS (Debian/Ubuntu, Arch Linux, Windows), installation with uv or pip, the dataset,
-every command, the tools and how to build the report: [INSTALL.md](INSTALL.md), which starts with a
-[from-scratch walkthrough](INSTALL.md#from-scratch).
+and every way to run pyBones (command line, browser, Python): [INSTALL.md](INSTALL.md), which starts
+with a [from-scratch walkthrough](INSTALL.md#from-scratch). Every setting, its default and what it
+does: [docs/CONFIGURATION.md](docs/CONFIGURATION.md). Changing the code (checks, tests, validation
+tools, generated documentation, the report): [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## HOW IT WORKS
 
@@ -124,8 +126,10 @@ every command, the tools and how to build the report: [INSTALL.md](INSTALL.md), 
    their radii merge, in µm. Each branch gets its length, chord, tortuosity and radius (distance
    from the centreline to the wall); ends against a face of the stack or a burst are flagged, their
    branches truncated. Three files land next to the labels: `network.json` (summary and nodes),
-   `branches.csv` (one row per branch) and `centrelines.npz`. On the sample: 18 s, 1.2 GB; 592 mm of
-   vessels in 9,514 branches, median radius 6.7 µm.
+   `branches.csv` (one row per branch) and `centrelines.npz`. On the sample:
+   <!-- pb:NetSeconds -->18<!-- /pb --> s, 1.2 GB; <!-- pb:NetLengthMm -->592<!-- /pb --> mm of vessels
+   in <!-- pb:NetBranches -->9,514<!-- /pb --> branches, median radius
+   <!-- pb:NetMedianRadiusUm -->6.7<!-- /pb --> µm.
 
    Its three 3D steps are interchangeable (`quantification.backends`; both give the same result,
    tested against each other and against brute force):
@@ -139,16 +143,18 @@ every command, the tools and how to build the report: [INSTALL.md](INSTALL.md), 
    | Distances | `scipy` | exact for any voxel shape, an independent cross-check; ~100× slower (39 s) |
 
 Everything is physical (µm): change `acquisition.voxel_size_um` and every kernel follows. Every value
-lives in one JSON configuration, validated by pydantic.
+lives in one JSON configuration, validated by pydantic; [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
+lists every setting, its default, the values it accepts and what it does.
 
 **Vessel edges against bone** (`segmentation.vessel.bone_side`, off by default). Where a vessel presses
 on bone, its half-maximum edge is measured against the soft tissue around it, so a band of bone one to
 three voxels wide joins the vessel. `enabled: true` measures each side of the contact against its own
 material instead (bone counts only where thicker than a disc of `barrier_um`). On the phantoms it
-raises the vessel and bone scores (standard phantom: vessel Dice 0.862 to 0.887) and removes about
-40 % of the network junctions that are not forks; on the real scan it also turns thin, dim structures
-next to bone into bone, and nothing can yet say whether they are vessels. Try it with `--set segmentation.vessel.bone_side.enabled=true`; it should become the
-default once annotated crops of the real scan confirm it.
+raises the vessel and bone scores and removes many of the network junctions that are not forks (the
+[CHANGELOG](CHANGELOG.md) gives the numbers, at 0.7.0); on the real scan it also turns thin, dim
+structures next to bone into bone, and nothing can yet say whether they are vessels. Try it with
+`--set segmentation.vessel.bone_side.enabled=true`; it should become the default once annotated crops
+of the real scan confirm it.
 
 **Mesh files.** Two settings decide how fine a mesh is, and they are independent:
 
@@ -189,7 +195,8 @@ noisy like the real scan.
 | Burst | 0.922 | 0.904 | 0.940 |
 <!-- scores:end -->
 
-Reference run on the real stack (100 x 2300 x 1487): segmentation in ~25 s with ~1.7 GB peak, on an AMD
+Reference run on the real stack (100 x 2300 x 1487): segmentation in ~<!-- pb:Seconds -->24<!-- /pb --> s
+with ~<!-- pb:PeakGB -->1.7<!-- /pb --> GB peak, on an AMD
 Ryzen AI 9 HX 370 (24 logical cores, 4 worker threads), 24 GB RAM, Linux. Timings depend on the machine:
 the report lists the one every timing was measured on.
 
@@ -208,9 +215,11 @@ src/pybones/
   api/            operations as functions, background jobs (progress, cancellation, events)
   server/         local web server (FastAPI): HTTP API over api/, and the web page (static/:
                   HTML, CSS, JavaScript modules, three.js 0.187 vendored)
-tools/            annotation page, synthetic phantom, report benchmark & figures, check runner
+tools/            annotation page, synthetic phantom, report benchmark & figures, generated docs,
+                  check runner
 tests/            mirrors src/ and tools/ (pytest, synthetic data)
-docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it compares against
+docs/             CONFIGURATION.md (every setting, written by tools.docs); report/: the report
+                  (LaTeX), whose 2018/ holds the 2018 images it compares against
 ```
 
 ## KNOWN LIMITATIONS
@@ -218,8 +227,9 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
 **Results**
 
 - **Voxel size**: unknown; 3 µm isotropic is an estimate (anatomy and the 2018 project brief agree).
-- **Thin vessels**: below ~6 µm radius, a vessel is smaller than the scanner blur; about 4 in 10 are
-  found. Measured diameters under ~12 µm will be overestimated.
+- **Thin vessels**: below ~6 µm radius, a vessel is smaller than the scanner blur; on the phantom, a
+  share of only <!-- pb:VesselRecallThin -->0.43<!-- /pb --> of their voxels is found. Measured
+  diameters under ~12 µm will be overestimated.
 - **Vessels and bone look alike**: even the researchers could not always tell them apart on this scan.
   The segmentation is a best effort, not a ground truth.
 - **Freezer damage**: the femur was frozen, so burst vessels and leaked or clotted contrast agent are
@@ -233,18 +243,23 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
 - **Junctions that are not forks**: wherever the vessel mask has a hole or a fold, the centreline goes
   around it and draws a loop, and each loop adds about two junctions. Loops barely longer than their
   vessel's circumference are removed (real loops are several times longer); on the network phantom,
-  the measured junctions of the segmentation are still mostly not forks (26 of 53 true forks found,
-  49 others; chapter 6 of the report). Repairing the mask from the truth one defect at a time shows
+  the measured junctions of the segmentation are still mostly not forks
+  (<!-- pb:NetSegForks -->26<!-- /pb --> of <!-- pb:NetTrueForks -->53<!-- /pb --> true forks found,
+  <!-- pb:NetSegSpurious -->49<!-- /pb --> others; chapter 6 of the report). Repairing the mask from the truth one defect at a time shows
   where they come from: mostly the band of bone that joins a vessel where it touches bone (see
   *Vessel edges against bone* above), then, about equally, vessel drawn over soft tissue and what the
   bursts still take; clotted segments cost real forks. Counts of junctions and branches are therefore
   upper bounds.
-- **Lengths carry three errors**: the measure reads about 8 % long even on the phantom's exact mask (a
-  centreline of voxels zigzags, each step counted from centre to centre), thin vessels missed shorten
-  it, strands along holes of the mask lengthen it. On the phantom they net to about 3 % short; none
-  is corrected, so a total length says little without the recall and precision of chapter 6.
-- **Radius bias depends on the calibre**: thin vessels read about 0.8 µm too wide, thick ones about
-  1.5 µm too narrow, so no single correction applies and none is made. Radii also come in steps of
+- **Lengths carry three errors**: the measure itself is off by
+  <!-- pb:NetTrueLengthErrorPct -->+8.2<!-- /pb --> % even on the phantom's exact mask (a centreline
+  of voxels zigzags, each step counted from centre to centre), thin vessels missed shorten it, strands
+  along holes of the mask lengthen it. On the phantom they net to
+  <!-- pb:NetSegLengthErrorPct -->-3.0<!-- /pb --> %; none is corrected, so a total length says little
+  without the recall and precision of chapter 6.
+- **Radius bias depends on the calibre**: the radius of thin vessels is off by
+  <!-- pb:NetSegRadiusThin -->+0.8<!-- /pb --> µm (too wide), that of thick ones by
+  <!-- pb:NetSegRadiusThick -->-1.5<!-- /pb --> µm (too narrow), so no single correction applies and
+  none is made. Radii also come in steps of
   the voxel grid (√k × 3 µm).
 - **Crossings look like forks**: two vessels touching in the mask are joined in the network.
 - **Branches cut by the stack** are counted but truncated (flagged in `branches.csv`): on a 300 µm
@@ -276,11 +291,12 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
   them, segmenting it gives one more sample to look at, not a measured accuracy.
 - **Format**: 16-bit grey-level slices (TIFF or PNG), one file per slice, in a folder or a zip
   archive, ordered by their file names (`slice_2` before `slice_10`).
-- **Size**: the stack is streamed, but memory still grows with it (~1.7 GB peak for the 100 × 2300 ×
-  1487 sample).
+- **Size**: the stack is streamed, but memory still grows with it
+  (~<!-- pb:PeakGB -->1.7<!-- /pb --> GB peak for the 100 × 2300 × 1487 sample).
 - **Older segmentations**: pyBones only reads the outputs of its own version's format; an output
   written by an older version is refused with a message naming both versions. Segment the stack
-  again (~25 s for the sample): while the project is alpha, outputs are not kept compatible.
+  again (~<!-- pb:Seconds -->24<!-- /pb --> s for the sample): while the project is alpha, outputs are
+  not kept compatible.
 
 **Web server**
 
@@ -297,7 +313,8 @@ docs/report/      the report (LaTeX); 2018/ holds the 2018 masks and images it c
 - **Jobs live in memory**: stopping the server cancels the running jobs and forgets the finished
   ones (their results stay on disk). The page remembers the last segmentation viewed in this browser
   only.
-- **One job at a time** by default (`jobs.max_concurrent`): a segmentation takes ~1.7 GB of RAM.
+- **One job at a time** by default (`jobs.max_concurrent`): a segmentation takes
+  ~<!-- pb:PeakGB -->1.7<!-- /pb --> GB of RAM.
 - **Browser caches**: the page's files are checked on every load, so an update is never missed; a
   browser that kept them before this rule (pyBones 0.5) may need one hard refresh (Ctrl+Shift+R).
 - **Centrelines in 3D** are drawn as points over the meshes, one pixel each: zoomed out, the whole
