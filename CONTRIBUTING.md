@@ -189,7 +189,7 @@ Some documentation is written from the code or the measurements, never by hand:
   `python -m tools.report figures`.
 - **Measured numbers in the Markdown files** (README, INSTALL, this guide): a number the report
   measures sits between two comments that name it, invisible once rendered; in the source, the
-  segmentation's peak memory reads `<!-- pb:PeakGB -->1.7<!-- /pb -->` (GB). The name is one of the
+  segmentation's peak memory reads `<!-- pb:PeakGB -->1.8<!-- /pb -->` (GB). The name is one of the
   report's values (`PeakGB` is `\pbValuePeakGB` in `docs/report/data/values.tex`).
   `python -m tools.report figures` rewrites every such number; a name it does not know stops it. Mark
   a measured number this way rather than typing it.
@@ -241,9 +241,10 @@ uv run python -m tools.report history
 # 3. Render the figures, plot data, history table, measured values (values.tex), the README's tables,
 #    screenshots 01-04 and the marked values of the Markdown files; mesh today's run in every format;
 #    generate, segment and measure the branching phantom and measure the sample's vessel network
-#    (chapter 6); time each progress stage of the segmentation, a mesh and the quantification, and
-#    warn about a stage weight that no longer matches its share (stage_weight_tolerance). About three
-#    minutes.
+#    (chapter 6); measure both experimental switches on both phantoms and the sample (chapter 8);
+#    time each progress stage of the segmentation (with and without the thin-vessel pass), a mesh
+#    and the quantification, and warn about a stage weight that no longer matches its share
+#    (stage_weight_tolerance). About four minutes.
 uv run python -m tools.report figures
 
 # 4. Build the PDF (settings in docs/report/latexmkrc; the PDF is copied to docs/report/report.pdf)

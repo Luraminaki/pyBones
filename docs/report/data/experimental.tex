@@ -1,0 +1,12 @@
+\begin{tabular}{lrrrrrrr}
+\toprule
+ & \multicolumn{3}{c}{Standard phantom (vessels)} & \multicolumn{4}{c}{Branching phantom} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-8}
+Setup & Dice & Precision & Recall $<6$\um & Forks & Other & Loops & Length \\
+\midrule
+Both off (default) & 0.862 & 0.826 & 0.43 & 26/53 & 49 & 7 & $-3.0$\,\% \\
+Bone-side edges & 0.887 & 0.876 & 0.42 & 30/53 & 28 & 5 & $-7.2$\,\% \\
+Thin vessels & 0.863 & 0.826 & 0.60 & 27/53 & 50 & 7 & $+2.1$\,\% \\
+Both on & 0.888 & 0.875 & 0.60 & 31/53 & 30 & 5 & $-1.8$\,\% \\
+\bottomrule
+\end{tabular}

@@ -151,11 +151,26 @@ lists every setting, its default, the values it accepts and what it does.
 on bone, its half-maximum edge is measured against the soft tissue around it, so a band of bone one to
 three voxels wide joins the vessel. `enabled: true` measures each side of the contact against its own
 material instead (bone counts only where thicker than a disc of `barrier_um`). On the phantoms it
-raises the vessel and bone scores and removes many of the network junctions that are not forks (the
-[CHANGELOG](CHANGELOG.md) gives the numbers, at 0.7.0); on the real scan it also turns thin, dim
-structures next to bone into bone, and nothing can yet say whether they are vessels. Try it with
-`--set segmentation.vessel.bone_side.enabled=true`; it should become the default once annotated crops
-of the real scan confirm it.
+raises the vessel scores and brings the network junctions that are not forks from
+<!-- pb:ExpDefaultSpurious -->49<!-- /pb --> to <!-- pb:ExpBoneSideSpurious -->28<!-- /pb --> on the
+branching phantom; on the real scan it changes the vessel volume by
+<!-- pb:ExpRealBoneSideVesselPct -->-4.0<!-- /pb --> %, turning thin, dim structures next to bone
+into bone, and nothing can yet say whether they are vessels.
+
+**Thin vessels** (`thin_vessels`, off by default). A vessel thinner than the scanner blur reads dim,
+often no brighter than bone. This last pass undoes part of the blur (Richardson-Lucy deconvolution,
+the measured Gaussian), and turns into vessel the thin pieces labelled background or bone that the
+sharpened image shows as bright as a vessel core. On the phantom it finds
+<!-- pb:ExpThinThinRecall -->0.60<!-- /pb --> of the vessels under 6 µm radius instead of
+<!-- pb:ExpDefaultThinRecall -->0.43<!-- /pb -->, nothing else worse; on the real scan it changes the
+vessel volume by <!-- pb:ExpRealThinVesselPct -->+1.3<!-- /pb --> %, bright spots and short bars in
+or along bone that only an expert can confirm, and adds <!-- pb:ExpRealThinSeconds -->15<!-- /pb -->
+s to the segmentation.
+
+Both switches can be set per run: in the web page's settings form, where they come first under
+*Experimental*, or on the command line (`--set thin_vessels.enabled=true`). Chapter 8 of the report
+measures them, alone and together.
+They should become defaults once annotated crops of the real scan confirm them.
 
 **Mesh files.** Two settings decide how fine a mesh is, and they are independent:
 
@@ -172,7 +187,7 @@ of the real scan confirm it.
     of a voxel on the sample (measured below); `32` stores exact floats.
 
 <!-- meshes:start (written by python -m tools.report figures) -->
-The vessel mesh of the sample (1.36 million points, 2.72 million triangles), with pyBones 0.7.0:
+The vessel mesh of the sample (1.36 million points, 2.72 million triangles), with pyBones 0.8.0:
 
 | Format | Size | Largest position error | Use |
 |---|---|---|---|
@@ -189,7 +204,7 @@ No expert ground truth exists for this scan, so [tools/phantom](tools/phantom/) 
 noisy like the real scan.
 
 <!-- scores:start (written by python -m tools.report figures) -->
-| Phantom (0.7.0) | Dice | Precision | Recall |
+| Phantom (0.8.0) | Dice | Precision | Recall |
 |---|---|---|---|
 | Bone | 0.989 | 0.994 | 0.984 |
 | Vessel | 0.862 | 0.826 | 0.901 |
@@ -197,7 +212,7 @@ noisy like the real scan.
 <!-- scores:end -->
 
 Reference run on the real stack (100 x 2300 x 1487): segmentation in ~<!-- pb:Seconds -->24<!-- /pb --> s
-with ~<!-- pb:PeakGB -->1.7<!-- /pb --> GB peak, on an AMD
+with ~<!-- pb:PeakGB -->1.8<!-- /pb --> GB peak, on an AMD
 Ryzen AI 9 HX 370 (24 logical cores, 4 worker threads), 24 GB RAM, Linux. Timings depend on the machine:
 the report lists the one every timing was measured on.
 
@@ -229,8 +244,9 @@ docs/             CONFIGURATION.md (every setting, written by tools.docs); repor
 
 - **Voxel size**: unknown; 3 µm isotropic is an estimate (anatomy and the 2018 project brief agree).
 - **Thin vessels**: below ~6 µm radius, a vessel is smaller than the scanner blur; on the phantom, a
-  share of only <!-- pb:VesselRecallThin -->0.43<!-- /pb --> of their voxels is found. Measured
-  diameters under ~12 µm will be overestimated.
+  share of only <!-- pb:VesselRecallThin -->0.43<!-- /pb --> of their voxels is found (the optional
+  *Thin vessels* pass above finds more, unconfirmed on the real scan). Measured diameters under
+  ~12 µm will be overestimated.
 - **Vessels and bone look alike**: even the researchers could not always tell them apart on this scan.
   The segmentation is a best effort, not a ground truth.
 - **Freezer damage**: the femur was frozen, so burst vessels and leaked or clotted contrast agent are
@@ -248,8 +264,10 @@ docs/             CONFIGURATION.md (every setting, written by tools.docs); repor
   (<!-- pb:NetSegForks -->26<!-- /pb --> of <!-- pb:NetTrueForks -->53<!-- /pb --> true forks found,
   <!-- pb:NetSegSpurious -->49<!-- /pb --> others; chapter 6 of the report). Repairing the mask from the truth one defect at a time shows
   where they come from: mostly the band of bone that joins a vessel where it touches bone (see
-  *Vessel edges against bone* above), then, about equally, vessel drawn over soft tissue and what the
-  bursts still take; clotted segments cost real forks. Counts of junctions and branches are therefore
+  *Vessel edges against bone* above), then, about equally, vessels closer than the blur's width
+  (~10 µm) that the image fuses into one, and what the bursts still take; clotted segments cost real
+  forks. Cutting fused vessels apart along the dimmest path between their cores was tried and
+  dropped: at this resolution it cut real vessels as often as fused ones. Counts of junctions and branches are therefore
   upper bounds.
 - **Lengths carry three errors**: the measure itself is off by
   <!-- pb:NetTrueLengthErrorPct -->+8.2<!-- /pb --> % even on the phantom's exact mask (a centreline
@@ -293,7 +311,7 @@ docs/             CONFIGURATION.md (every setting, written by tools.docs); repor
 - **Format**: 16-bit grey-level slices (TIFF or PNG), one file per slice, in a folder or a zip
   archive, ordered by their file names (`slice_2` before `slice_10`).
 - **Size**: the stack is streamed, but memory still grows with it
-  (~<!-- pb:PeakGB -->1.7<!-- /pb --> GB peak for the 100 × 2300 × 1487 sample).
+  (~<!-- pb:PeakGB -->1.8<!-- /pb --> GB peak for the 100 × 2300 × 1487 sample).
 - **Older segmentations**: pyBones only reads the outputs of its own version's format; an output
   written by an older version is refused with a message naming both versions. Segment the stack
   again (~<!-- pb:Seconds -->24<!-- /pb --> s for the sample): while the project is alpha, outputs are
@@ -315,24 +333,27 @@ docs/             CONFIGURATION.md (every setting, written by tools.docs); repor
   ones (their results stay on disk). The page remembers the last segmentation viewed in this browser
   only.
 - **One job at a time** by default (`jobs.max_concurrent`): a segmentation takes
-  ~<!-- pb:PeakGB -->1.7<!-- /pb --> GB of RAM.
+  ~<!-- pb:PeakGB -->1.8<!-- /pb --> GB of RAM.
 - **Browser caches**: the page's files are checked on every load, so an update is never missed; a
   browser that kept them before this rule (pyBones 0.5) may need one hard refresh (Ctrl+Shift+R).
 - **Centrelines in 3D** are drawn as points over the meshes, one pixel each: zoomed out, the whole
   stack's centrelines (about 220,000 points on the sample) cover much of the view.
+- **Settings per run cover the segmentation**: the settings form (and a run request) changes the
+  segmentation's settings only; meshes and networks are built with the server's (`default.json`).
 - **Cached meshes are not rebuilt by themselves**: a mesh is built once per label and format and kept
   next to its segmentation; after changing the mesh settings (grid, smoothing, precision), build it
   again (`POST` its address) to refresh it.
 
 ## POSSIBLE FUTURE UPDATES
 
-- Vascular network: telling a vessel from the bone where they touch (the bone-side edge exists but
-  needs annotated crops of the real scan before it can be the default), keeping clotted segments
+- Vascular network: keeping clotted segments
   joined to their vessel (the halo rule cuts them off before the 3D refinement can), a length that
   follows the centreline instead of its voxel steps, and measures per region (cortex, marrow).
 - Bridging small vessel gaps (clots) along the vessel direction.
-- Web page: the raw slice without overlay, measurements in 3D (distances, a picked vessel's calibre),
-  and the configuration of a run as a form built from its schema (`GET /api/config/schema`).
+- Web page: comparing two runs side by side (settings, results, the same slice), meshing and
+  measuring again with other settings, the raw slice without overlay, measurements in 3D
+  (distances, a picked vessel's calibre).
+- Experimental switches: deciding them on annotated crops of the real scan.
 
 ## LICENSE AND DATA
 

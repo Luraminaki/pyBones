@@ -16,7 +16,10 @@ they fall below that vessel's half-maximum and are taken for its halo. Telling t
 halo with the Hessian recovered about as many wrong voxels as right ones: no net gain, so I did not
 keep the code. The
 consequence for future measurements is that diameters under about 12\um{} will be overestimated, and
-the thinnest vessels partly missed: this is a property of the scan, not of the software.
+the thinnest vessels partly missed: this is a property of the scan, not of the software. The optional
+thin-vessel pass (Section~\ref{sec:thinvessels}) undoes part of the blur and finds
+\pbValueExpThinThinRecall{} of them on the phantom instead of \pbValueVesselRecallThin; what it adds
+on the real scan is unconfirmed (Section~\ref{sec:experimental}).
 
 \section{Rods and vessels}
 
@@ -85,9 +88,42 @@ measures it (Chapter~\ref{chap:network}), within the limits measured there: leng
 three errors (the measure reads long, thin vessels are missed, strands follow the holes of the vessel
 mask); junction counts are inflated by the loops the skeleton draws where the vessel mask has holes or
 folds (most junctions of the segmented phantom are not forks), mostly where a vessel touches bone. The
-setting that measures a vessel's edge against bone on the bone side removes about 40\,\% of them on
-the phantom, but stays off until annotated crops of the real scan can confirm it: there, it also turns
-thin, dim structures next to bone into bone. The radius is biased in opposite directions for thin and
+setting that measures a vessel's edge against bone on the bone side brings them from
+\pbValueExpDefaultSpurious{} to \pbValueExpBoneSideSpurious{} on the branching phantom, but stays off
+until annotated crops of the real scan can confirm it (Section~\ref{sec:experimental}). Where two
+vessels pass closer than the blur's width (about 10\um), the image holds one bright shape and the
+network joins them: cutting along the dimmest path between their cores (a watershed), with or
+without a test of the image's curvature, removed only a few of these junctions, at the cost of real
+forks and length, and was dropped. The radius is biased in opposite directions for thin and
 thick vessels; and many
 branches are truncated by the thin stack. The measures cover the whole stack: no region (cortex,
 marrow) is told apart yet.
+
+\section{Two experimental switches}
+\label{sec:experimental}
+
+Two settings improve the phantoms but stay off by default, because what they change on the real scan
+cannot be checked without expert labels: measuring a vessel's edge against bone on the bone side of a
+contact (\code{segmentation.vessel.bone\_side}, Section~\ref{sec:edges}), and adding the thin vessels a
+deconvolved image shows (\code{thin\_vessels}, Section~\ref{sec:thinvessels}).
+Table~\ref{tab:experimental} measures them on both phantoms, alone and together; the report tool runs
+them every time.
+
+\begin{table}[ht]
+\centering
+\small
+\input{data/experimental.tex}
+\caption{The experimental switches on the standard phantom (vessel scores, recall of vessels thinner
+  than 6\um) and on the branching phantom (forks found of those visible, other junctions, independent
+  loops, error of the total length).}
+\label{tab:experimental}
+\end{table}
+
+Their effects add up: the bone-side edges remove the false vessel along bone, which removes many of
+the junctions that are not forks, but shorten the network; the thin vessels give most of that length
+back. On the real scan, however, the bone-side edges change the vessel volume by
+\pbValueExpRealBoneSideVesselPct\,\%, turning into bone thin, dim structures next to bone, and the
+thin vessels change it by \pbValueExpRealThinVesselPct\,\%, as bright spots and short bars in or
+along bone. Both are plausible, and neither can be confirmed: a few annotated crops of the real scan,
+compared side by side, would settle them. Until then they can be switched on per run, from the
+command line or the web page's settings form, where they come first under \emph{Experimental}.

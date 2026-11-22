@@ -91,7 +91,7 @@ a { color: var(--accent); }
 .topbar-actions { display: flex; align-items: center; gap: 1rem; }
 
 /* Buttons and fields */
-button, select, input, textarea { font: inherit; color: inherit; }
+button, select, input { font: inherit; color: inherit; }
 button {
   border: 1px solid transparent; border-radius: 7px; padding: 0.42rem 0.9rem;
   background: var(--accent); color: var(--accent-text); cursor: pointer; font-weight: 600;
@@ -103,12 +103,11 @@ button.small { padding: 0.2rem 0.6rem; font-size: 0.85rem; }
 button.danger { background: transparent; color: var(--danger); border-color: var(--border); }
 
 label { display: block; font-size: 0.86rem; color: var(--muted); margin: 0.6rem 0 0.25rem; }
-select, input[type="text"], input[type="number"], input:not([type]), textarea {
+select, input[type="text"], input[type="number"], input:not([type]) {
   width: 100%; padding: 0.4rem 0.55rem; border: 1px solid var(--border); border-radius: 7px;
   background: var(--surface);
 }
 input:invalid:not(:placeholder-shown):not(:focus) { border-color: var(--danger); }
-textarea { resize: vertical; font-family: ui-monospace, Menlo, monospace; font-size: 0.85rem; }
 details { margin: 0.7rem 0 0; }
 summary { cursor: pointer; color: var(--muted); font-size: 0.86rem; }
 form button[type="submit"] { margin-top: 0.9rem; width: 100%; }

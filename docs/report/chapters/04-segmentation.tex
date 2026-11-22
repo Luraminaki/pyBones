@@ -73,11 +73,12 @@ A band of bone one to three voxels wide joins the vessel along the contact. On t
 (Chapter~\ref{chap:network}) these bands are the main source of junctions that are not forks. A
 setting, \texttt{segmentation.vessel.bone\_side}, measures each pixel against the material on its own
 side instead: the nearer of soft tissue and bone, both beyond the reach of every core, bone counting
-only where it is thick enough to hold a 12\um{} disk (a dim, partly filled vessel is foreground too,
-but thin). On both phantoms it raises the vessel and bone scores; on the real scan, however, it also turns into bone
-networks of thin, dim structures next to bone that may be partly filled vessels, and neither the 2018
-masks nor any annotation can tell which is right. It is therefore off by default
-(Chapter~\ref{chap:limitations}).
+only where it is thick enough to hold a \pbValueExpBoneSideBarrier\um{} disk (a dim, partly filled vessel is foreground too,
+but thin). On both phantoms it raises the vessel scores (Table~\ref{tab:experimental}); on
+the real scan, however, it also turns into bone networks of thin, dim structures next to bone that may
+be partly filled vessels (\pbValueExpRealBoneSideVesselPct\,\% of vessel), and neither the 2018 masks
+nor any annotation can tell which is right. It is therefore off by default
+(Section~\ref{sec:experimental}).
 
 Pixels near a core but below the half-maximum, with soft tissue around, form the \emph{halo}: a
 vessel/soft-tissue mix whose intensity can reach bone level. They are background, not bone. This
@@ -266,6 +267,32 @@ misclassified bone fragments (two of them 6\,000 and 17\,000 voxels) without los
   green to red ones tube-like. The 3D decision uses the mean over each 3D component; this is its 2D view.}
 \label{fig:tubularity}
 \end{figure}
+
+\section{Thin vessels, on a sharpened image (optional)}
+\label{sec:thinvessels}
+
+A vessel thinner than the blur reads dim, often no brighter than bone, so the stages above label it
+bone or background (Section~\ref{sec:thin}). But the blur is known, a Gaussian of
+$\sigma = \pbValueExpThinSigma$\um{} measured on the bone edges, and part of it can be undone. An
+optional last pass, \code{thin\_vessels}, deconvolves the stack with Richardson--Lucy, the algorithm
+long used on telescope images: blur the estimate, compare it with the measured image, multiply the
+estimate by the blurred ratio of the two, and repeat (\pbValueExpThinIterations{} times: each
+iteration finds more, and amplifies the noise more). What can come back is bounded: a Gaussian keeps
+a fraction $e^{-2\pi^2\sigma^2 f^2}$ of each spatial frequency $f$, so two vessels 6\um{} apart keep
+about 7\,\% of their contrast, enough to be recovered, and two vessels one voxel apart keep almost
+nothing.
+
+Noise and dense bone sharpen too, so the pass only adds \emph{thin} pieces. Voxels labelled background
+or bone that reach the vessel-core threshold once deconvolved are linked into 3D pieces; a piece
+becomes vessel if it is larger than noise (\pbValueExpThinMinVolume\umcube) and holds no ball of
+\pbValueExpThinMaxHalf\um{} radius. The deconvolution runs block by block: after $n$ iterations a
+voxel depends only on the image within $2nr$ voxels ($r$ being the kernel's radius), so blocks
+carrying that margin give exactly the whole-volume result in their core (a test checks it), and memory
+stays bounded. On the phantom it finds \pbValueExpThinThinRecall{} of the vessels thinner than 6\um{}
+instead of \pbValueExpDefaultThinRecall, the other scores unchanged (Table~\ref{tab:experimental}). On
+the real scan it changes the vessel volume by \pbValueExpRealThinVesselPct\,\%: bright spots and short bars in or
+along bone, where only an expert can tell a vessel from dense bone: like the bone-side edges, it is
+off by default (Section~\ref{sec:experimental}).
 
 \section{Meshing}
 \label{sec:meshing}

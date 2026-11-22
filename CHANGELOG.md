@@ -9,8 +9,19 @@ The current version lives in [pyproject.toml](pyproject.toml) and is read
 from package metadata at runtime; every segmentation records it in its
 `meta.json`. The [report](docs/report/) measures what each step below changed.
 
-## Unreleased
+## 0.8.0-alpha
 
+Two experimental features and a settings form. Thin vessels the blur hides come back from a
+deconvolved image (an optional pass, off by default like the bone-side edges: both improve the
+phantoms, and wait for expert labels of the real scan). The web page's run settings become a form
+that explains each setting and what a change affects. The report measures both switches every time
+it runs. Outputs of 0.7.0 must be segmented again.
+
+- Report: chapter 4 explains the thin-vessel pass; chapter 8 measures both experimental switches,
+  alone and together, on both phantoms and the sample (a new report step, `experimental.json` and
+  a generated table); chapters 3, 7, 9 and the appendix follow. README: the thin-vessel pass and
+  both switches' numbers (generated markers), vessels fused below the blur's width as a source of
+  false junctions, the form's limits; INSTALL and CONTRIBUTING follow.
 - Web page: a settings form for a new run, built from the configuration's schema (the free-text
   box of overrides is gone):
   - Every setting a run may change shows what it is, *when to change it* (new advice on each
@@ -39,14 +50,16 @@ from package metadata at runtime; every segmentation records it in its
     3 iterations). Voxels labelled background or bone that then reach the vessel-core threshold
     are candidates, linked into 3D pieces. Pieces of at least 540 µm³ in which no ball of 6 µm
     fits become vessel.
-  - Phantom (measured before the stage was built, as a post-process): thin vessels found under
-    6 µm radius 43 % -> 61 %; nothing else worse (vessel precision unchanged, 50 false
-    junctions instead of 49); network length -8 % -> -3 %. The result holds with the blur wrong
+  - Phantoms (measured by the report, chapter 8): thin vessels found under 6 µm radius
+    0.43 -> 0.60; vessel Dice and precision unchanged; on the branching phantom 27 forks of 53
+    instead of 26, 50 other junctions instead of 49, and a total length 2.1 % long instead of
+    3.0 % short. Before it was built, a scratch study found the gain holds with the blur wrong
     by ±20 %.
   - Real stack: +96,173 voxels (+1.3 % vessel), 96 % of them labelled bone before; 1,595 pieces.
     Up close they are bright spots and short bars in or along bone, where only an expert can
     tell a vessel from dense bone: hence off by default, like `bone_side`.
-  - Cost on the real stack: +17 s (segmentation 24 -> 41 s); peak memory 1.64 -> 2.53 GB.
+  - Cost on the real stack: about 15 s more per segmentation (measured by the report, chapter 7);
+    peak memory about 0.9 GB higher (measured in one process, with and without the pass).
   - How it streams: the deconvolution runs in blocks whose margins make them equal to the whole
     volume (tested), on the worker threads. The thin test is an erosion by the ball, slice by
     slice. Pieces are linked across slices as the refinement does.

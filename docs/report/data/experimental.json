@@ -1,0 +1,111 @@
+{
+  "real": {
+    "Default": {
+      "vessel_voxels": 7644387
+    },
+    "BoneSide": {
+      "vessel_voxels": 7335295,
+      "thin_seconds": 0.0
+    },
+    "Thin": {
+      "vessel_voxels": 7740560,
+      "thin_seconds": 14.59069873899989
+    }
+  },
+  "standard": {
+    "Default": {
+      "vessel_dice": 0.8621721259820466,
+      "vessel_precision": 0.8263705841393948,
+      "thin_recall": 0.4305267523849025
+    },
+    "BoneSide": {
+      "vessel_dice": 0.8867345906130504,
+      "vessel_precision": 0.875881125484407,
+      "thin_recall": 0.4207797594359187
+    },
+    "Thin": {
+      "vessel_dice": 0.8630696328095913,
+      "vessel_precision": 0.8261119801905654,
+      "thin_recall": 0.6047283284944006
+    },
+    "Both": {
+      "vessel_dice": 0.8875135159996068,
+      "vessel_precision": 0.8750008891038544,
+      "thin_recall": 0.6001659062629614
+    }
+  },
+  "network": {
+    "Default": {
+      "centreline_recall": 0.7887067395264117,
+      "centreline_precision": 0.8528812303131369,
+      "true_junctions": 53,
+      "matched_junctions": 26,
+      "crossing_junctions": 7,
+      "spurious_junctions": 49,
+      "independent_cycles": 7,
+      "radius_offset_um": -0.8217239379882812,
+      "radius_abs_error_um": 0.897186279296875,
+      "radius_offset_by_band_um": [
+        0.8195934295654297,
+        -0.47666311264038086,
+        -1.4812355041503906
+      ],
+      "true_length_mm": 21.716333137886004,
+      "measured_length_mm": 21.05829479245152
+    },
+    "BoneSide": {
+      "centreline_recall": 0.8001561280249805,
+      "centreline_precision": 0.9087884126052065,
+      "true_junctions": 53,
+      "matched_junctions": 30,
+      "crossing_junctions": 7,
+      "spurious_junctions": 28,
+      "independent_cycles": 5,
+      "radius_offset_um": -0.9750471115112305,
+      "radius_abs_error_um": 0.9289321899414062,
+      "radius_offset_by_band_um": [
+        0.8195934295654297,
+        -0.7081518173217773,
+        -1.5499982833862305
+      ],
+      "true_length_mm": 21.716333137886004,
+      "measured_length_mm": 20.15647391199625
+    },
+    "Thin": {
+      "centreline_recall": 0.831511839708561,
+      "centreline_precision": 0.8603667136812412,
+      "true_junctions": 53,
+      "matched_junctions": 27,
+      "crossing_junctions": 7,
+      "spurious_junctions": 50,
+      "independent_cycles": 7,
+      "radius_offset_um": -0.89862060546875,
+      "radius_abs_error_um": 0.8830776214599609,
+      "radius_offset_by_band_um": [
+        0.1113896369934082,
+        -0.539675235748291,
+        -1.4812355041503906
+      ],
+      "true_length_mm": 21.716333137886004,
+      "measured_length_mm": 22.16592579334248
+    },
+    "Both": {
+      "centreline_recall": 0.8430913348946136,
+      "centreline_precision": 0.913341992948599,
+      "true_junctions": 53,
+      "matched_junctions": 31,
+      "crossing_junctions": 7,
+      "spurious_junctions": 30,
+      "independent_cycles": 5,
+      "radius_offset_um": -1.0317835807800293,
+      "radius_abs_error_um": 0.9532790184020996,
+      "radius_offset_by_band_um": [
+        0.1113896369934082,
+        -0.777043342590332,
+        -1.5499982833862305
+      ],
+      "true_length_mm": 21.716333137886004,
+      "measured_length_mm": 21.31626944118482
+    }
+  }
+}

@@ -1,14 +1,21 @@
 operation,stage,weight,measured
-segmentation,thresholds,0.020,0.023
-segmentation,classify,0.650,0.636
-segmentation,analyse,0.110,0.112
-segmentation,resolve,0.170,0.174
-segmentation,clean,0.050,0.055
-mesh,occupancy,0.300,0.293
-mesh,surface,0.090,0.094
-mesh,smoothing,0.530,0.536
-mesh,writing,0.080,0.077
-quantification,cavities,0.330,0.336
-quantification,skeleton,0.560,0.564
-quantification,calibre,0.050,0.055
-quantification,network,0.060,0.045
+segmentation,thresholds,0.020,0.024
+segmentation,classify,0.650,0.612
+segmentation,analyse,0.110,0.118
+segmentation,resolve,0.170,0.186
+segmentation,clean,0.050,0.059
+"segmentation, thin vessels",thresholds,0.012,0.014
+"segmentation, thin vessels",classify,0.380,0.375
+"segmentation, thin vessels",analyse,0.064,0.069
+"segmentation, thin vessels",resolve,0.099,0.108
+"segmentation, thin vessels",clean,0.029,0.035
+"segmentation, thin vessels",sharpen,0.398,0.384
+"segmentation, thin vessels",thin,0.018,0.015
+mesh,occupancy,0.300,0.300
+mesh,surface,0.090,0.093
+mesh,smoothing,0.530,0.531
+mesh,writing,0.080,0.076
+quantification,cavities,0.330,0.332
+quantification,skeleton,0.560,0.572
+quantification,calibre,0.050,0.056
+quantification,network,0.060,0.040

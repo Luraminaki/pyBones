@@ -183,7 +183,7 @@ both are in the `logging` section of the configuration (`console_level` `WARNING
 quiet). `pybones config` writes its JSON on stdout, so that it can be redirected to a file.
 
 (*) The sample takes ~<!-- pb:Seconds -->24<!-- /pb --> s, with a peak of
-~<!-- pb:PeakGB -->1.7<!-- /pb --> GB of memory, on an AMD Ryzen AI 9 HX 370 (24 logical cores, 4 worker
+~<!-- pb:PeakGB -->1.8<!-- /pb --> GB of memory, on an AMD Ryzen AI 9 HX 370 (24 logical cores, 4 worker
 threads), 24 GB RAM, Linux; the report lists the machine every timing was measured on.
 
 Every setting, its default, the values it accepts and what it does are listed in

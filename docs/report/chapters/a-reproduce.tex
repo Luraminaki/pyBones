@@ -2,8 +2,8 @@
 \label{chap:reproduce}
 
 Everything below runs from the repository root, with the dataset saved as
-\code{data/data\_set.zip}, and needs uv and git (\code{INSTALL.md} explains how to install the
-project from scratch, \code{CONTRIBUTING.md} the report's steps in more detail).
+\code{data/data\_set.zip}, and needs uv and git. How to install the project from scratch is in
+\code{INSTALL.md}; the report's steps, in more detail, are in \code{CONTRIBUTING.md}.
 
 \begin{enumerate}
   \item Generate the phantom (the stack itself is segmented by the next step):
@@ -22,9 +22,10 @@ uv run python -m tools.report history
         session, under one profile, with nothing else running (Chapter~\ref{chap:performance}).
   \item Render the figures, the plot data, the history table, the mesh measurements (each label
         meshed and written in every format), the vascular network of Chapter~\ref{chap:network} (the
-        sample measured, the branching phantom generated, segmented and scored afresh) and the
-        measured values (\code{values.tex}), the stage weights of the progress bars, and the README's
-        tables and first screenshots; about three minutes:
+        sample measured, the branching phantom generated, segmented and scored afresh), the two
+        experimental switches on both phantoms and the sample (Section~\ref{sec:experimental}), and
+        the measured values (\code{values.tex}), the stage weights of the progress bars, and the README's
+        tables and first screenshots; about four minutes:
 \begin{verbatim}
 uv run python -m tools.report figures
 \end{verbatim}
