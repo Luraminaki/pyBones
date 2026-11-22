@@ -105,7 +105,12 @@ export function showSegmentation(summary, all) {
     ...others.map((s) => el('option', { value: s.id, selected: s.id === picked }, s.id)),
   );
   if (!same || nodes.other.value !== picked) {
-    if (!same) nodes.slider.value = String(Math.floor(summary.shape_zyx[0] / 2));
+    if (!same) {
+      // The maximum first: a value above the current maximum would be clamped to it.
+      const depth = summary.shape_zyx[0];
+      nodes.slider.max = String(depth - 1);
+      nodes.slider.value = String(Math.floor(depth / 2));
+    }
     void compare();
   }
 }

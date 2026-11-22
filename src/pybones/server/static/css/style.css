@@ -278,3 +278,4 @@ label.switch { display: flex; gap: 0.4rem; align-items: center; margin: 0; }
 .compare-slices figcaption { font-size: 0.86rem; color: var(--muted); margin-bottom: 0.3rem; }
 .compare-slices img { display: block; max-width: 100%; height: auto; background: #000; image-rendering: pixelated; }
 .slice-controls .spinner { position: static; border-color: var(--border); border-top-color: var(--accent); }
+#network-measured { margin: 0.4rem 0 0.8rem; }

@@ -48,6 +48,15 @@ export function percent(fraction, digits = 0) {
 }
 
 /**
+ * Format a count for reading, with thousands separators, e.g. `9,514`.
+ * @param {number} value The count.
+ * @returns {string} The text.
+ */
+export function count(value) {
+  return value.toLocaleString('en');
+}
+
+/**
  * Format a fraction as a CSS length, e.g. a bar width `25%`.
  * @param {number} fraction Value in [0, 1].
  * @returns {string} The CSS percentage.

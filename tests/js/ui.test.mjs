@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 
 import {
-  baseName, cssColor, cssPercent, duration, LABELS, megabytes, percent,
+  baseName, count, cssColor, cssPercent, duration, LABELS, megabytes, percent,
 } from '../../src/pybones/server/static/js/ui.js';
 
 describe('duration', () => {
@@ -57,4 +57,10 @@ describe('baseName', () => {
 
 test('LABELS lists the drawn labels once each', () => {
   assert.equal(new Set(LABELS).size, LABELS.length);
+});
+
+test('count writes thousands separators', () => {
+  assert.equal(count(7), '7');
+  assert.equal(count(9514), '9,514');
+  assert.equal(count(1234567), '1,234,567');
 });

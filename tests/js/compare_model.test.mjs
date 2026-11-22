@@ -53,11 +53,11 @@ test("networks' own settings count only when both are measured", () => {
 });
 
 test('results are laid side by side, a missing network as a dash', () => {
-  const thin = { candidate_pieces: 12, pieces_added: 3, from_background: 400, from_bone: 1200 };
+  const thin = { candidate_pieces: 12_064, pieces_added: 1595, from_background: 400, from_bone: 1200 };
   const rows = Object.fromEntries(comparedResults(side({ network: NETWORK }), side({ thin })).map(([w, a, b]) => [w, [a, b]]));
   assert.deepEqual(rows.Stack, ['stack.zip', 'stack.zip']);
   assert.deepEqual(rows.Vessel, ['7.50 %', '7.50 %']);
-  assert.deepEqual(rows['Thin vessels added'], ['off', '3 pieces, 1,600 voxels']);
+  assert.deepEqual(rows['Thin vessels added'], ['off', '1,595 pieces, 1,600 voxels']);
   assert.deepEqual(rows['Network: branches'], ['9,514', '—']);
   assert.deepEqual(rows['Network: total length'], ['592.3 mm', '—']);
 });

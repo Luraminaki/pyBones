@@ -3,7 +3,7 @@
 
 import { api, JOB_KINDS } from './api.js';
 import { activeJob, JOB_FINISHED, JOB_UPDATED, startOrJoin } from './jobs.js';
-import { duration, el, percent, toast } from './ui.js';
+import { count, duration, el, percent, toast } from './ui.js';
 
 const LENGTH_DIGITS = 1;
 const RATIO_DIGITS = 2;
@@ -15,9 +15,9 @@ const RATIO_DIGITS = 2;
 const ROWS = [
   ['Total length', (s) => `${s.total_length_mm.toFixed(LENGTH_DIGITS)} mm`],
   ['Length density', (s) => `${s.length_density_mm_per_mm3.toFixed(RATIO_DIGITS)} mm/mm³`],
-  ['Branches', (s) => `${s.branches} (${s.truncated_branches} cut by the stack, ${s.loops} loops)`],
-  ['Junctions', (s) => String(s.junctions)],
-  ['Ends', (s) => `${s.free_ends} free · ${s.face_ends} at a face · ${s.burst_ends} at a burst`],
+  ['Branches', (s) => `${count(s.branches)} (${count(s.truncated_branches)} cut by the stack, ${count(s.loops)} loops)`],
+  ['Junctions', (s) => count(s.junctions)],
+  ['Ends', (s) => `${count(s.free_ends)} free · ${count(s.face_ends)} at a face · ${count(s.burst_ends)} at a burst`],
   ['Median branch length', (s) => `${s.median_branch_length_um.toFixed(LENGTH_DIGITS)} µm`],
   ['Median radius', (s) => `${s.median_radius_um.toFixed(LENGTH_DIGITS)} µm`],
   ['Median tortuosity', (s) => s.median_tortuosity.toFixed(RATIO_DIGITS)],

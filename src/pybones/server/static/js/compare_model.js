@@ -2,7 +2,7 @@
 // side. No DOM: tested with Node (tests/js/compare_model.test.mjs).
 
 import { settingDifferences } from './settings_model.js';
-import { baseName, duration, LABELS, percent } from './ui.js';
+import { baseName, count, duration, LABELS, percent } from './ui.js';
 
 // Decimals of the lengths and radii shown.
 const LENGTH_DIGITS = 1;
@@ -53,7 +53,8 @@ export function settingText(value) {
 function thinText(meta) {
   const thin = meta.thin_vessels;
   if (!thin) return 'off';
-  return `${thin.pieces_added} pieces, ${(thin.from_background + thin.from_bone).toLocaleString('en')} voxels`;
+  const voxels = thin.from_background + thin.from_bone;
+  return `${count(thin.pieces_added)} pieces, ${count(voxels)} voxels`;
 }
 
 /**
@@ -74,8 +75,8 @@ export function comparedResults(a, b) {
   row('Thin vessels added', ({ meta }) => thinText(meta));
   row('Segmentation time', ({ meta }) => duration(meta.timing_s.total));
   const network = (read) => ({ network: view }) => (view ? read(view.summary) : NONE);
-  row('Network: branches', network((s) => s.branches.toLocaleString('en')));
-  row('Network: junctions', network((s) => s.junctions.toLocaleString('en')));
+  row('Network: branches', network((s) => count(s.branches)));
+  row('Network: junctions', network((s) => count(s.junctions)));
   row('Network: total length', network((s) => `${s.total_length_mm.toFixed(LENGTH_DIGITS)} mm`));
   row('Network: median radius', network((s) => `${s.median_radius_um.toFixed(LENGTH_DIGITS)} µm`));
   return rows;
